@@ -9,7 +9,7 @@
 | 菜单 | 路由 | 谁能看 | 做什么 |
 | --- | --- | --- | --- |
 | 登录 | `/login` | 所有人 | 手机号 + 密码。输错提示「连续输错 5 次锁定 15 分钟」，锁定时说明多久后再试 |
-| 修改密码 | `/change-password` | 已登录 | 第一次登录或密码被重置后强制进入，改完才能用其他页面 |
+| 修改密码 | `/change-password` | 已登录 | 第一次登录或密码被重置后强制进入。改完回登录页用新密码重新登录（服务端已让旧登录作废）。接口返回 `MUST_CHANGE_PASSWORD` 时也会跳到这里 |
 | 概览 | `/dashboard` | 所有员工 | 会员数、储值总额（仅超级管理员）、今日充值、今日消费（扣除冲正后），最近流水，快捷开卡 / 充值 |
 | 会员 · 开卡 | `/members/open` | 所有员工 | 手机号、称呼、开卡门店，二次确认。已开过卡时给出「查看这位会员」 |
 | 会员 · 会员查询 | `/members`、`/members/:id` | 所有员工 | 完整手机号查任一门店的会员；手机号片段或称呼只查本店会员。详情页显示总余额（视觉焦点）、本店范围内的流水、充值 / 发起权益单 |
@@ -55,7 +55,7 @@ pnpm --filter admin-web test     # vitest：金额换算、角色与菜单、错
 pnpm --filter admin-web build
 ```
 
-截图：按 [apps/admin-web/preview/README.md](../../apps/admin-web/preview/README.md) 起本机接口和假电子签平台，造演示数据后自动走一遍 34 个场景。
+截图：按 [apps/admin-web/preview/README.md](../../apps/admin-web/preview/README.md) 起本机接口和假电子签平台，造演示数据后自动走一遍 35 个场景。
 
 ## 4. 已知限制
 

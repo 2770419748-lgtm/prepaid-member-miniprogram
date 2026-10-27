@@ -2,7 +2,7 @@ import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { AccessPrincipal } from './access-principal';
-import { CurrentPrincipal, Principals, Public } from './decorators';
+import { AllowPendingPassword, CurrentPrincipal, Principals, Public } from './decorators';
 import { ChangeStaffPasswordDto, StaffPasswordLoginDto } from './dto/staff-password.dto';
 import { WxPhoneLoginDto } from './dto/wx-phone-login.dto';
 
@@ -34,13 +34,15 @@ export class AuthController {
 
   @Post('staff/password/change')
   @Principals('STAFF')
+  @AllowPendingPassword()
   @ApiBearerAuth()
-  @ApiOperation({ summary: '员工修改网页后台密码。第一次登录用初始密码换掉' })
+  @ApiOperation({ summary: '员工修改网页后台密码。第一次登录用初始密码换掉。改完之前的登录全部作废，要用新密码重新登录' })
   changeStaffPassword(@CurrentPrincipal() principal: AccessPrincipal, @Body() dto: ChangeStaffPasswordDto) {
     return this.auth.changeStaffPassword(principal, dto);
   }
 
   @Get('me')
+  @AllowPendingPassword()
   @ApiBearerAuth()
   @ApiOperation({ summary: '查看当前登录的是会员还是员工' })
   me(@CurrentPrincipal() principal: AccessPrincipal) {

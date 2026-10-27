@@ -47,7 +47,7 @@ describe('member pay code', () => {
       const recharge = await http()
         .post(`/wallets/${opened.body.id}/recharge`)
         .set('Authorization', `Bearer ${tokens.clerkA}`)
-        .send({ storeId: storeA, amountCent: balanceCent });
+        .send({ storeId: storeA, amountCent: balanceCent, requestId: randomUUID() });
       expect(recharge.status).toBe(201);
     }
     const code = `member-${phone}`;
@@ -74,7 +74,9 @@ describe('member pay code', () => {
     memberId: string,
     body: { storeId: string; amountCent: number; payCode?: string; requestId?: string },
   ) {
-    return http().post(`/wallets/${memberId}/consume`).set('Authorization', `Bearer ${token}`).send(body);
+    // 请求号必填；没指定时每次给一个新的。
+    const payload = 'requestId' in body ? body : { ...body, requestId: randomUUID() };
+    return http().post(`/wallets/${memberId}/consume`).set('Authorization', `Bearer ${token}`).send(payload);
   }
 
   beforeAll(async () => {

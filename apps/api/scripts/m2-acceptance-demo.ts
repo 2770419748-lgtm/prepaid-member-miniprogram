@@ -387,9 +387,9 @@ async function main(): Promise<void> {
     detail: `余额一下变成 ${yuan((wrong.body as MoveBody).balanceCent)} 元。这条记录不能删也不能改，只能冲正。`,
   });
 
-  const clerkTries = await api(`/ledger/${wrongId}/reversal`, { token: clerkA, body: { remark: '录错了' } });
+  const clerkTries = await api(`/ledger/${wrongId}/reversal`, { token: clerkA, body: { remark: '录错了', requestId: randomUUID() } });
   expectStatus(clerkTries, 403, '店员冲正');
-  const otherManagerTries = await api(`/ledger/${wrongId}/reversal`, { token: managerB, body: { remark: '录错了' } });
+  const otherManagerTries = await api(`/ledger/${wrongId}/reversal`, { token: managerB, body: { remark: '录错了', requestId: randomUUID() } });
   expectStatus(otherManagerTries, 403, '别店店长冲正');
   steps.push({
     tone: 'blocked',
@@ -408,7 +408,7 @@ async function main(): Promise<void> {
     detail: `补记一笔反方向的 1000.00 元把它抵掉，原因写「多打了一个零」。余额回到 ${yuan((fixed.body as MoveBody).balanceCent)} 元。原来那条还在，标着「已被冲正」。`,
   });
 
-  const again = await api(`/ledger/${wrongId}/reversal`, { token: managerA, body: { remark: '再冲一次' } });
+  const again = await api(`/ledger/${wrongId}/reversal`, { token: managerA, body: { remark: '再冲一次', requestId: randomUUID() } });
   expectStatus(again, 409, '重复冲正');
   steps.push({
     tone: 'blocked',

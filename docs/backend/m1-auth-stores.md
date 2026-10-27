@@ -141,7 +141,7 @@ M0 应已具备：
 | POST | `/auth/member/wx-phone` | 无 | `code`（wx.login）+ 手机号授权 `phoneCode`；会员端 `WECHAT_MEMBER_*`。仅小程序 | JWT + member 摘要；第一次登录只登记身份，不建余额。未开卡时 `needsCard` 为真 |
 | POST | `/auth/staff/wx-phone` | 无 | 同上，用 `WECHAT_STAFF_*`。仅小程序。手机号须已存在于 `Staff` 且在职 | JWT + staff + roles[] |
 | POST | `/auth/staff/password/login` | 无 | 网页后台。`phone`、`password`，多家公司时带 `orgId` | JWT + `mustChangePassword`。连续错 5 次锁定 15 分钟。不返回密码 |
-| POST | `/auth/staff/password/change` | 员工 | `currentPassword`、`newPassword` | 修改成功后 `mustChangePassword` 为假 |
+| POST | `/auth/staff/password/change` | 员工 | `currentPassword`、`newPassword` | 修改成功后 `mustChangePassword` 为假。这位员工之前的登录全部作废，要用新密码重新登录 |
 | GET | `/auth/me` | 登录 | — | 当前身份：member 或 staff+roles。员工结果含 `mustChangePassword` |
 
 说明：测试号阶段按微信开放文档换 session / 手机号；密钥只读 env，不进仓。
@@ -241,6 +241,7 @@ M0 应已具备：
 
 - 员工必须事先录入且为在职，否则小程序登录拒绝。网页后台密码错误时只回答「手机号或密码错误」，不透露账号是否存在。
 - 新建员工时设置初始密码，只保存 bcrypt 哈希。第一次用初始密码登录网页后台时，结果里 `mustChangePassword` 为真，员工要调用修改密码接口换成自己的密码。超级管理员可以重置密码，重置后再次要求修改。
+- 服务端强制（2026-10-28）：用密码登录、还没改密时，除 `GET /auth/me` 和修改密码外的接口都返回 403 `code: MUST_CHANGE_PASSWORD`。改密或被重置后之前的登录全部作废。员工小程序（微信手机号登录）不受这条限制。详见 [security-hardening.md](./security-hardening.md)。
 - 同一账号连续输错 5 次后锁定 15 分钟。锁定期间即使密码正确也不能登录。锁定结束后重新计数。
 - 会员第一次登录会登记手机号和微信标识，不建余额、不开卡。还没有开卡门店时，结果里 `needsCard` 为真。
 - 只有一家在营公司时可以不填公司；有多家时必须指定。

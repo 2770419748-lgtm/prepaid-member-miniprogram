@@ -41,7 +41,7 @@ interface Movement {
   amountCent: number;
   remark: string | null;
   reversalOfId: string | null;
-  requestId: string | null;
+  requestId: string;
   /** 消费扣款用的会员码，和流水同一事务标成已用。 */
   payCodeId: string | null;
 }
@@ -62,6 +62,17 @@ function cleanRemark(value: string | undefined): string | null {
 
 function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+/** 判断「同一请求号是不是同一笔」时比哪些字段：冲正比原流水，充值、扣款比金额和门店。 */
+function requestShape(movement: Movement) {
+  return {
+    memberId: movement.memberId,
+    type: movement.type,
+    ...(movement.reversalOfId
+      ? { reversalOfId: movement.reversalOfId }
+      : { amountCent: movement.amountCent, storeId: movement.storeId }),
+  };
 }
 
 function pause(attempt: number): Promise<void> {
@@ -134,7 +145,7 @@ export class WalletService {
       amountCent: original.amountCent,
       remark: cleanRemark(dto.remark),
       reversalOfId: original.id,
-      requestId: dto.requestId ?? null,
+      requestId: dto.requestId,
       payCodeId: null,
     });
   }
@@ -196,7 +207,7 @@ export class WalletService {
       amountCent: dto.amountCent,
       remark: cleanRemark(dto.remark),
       reversalOfId: null,
-      requestId: dto.requestId ?? null,
+      requestId: dto.requestId,
       payCodeId,
     });
   }
@@ -206,15 +217,21 @@ export class WalletService {
       try {
         return await this.prisma.$transaction((tx) => this.applyOnce(tx, movement), TX_OPTIONS);
       } catch (error) {
+        if (isUniqueViolation(error)) {
+          return this.afterDuplicate(movement);
+        }
+        // 同一请求号的另一次提交（连点、网络重试）可能刚刚记完：余额已经变了，这次会撞版本或报余额不足。
+        // 是它就返回那一笔，不重试、不报错。例如同时冲正两次一笔充值，第二次不该报「余额不足」。
+        const replayed = await this.replay(movement.orgId, movement.requestId, requestShape(movement));
+        if (replayed) {
+          return replayed;
+        }
         if (error instanceof VersionConflict) {
           if (attempt < MAX_ATTEMPTS) {
             await pause(attempt);
             continue;
           }
           throw new ConflictException('账户正在被其他操作修改，请稍后重试');
-        }
-        if (isUniqueViolation(error)) {
-          return this.afterDuplicate(movement);
         }
         throw error;
       }
@@ -285,13 +302,7 @@ export class WalletService {
 
   /** 撞了唯一约束：要么同一请求号并发提交，要么同一条流水被并发冲正。 */
   private async afterDuplicate(movement: Movement): Promise<MoveResult> {
-    const replay = await this.replay(movement.orgId, movement.requestId ?? undefined, {
-      memberId: movement.memberId,
-      type: movement.type,
-      ...(movement.reversalOfId
-        ? { reversalOfId: movement.reversalOfId }
-        : { amountCent: movement.amountCent, storeId: movement.storeId }),
-    });
+    const replay = await this.replay(movement.orgId, movement.requestId, requestShape(movement));
     if (replay) {
       return replay;
     }
@@ -303,16 +314,13 @@ export class WalletService {
 
   /**
    * 同一请求号已经记过账：内容一致就原样返回第一次的结果，不一致就拒绝。
-   * 没带请求号或还没记过则返回 null。
+   * 还没记过则返回 null。
    */
   private async replay(
     orgId: string,
-    requestId: string | undefined,
+    requestId: string,
     expected: Partial<Pick<LedgerRecord, 'memberId' | 'type' | 'amountCent' | 'storeId' | 'reversalOfId'>>,
   ): Promise<MoveResult | null> {
-    if (!requestId) {
-      return null;
-    }
     const entry = await this.prisma.ledgerEntry.findUnique({
       where: { orgId_requestId: { orgId, requestId } },
       include: ledgerInclude,

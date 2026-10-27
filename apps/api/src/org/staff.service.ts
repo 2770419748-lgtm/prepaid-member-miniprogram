@@ -284,6 +284,8 @@ export class StaffService {
           mustChangePassword: true,
           failedLoginCount: 0,
           lockedUntil: null,
+          // 重置后这位员工之前的登录全部作废，要用新密码登录并改密。
+          sessionVersion: { increment: 1 },
         },
         include: staffInclude,
       });

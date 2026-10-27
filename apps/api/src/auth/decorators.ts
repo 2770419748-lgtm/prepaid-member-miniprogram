@@ -8,6 +8,13 @@ export const Public = () => SetMetadata(IS_PUBLIC, true);
 export const ROLES_KEY = 'roles';
 export const Roles = (...roles: StaffRole[]) => SetMetadata(ROLES_KEY, roles);
 
+/**
+ * 还没改掉初始密码时也能调的接口。只给「修改密码」「查看本人信息」用，其他接口默认都拦。
+ * 加新接口不用管它；放宽前先想清楚。test/password-change-guard.spec.ts 会核对名单。
+ */
+export const ALLOW_PENDING_PASSWORD = 'allowPendingPassword';
+export const AllowPendingPassword = () => SetMetadata(ALLOW_PENDING_PASSWORD, true);
+
 export const PRINCIPALS_KEY = 'principals';
 export const Principals = (...types: PrincipalType[]) => SetMetadata(PRINCIPALS_KEY, types);
 

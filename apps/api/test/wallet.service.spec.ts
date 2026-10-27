@@ -105,13 +105,15 @@ function fakePayCodes(options: { usable?: boolean; markFails?: boolean } = {}) {
 }
 
 const scanned = { payCode: '800000000000000000' };
+/** 充值、扣款、冲正都必须带请求号。 */
+const req = { requestId: 'request-0001' };
 
 describe('WalletService', () => {
   it('writes the wallet, the ledger entry and the audit record in one transaction', async () => {
     const wallet = { id: 'wallet-1', balanceCent: 0, version: 0 };
     const fake = fakePrisma(wallet);
     const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service);
-    const result = await service.recharge(clerk, 'member-1', { storeId: 'store-1', amountCent: 10000 });
+    const result = await service.recharge(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 10000 });
     expect(result.balanceCent).toBe(10000);
     expect(fake.transactions()).toBe(1);
     expect(fake.tx.wallet.updateMany).toHaveBeenCalledWith({
@@ -133,7 +135,7 @@ describe('WalletService', () => {
     const wallet = { id: 'wallet-1', balanceCent: 500, version: 3 };
     const fake = fakePrisma(wallet);
     const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service);
-    await expect(service.consume(clerk, 'member-1', { storeId: 'store-1', amountCent: 501, ...scanned })).rejects.toThrow(
+    await expect(service.consume(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 501, ...scanned })).rejects.toThrow(
       BadRequestException,
     );
     expect(fake.tx.wallet.updateMany).not.toHaveBeenCalled();
@@ -145,7 +147,7 @@ describe('WalletService', () => {
     const wallet = { id: 'wallet-1', balanceCent: 1000, version: 0 };
     const fake = fakePrisma(wallet, [0, 0]);
     const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service);
-    const result = await service.consume(clerk, 'member-1', { storeId: 'store-1', amountCent: 300, ...scanned });
+    const result = await service.consume(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 300, ...scanned });
     expect(fake.transactions()).toBe(3);
     expect(result.balanceCent).toBe(700);
     expect(fake.created).toHaveLength(1);
@@ -156,7 +158,7 @@ describe('WalletService', () => {
     const wallet = { id: 'wallet-1', balanceCent: 1000, version: 0 };
     const fake = fakePrisma(wallet, Array.from({ length: 20 }, () => 0));
     const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service);
-    await expect(service.consume(clerk, 'member-1', { storeId: 'store-1', amountCent: 300, ...scanned })).rejects.toThrow(
+    await expect(service.consume(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 300, ...scanned })).rejects.toThrow(
       ConflictException,
     );
     expect(fake.created).toHaveLength(0);
@@ -168,7 +170,7 @@ describe('WalletService', () => {
     const fake = fakePrisma(wallet);
     const codes = fakePayCodes();
     const service = new WalletService(fake.prisma, new AuditLogWriter(), codes.service);
-    await service.consume(clerk, 'member-1', { storeId: 'store-1', amountCent: 300, ...scanned });
+    await service.consume(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 300, ...scanned });
     expect(codes.raw.assertUsable).toHaveBeenCalledWith(clerk, 'member-1', 'store-1', scanned.payCode);
     expect(codes.raw.markUsed).toHaveBeenCalledWith(fake.tx, 'code-1', 'staff-1', 'store-1', 'entry-1');
     expect(fake.audits[0]).toMatchObject({ action: 'WALLET_CONSUME', payloadJson: { payCodeId: 'code-1' } });
@@ -179,7 +181,7 @@ describe('WalletService', () => {
     const fake = fakePrisma(wallet);
     const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes({ usable: false }).service);
     await expect(
-      service.consume(clerk, 'member-1', { storeId: 'store-1', amountCent: 300, ...scanned }),
+      service.consume(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 300, ...scanned }),
     ).rejects.toThrow('请先扫顾客的会员码');
     expect(fake.transactions()).toBe(0);
   });
@@ -189,7 +191,7 @@ describe('WalletService', () => {
     const fake = fakePrisma(wallet);
     const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes({ markFails: true }).service);
     await expect(
-      service.consume(clerk, 'member-1', { storeId: 'store-1', amountCent: 300, ...scanned }),
+      service.consume(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 300, ...scanned }),
     ).rejects.toThrow(ConflictException);
     // 真实数据库里整笔回滚；这里确认没有走到写操作记录。
     expect(fake.audits).toHaveLength(0);
@@ -200,7 +202,7 @@ describe('WalletService', () => {
     const fake = fakePrisma(wallet);
     const codes = fakePayCodes();
     const service = new WalletService(fake.prisma, new AuditLogWriter(), codes.service);
-    await service.recharge(clerk, 'member-1', { storeId: 'store-1', amountCent: 100 });
+    await service.recharge(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 100 });
     expect(codes.raw.assertUsable).not.toHaveBeenCalled();
     expect(codes.raw.markUsed).not.toHaveBeenCalled();
   });
@@ -210,7 +212,7 @@ describe('WalletService', () => {
     const fake = fakePrisma(wallet);
     const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service);
     await expect(
-      service.recharge(clerk, 'member-1', { storeId: 'store-2', amountCent: 100 }),
+      service.recharge(clerk, 'member-1', { ...req, storeId: 'store-2', amountCent: 100 }),
     ).rejects.toThrow('无权操作该门店');
     expect(fake.transactions()).toBe(0);
   });

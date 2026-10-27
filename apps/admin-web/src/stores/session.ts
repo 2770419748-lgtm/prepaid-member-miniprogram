@@ -79,7 +79,10 @@ export const useSessionStore = defineStore('session', () => {
     staff.value = result.staff;
     roles.value = result.roles;
     mustChangePassword.value = result.mustChangePassword;
-    await refreshStores();
+    // 没改初始密码前服务端只放行改密码、看本人信息，门店列表要等改完重新登录再取。
+    if (!result.mustChangePassword) {
+      await refreshStores();
+    }
     loaded.value = true;
   }
 
@@ -89,12 +92,15 @@ export const useSessionStore = defineStore('session', () => {
     staff.value = me.staff;
     roles.value = me.roles;
     mustChangePassword.value = me.staff.mustChangePassword;
-    await refreshStores();
+    if (!me.staff.mustChangePassword) {
+      await refreshStores();
+    }
     loaded.value = true;
   }
 
-  function passwordChanged(): void {
-    mustChangePassword.value = false;
+  /** 接口说要先改初始密码（例如密码刚被超级管理员重置）。 */
+  function requirePasswordChange(): void {
+    mustChangePassword.value = true;
   }
 
   function logout(): void {
@@ -127,7 +133,7 @@ export const useSessionStore = defineStore('session', () => {
     refreshStores,
     login,
     restore,
-    passwordChanged,
+    requirePasswordChange,
     logout,
   };
 });

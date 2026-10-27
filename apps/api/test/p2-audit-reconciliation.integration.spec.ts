@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { LedgerEntry, StaffRole } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { WechatPhoneClient } from '../src/auth/wechat/wechat-phone.client';
@@ -142,7 +143,7 @@ describe('P2 audit log and reconciliation', () => {
     const response = await http()
       .post(`/wallets/${memberId}/${kind}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ storeId, amountCent, ...(code ? { payCode: code } : {}) });
+      .send({ storeId, amountCent, requestId: randomUUID(), ...(code ? { payCode: code } : {}) });
     expect(response.status).toBe(201);
     return response.body.entry.id as string;
   }
@@ -151,7 +152,7 @@ describe('P2 audit log and reconciliation', () => {
     const response = await http()
       .post(`/ledger/${entryId}/reversal`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ remark: '记错了' });
+      .send({ remark: '记错了', requestId: randomUUID() });
     expect(response.status).toBe(201);
     return response.body.entry.id as string;
   }

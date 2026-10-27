@@ -19,7 +19,7 @@ pnpm dev:admin
 # 4. 演示数据：三家门店、五个员工、五位会员和几笔流水
 node apps/admin-web/preview/seed-demo.mjs
 
-# 5. 截图，34 张
+# 5. 截图，35 张
 node apps/admin-web/preview/shoot.mjs --out /tmp/admin-shots
 # 只跑几组：--only login,firstlogin,admin,manager,esign
 ```
