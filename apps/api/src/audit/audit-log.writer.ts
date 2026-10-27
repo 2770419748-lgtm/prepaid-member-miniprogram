@@ -14,11 +14,34 @@ export const AuditAction = {
   WalletRecharge: 'WALLET_RECHARGE',
   WalletConsume: 'WALLET_CONSUME',
   WalletReversal: 'WALLET_REVERSAL',
+  /** M4 发起签署成功时写。 */
+  SignFlowCreate: 'SIGN_FLOW_CREATE',
 } as const;
+
+export type AuditActionCode = (typeof AuditAction)[keyof typeof AuditAction];
+
+/** 后台筛选和列表里显示的中文名。新增 action 时一起加。 */
+export const AuditActionLabel: Record<AuditActionCode, string> = {
+  STORE_CREATE: '新建门店',
+  STORE_UPDATE: '修改门店',
+  STAFF_CREATE: '新建员工',
+  STAFF_UPDATE: '修改员工',
+  STAFF_ROLES_REPLACE: '调整员工角色',
+  STAFF_PASSWORD_CHANGE: '修改密码',
+  STAFF_PASSWORD_RESET: '重置密码',
+  MEMBER_IDENTITY_CREATE: '会员首次登录',
+  MEMBER_CARD_OPEN: '开卡',
+  WALLET_RECHARGE: '充值',
+  WALLET_CONSUME: '消费扣款',
+  WALLET_REVERSAL: '冲正',
+  SIGN_FLOW_CREATE: '发起签署',
+};
 
 export interface AuditWriteInput {
   orgId: string;
   actorStaffId?: string | null;
+  /** 操作发生在哪家门店。与门店无关的操作不填。 */
+  storeId?: string | null;
   action: string;
   targetType: string;
   targetId: string;
@@ -32,8 +55,8 @@ type AuditTx = {
 };
 
 /**
- * 只负责把关键写操作记下来。查询、对账留给后续里程碑。
- * 调用方应放在同一事务里，避免事情没做成却留下记录。
+ * 操作记录的唯一写入口。查询见 AuditQueryService。
+ * 调用方应放在同一事务里，避免事情没做成却留下记录。记录只追加，数据库拒绝修改和删除。
  */
 @Injectable()
 export class AuditLogWriter {
@@ -42,6 +65,7 @@ export class AuditLogWriter {
       data: {
         orgId: entry.orgId,
         actorStaffId: entry.actorStaffId ?? null,
+        storeId: entry.storeId ?? null,
         action: entry.action,
         targetType: entry.targetType,
         targetId: entry.targetId,

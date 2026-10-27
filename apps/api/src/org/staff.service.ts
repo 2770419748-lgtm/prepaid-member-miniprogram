@@ -127,6 +127,7 @@ export class StaffService {
         await this.audit.write(tx, {
           orgId: actor.orgId,
           actorStaffId: actor.sub,
+          storeId: store.id,
           action: AuditAction.StaffCreate,
           targetType: 'Staff',
           targetId: staff.id,

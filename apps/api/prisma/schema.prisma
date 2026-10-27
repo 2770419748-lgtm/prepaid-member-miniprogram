@@ -118,6 +118,7 @@ model Store {
   staffRoles    StaffStoreRole[]
   openedMembers Member[]         @relation("MemberOpenStore")
   ledgerEntries LedgerEntry[]
+  auditLogs     AuditLog[]
 
   @@index([orgId])
   @@map("stores")
@@ -297,10 +298,13 @@ model SignFlow {
   @@map("sign_flows")
 }
 
+/// 操作记录。只追加，数据库触发器拒绝修改和删除。
+/// storeId 是这次操作发生的门店（开卡、记账、门店和员工开通），店长按它看本店记录；与门店无关的操作为空。
 model AuditLog {
   id           String   @id @default(cuid())
   orgId        String   @map("org_id")
   actorStaffId String?  @map("actor_staff_id")
+  storeId      String?  @map("store_id")
   action       String
   targetType   String?  @map("target_type")
   targetId     String?  @map("target_id")
@@ -309,7 +313,11 @@ model AuditLog {
 
   org   Org    @relation(fields: [orgId], references: [id], onDelete: Restrict)
   actor Staff? @relation(fields: [actorStaffId], references: [id], onDelete: SetNull)
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Restrict)
 
   @@index([orgId, createdAt])
+  @@index([orgId, action, createdAt])
+  @@index([orgId, storeId, createdAt])
+  @@index([actorStaffId, createdAt])
   @@map("audit_logs")
 }
