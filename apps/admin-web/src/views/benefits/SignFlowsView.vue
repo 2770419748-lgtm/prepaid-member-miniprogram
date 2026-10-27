@@ -2,13 +2,11 @@
   <div>
     <h1 class="pm-page-title">权益单签署</h1>
     <p class="pm-page-sub">
-      给会员发起线上签署，会员用手机扫码或在会员小程序里阅读并签字。
+      给会员发起线上签署，会员用手机微信扫码，阅读后签字。
       {{ session.superAdmin ? '' : '只显示在你的门店发起的签署。' }}
     </p>
 
-    <a-result v-if="missing" status="info" title="电子签功能还在接入中" sub-title="接口上线后就能在这里给会员发起签署。" />
-
-    <a-card v-else :bordered="false" class="block">
+    <a-card :bordered="false" class="block">
       <div class="pm-toolbar">
         <a-select
           v-model:value="filters.status"
@@ -36,7 +34,7 @@
         :loading="loading"
         :pagination="pagination"
         row-key="id"
-        :scroll="{ x: 1000 }"
+        :scroll="{ x: 1120 }"
         @change="(p: TablePaginationConfig) => reload(p.current ?? 1)"
       >
         <template #emptyText><a-empty description="还没有发起过签署" /></template>
@@ -66,8 +64,9 @@
           <template v-else-if="column.key === 'actions'">
             <a-space :size="4" wrap>
               <a-button v-if="record.signUrl" type="link" size="small" @click="showQr(record)">签署码</a-button>
+              <!-- 签完但合同还没归档时也要能再刷新，后端会重试归档。 -->
               <a-button
-                v-if="record.status === 'PENDING' || record.status === 'DRAFT'"
+                v-if="record.status === 'PENDING' || record.status === 'DRAFT' || (record.status === 'SIGNED' && !record.hasPdf)"
                 type="link"
                 size="small"
                 :loading="refreshing === record.id"
@@ -142,7 +141,7 @@
       @cancel="cancelling = null"
     >
       <p class="muted">撤销后会员不能再签这份权益单，需要的话可以重新发起。</p>
-      <a-textarea v-model:value="cancelReason" :rows="2" :maxlength="200" placeholder="撤销原因，例如：模板选错了" />
+      <a-textarea v-model:value="cancelReason" :rows="2" :maxlength="100" placeholder="撤销原因，例如：模板选错了" />
     </a-modal>
   </div>
 </template>
@@ -150,7 +149,7 @@
 <script setup lang="ts">
 import { message, type TablePaginationConfig } from 'ant-design-vue';
 import type { ColumnsType } from 'ant-design-vue/es/table';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   cancelSignFlow,
@@ -180,7 +179,6 @@ const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
 
-const missing = ref(false);
 const rows = ref<SignFlow[]>([]);
 const loading = ref(false);
 const page = ref(1);
@@ -197,8 +195,8 @@ const columns: ColumnsType<SignFlow> = [
   { title: '权益单', key: 'title' },
   { title: '状态', key: 'status', width: 170 },
   { title: '门店', key: 'store', width: 110 },
-  { title: '发起人', key: 'initiator', width: 100 },
-  { title: '时间', key: 'time', width: 170 },
+  { title: '发起人', key: 'initiator', width: 120 },
+  { title: '时间', key: 'time', width: 200 },
   { title: '操作', key: 'actions', width: 200, fixed: 'right' },
 ];
 
@@ -230,11 +228,7 @@ async function reload(toPage = page.value): Promise<void> {
     rows.value = result.items;
     total.value = result.total;
   } catch (e) {
-    if (isNotFound(e)) {
-      missing.value = true;
-    } else {
-      message.error(errorMessage(e));
-    }
+    message.error(errorMessage(e));
   } finally {
     loading.value = false;
   }
@@ -286,6 +280,11 @@ async function openStart(member?: MemberCard | null): Promise<void> {
     startError.value = errorMessage(e);
   }
 }
+
+// 换了会员、模板或门店就是另一次发起，要换请求号；内容不变的重试沿用同一个号，不会重复发起。
+watch([() => startMember.value?.id, startTemplateId, startStoreId], () => {
+  startRequestId = newRequestId();
+});
 
 async function submitStart(): Promise<void> {
   if (!startMember.value || !startTemplateId.value || !startStoreId.value) {
@@ -381,10 +380,10 @@ onMounted(async () => {
   if (filters.memberId) {
     const member = await getMember(filters.memberId).catch(() => null);
     memberFilter.value = member ? `${member.name || '未填称呼'} ${maskPhone(member.phone)}` : '这位会员';
-    if (route.query.start === '1' && !missing.value) {
+    if (route.query.start === '1') {
       void openStart(member);
     }
-  } else if (route.query.start === '1' && !missing.value) {
+  } else if (route.query.start === '1') {
     void openStart();
   }
 });

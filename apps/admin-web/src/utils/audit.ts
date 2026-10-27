@@ -1,11 +1,18 @@
 import type { StaffRole } from '../api/types';
+import { SIGN_STATUS } from './esign';
 import { formatCent } from './money';
 import { maskPhone } from './phone';
 import { ROLE_LABEL } from './roles';
 
 type StoreName = (storeId: string) => string | null;
 
-const STATUS_LABEL: Record<string, string> = { ACTIVE: '启用', DISABLED: '停用' };
+const STATUS_LABEL: Record<string, string> = { ACTIVE: '启用', DISABLED: '停用', DRAFT: '草稿', ARCHIVED: '已下架' };
+
+const SYNC_SOURCE_LABEL: Record<string, string> = { refresh: '刷新状态时同步', webhook: 'e签宝通知' };
+
+function signStatus(value: unknown): string {
+  return typeof value === 'string' && value in SIGN_STATUS ? SIGN_STATUS[value as keyof typeof SIGN_STATUS].label : text(value);
+}
 
 function isRole(value: unknown): value is StaffRole {
   return value === 'SUPER_ADMIN' || value === 'STORE_MANAGER' || value === 'STAFF';
@@ -31,8 +38,22 @@ export function describeAuditPayload(payload: Record<string, unknown> | null, st
   if (typeof p.balanceBefore === 'number' && typeof p.balanceAfter === 'number') {
     lines.push(`余额 ${formatCent(p.balanceBefore)} → ${formatCent(p.balanceAfter)} 元`);
   }
-  if (typeof p.name === 'string' && p.name) {
-    lines.push(`名称 ${p.name}`);
+  const name = text(p.name) || text(p.title);
+  if (name) {
+    lines.push(`名称 ${name}`);
+  }
+  if (typeof p.itemCount === 'number') {
+    lines.push(`${p.itemCount} 条权益`);
+  }
+  if (typeof p.esignTemplateId === 'string') {
+    lines.push(`e签宝模板 ${p.esignTemplateId}`);
+  }
+  if (p.from !== undefined && p.to !== undefined) {
+    const source = SYNC_SOURCE_LABEL[text(p.source)];
+    lines.push(`状态 ${signStatus(p.from)} → ${signStatus(p.to)}${source ? `（${source}）` : ''}`);
+  }
+  if (p.env === 'SANDBOX') {
+    lines.push('测试签署');
   }
   if (typeof p.phone === 'string' && p.phone) {
     lines.push(`电话 ${/^1\d{10}$/.test(p.phone) ? maskPhone(p.phone) : p.phone}`);

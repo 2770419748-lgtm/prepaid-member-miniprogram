@@ -12,7 +12,6 @@
       <MemberCardPanel :member="member" full-phone>
         <template v-if="member.hasCard && member.status === 'ACTIVE'">
           <a-button type="primary" @click="router.push({ name: 'recharge', query: { memberId: member.id } })">充值</a-button>
-          <a-button @click="router.push({ name: 'consume', query: { memberId: member.id } })">扣款</a-button>
           <a-button @click="router.push({ name: 'sign-flows', query: { memberId: member.id, start: '1' } })">
             发起权益单
           </a-button>

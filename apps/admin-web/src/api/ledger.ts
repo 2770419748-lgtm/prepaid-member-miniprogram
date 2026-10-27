@@ -13,11 +13,6 @@ export async function recharge(memberId: string, body: MoneyMoveBody): Promise<M
   return data;
 }
 
-export async function consume(memberId: string, body: MoneyMoveBody): Promise<MoneyMoveResult> {
-  const { data } = await http.post<MoneyMoveResult>(`/wallets/${encodeURIComponent(memberId)}/consume`, body);
-  return data;
-}
-
 export async function reverse(
   entryId: string,
   body: { remark: string; requestId: string },

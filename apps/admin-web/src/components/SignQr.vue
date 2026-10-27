@@ -2,7 +2,7 @@
   <div class="qr">
     <template v-if="flow.signUrl">
       <a-qrcode :value="flow.signUrl" :size="200" color="#0F172A" />
-      <p class="hint">请会员用微信扫码阅读并签署。会员也可以打开会员小程序，在首页完成签署。</p>
+      <p class="hint">请会员用手机微信扫码，阅读权益内容后签署。</p>
       <a-input-group compact class="link">
         <a-input :value="flow.signUrl" readonly style="width: calc(100% - 88px)" />
         <a-button style="width: 88px" @click="copy">复制链接</a-button>

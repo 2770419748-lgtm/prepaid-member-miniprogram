@@ -74,6 +74,12 @@ describe('菜单按角色隐藏', () => {
     expect(keys(manager)).toContain('staff');
     expect(keys(admin)).toContain('staff');
   });
+
+  it('谁都没有消费扣款入口（消费要在员工小程序扫会员码）', () => {
+    for (const roles of [clerk, manager, admin]) {
+      expect(keys(roles)).not.toContain('consume');
+    }
+  });
 });
 
 describe('权益单菜单', () => {

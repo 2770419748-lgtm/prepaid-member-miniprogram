@@ -64,7 +64,7 @@ import LedgerTable from '../../components/LedgerTable.vue';
 import ReversalModal from '../../components/ReversalModal.vue';
 import { useSessionStore } from '../../stores/session';
 import { dayStart, nextDayStart } from '../../utils/datetime';
-import { LEDGER_TYPE_OPTIONS } from '../../utils/ledger';
+import { LEDGER_TYPE_LABEL, LEDGER_TYPE_OPTIONS } from '../../utils/ledger';
 import { isMobile, normalizePhone } from '../../utils/phone';
 
 const route = useRoute();
@@ -78,7 +78,10 @@ const filters = reactive<{
 }>({
   phone: '',
   storeId: typeof route.query.storeId === 'string' ? route.query.storeId : undefined,
-  type: undefined,
+  type:
+    typeof route.query.type === 'string' && route.query.type in LEDGER_TYPE_LABEL
+      ? (route.query.type as LedgerType)
+      : undefined,
   range: typeof route.query.date === 'string' ? [route.query.date, route.query.date] : null,
 });
 

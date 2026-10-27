@@ -37,7 +37,6 @@ export const MENU: MenuGroup[] = [
     icon: 'billing',
     children: [
       { key: 'recharge', label: '充值记账' },
-      { key: 'consume', label: '消费扣款' },
       { key: 'ledger', label: '流水查询' },
     ],
   },

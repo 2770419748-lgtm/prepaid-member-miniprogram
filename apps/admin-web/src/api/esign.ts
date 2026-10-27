@@ -146,6 +146,9 @@ export async function downloadSignedPdf(flow: SignFlow): Promise<void> {
   const link = document.createElement('a');
   link.href = url;
   link.download = `${flow.title || '权益单'}-${flow.member.name || flow.member.phone}.pdf`;
+  // 老版本 Firefox 要求链接在页面里才会触发下载。
+  document.body.appendChild(link);
   link.click();
+  link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

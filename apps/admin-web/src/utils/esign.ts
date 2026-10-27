@@ -12,10 +12,14 @@ export const SIGN_STATUS: Record<SignFlowStatus, { label: string; color: string 
 export const PLAN_STATUS: Record<PlanStatus, { label: string; color: string }> = {
   DRAFT: { label: '草稿', color: 'default' },
   ACTIVE: { label: '启用', color: 'success' },
-  ARCHIVED: { label: '已归档', color: 'default' },
+  ARCHIVED: { label: '已下架', color: 'default' },
 };
 
-export const TEMPLATE_STATUS: Record<TemplateStatus, { label: string; color: string }> = PLAN_STATUS;
+export const TEMPLATE_STATUS: Record<TemplateStatus, { label: string; color: string }> = {
+  DRAFT: { label: '已停用', color: 'default' },
+  ACTIVE: { label: '启用', color: 'success' },
+  ARCHIVED: { label: '已下架', color: 'default' },
+};
 
 export const SIGN_STATUS_OPTIONS = (Object.keys(SIGN_STATUS) as SignFlowStatus[])
   .filter((s) => s !== 'DRAFT')

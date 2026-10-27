@@ -58,16 +58,15 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'billing/recharge',
         name: 'recharge',
-        component: () => import('../views/billing/BillingView.vue'),
-        props: { kind: 'RECHARGE' },
+        component: () => import('../views/billing/RechargeView.vue'),
         meta: { title: '充值记账' },
       },
       {
         path: 'billing/consume',
         name: 'consume',
-        component: () => import('../views/billing/BillingView.vue'),
-        props: { kind: 'CONSUME' },
-        meta: { title: '消费扣款' },
+        // 消费必须在员工小程序扫会员码，旧链接进来给提示。
+        component: () => import('../views/billing/ConsumeMovedView.vue'),
+        meta: { title: '消费扣款', menuKey: 'ledger' },
       },
       {
         path: 'ledger',

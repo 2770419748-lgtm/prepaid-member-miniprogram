@@ -60,9 +60,6 @@
                 <a-button type="link" size="small" @click="router.push({ name: 'recharge', query: { memberId: record.id } })">
                   充值
                 </a-button>
-                <a-button type="link" size="small" @click="router.push({ name: 'consume', query: { memberId: record.id } })">
-                  扣款
-                </a-button>
               </template>
             </a-space>
           </template>

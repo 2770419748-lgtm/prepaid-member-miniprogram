@@ -6,9 +6,7 @@
     </p>
     <a-alert class="gap" type="warning" show-icon message="当前是测试环境（沙箱），签出来的权益单不具法律效力。正式签署要等公司主体和企业章就绪后才打开。" />
 
-    <a-result v-if="missing" status="info" title="电子签功能还在接入中" sub-title="接口上线后这里就能配置权益方案和合同模板。" />
-
-    <a-tabs v-else v-model:active-key="tab">
+    <a-tabs v-model:active-key="tab">
       <a-tab-pane key="plans" tab="权益方案">
         <a-card :bordered="false" class="block">
           <div class="pm-toolbar">
@@ -16,7 +14,7 @@
               <a-radio-button value="">全部</a-radio-button>
               <a-radio-button value="ACTIVE">启用</a-radio-button>
               <a-radio-button value="DRAFT">草稿</a-radio-button>
-              <a-radio-button value="ARCHIVED">已归档</a-radio-button>
+              <a-radio-button value="ARCHIVED">已下架</a-radio-button>
             </a-radio-group>
             <span class="pm-spacer" />
             <a-button v-if="session.superAdmin" type="primary" @click="openPlan(null)">新建权益方案</a-button>
@@ -46,7 +44,7 @@
                 <a-space v-if="session.superAdmin" :size="4">
                   <a-button type="link" size="small" @click="openPlan(record)">编辑</a-button>
                   <a-button v-if="record.status !== 'ARCHIVED'" type="link" size="small" @click="setPlanStatus(record, 'ARCHIVED')">
-                    归档
+                    下架
                   </a-button>
                   <a-button v-else type="link" size="small" @click="setPlanStatus(record, 'ACTIVE')">重新启用</a-button>
                 </a-space>
@@ -130,14 +128,14 @@
     >
       <a-form layout="vertical">
         <a-form-item label="方案名称" required>
-          <a-input v-model:value="planForm.title" :maxlength="80" placeholder="例如：年度储值会员权益" />
+          <a-input v-model:value="planForm.title" :maxlength="60" placeholder="例如：年度储值会员权益" />
         </a-form-item>
         <a-form-item label="一句话说明">
           <a-input v-model:value="planForm.summary" :maxlength="200" placeholder="会员首页显示的摘要" />
         </a-form-item>
         <a-form-item label="权益条目" required extra="1 到 20 条，会员小程序最多展示前 3 条">
           <div v-for="(item, i) in planForm.items" :key="i" class="item-row">
-            <a-input v-model:value="item.title" :maxlength="80" placeholder="权益名称" style="width: 200px" />
+            <a-input v-model:value="item.title" :maxlength="40" placeholder="权益名称" style="width: 200px" />
             <a-input v-model:value="item.detail" :maxlength="500" placeholder="细则（可不填）" style="flex: 1" />
             <a-button type="text" danger :disabled="planForm.items.length <= 1" @click="planForm.items.splice(i, 1)">移除</a-button>
           </div>
@@ -146,12 +144,13 @@
           </a-button>
         </a-form-item>
         <a-form-item label="适用规则">
-          <a-textarea v-model:value="planForm.rules" :rows="3" :maxlength="2000" placeholder="例如：储值终身有效，用完为止；全公司门店通用" />
+          <a-textarea v-model:value="planForm.rules" :rows="3" :maxlength="5000" placeholder="例如：储值终身有效，用完为止；全公司门店通用" />
         </a-form-item>
         <a-form-item label="状态">
           <a-radio-group v-model:value="planForm.status">
             <a-radio value="ACTIVE">启用</a-radio>
             <a-radio value="DRAFT">草稿</a-radio>
+            <a-radio v-if="editingPlan" value="ARCHIVED">下架</a-radio>
           </a-radio-group>
         </a-form-item>
         <a-alert v-if="formError" type="error" show-icon :message="formError" />
@@ -172,14 +171,14 @@
     >
       <a-form layout="vertical">
         <a-form-item label="模板名称" required>
-          <a-input v-model:value="templateForm.name" :maxlength="80" placeholder="例如：储值会员权益单" />
+          <a-input v-model:value="templateForm.name" :maxlength="60" placeholder="例如：储值会员权益单" />
         </a-form-item>
         <a-form-item
           label="e签宝模板编号"
           required
           extra="在 e签宝沙箱后台「模板管理」里复制。保存时会去沙箱核对这个模板是否存在。"
         >
-          <a-input v-model:value="templateForm.esignTemplateId" :disabled="!!editingTemplate" :maxlength="64" class="mono" />
+          <a-input v-model:value="templateForm.esignTemplateId" :maxlength="64" class="mono" />
         </a-form-item>
         <a-form-item label="关联权益方案">
           <a-select v-model:value="templateForm.benefitPlanId" :options="planOptions" allow-clear placeholder="选择权益方案" />
@@ -188,15 +187,16 @@
           <a-radio-group v-model:value="templateForm.status">
             <a-radio value="ACTIVE">启用</a-radio>
             <a-radio value="DRAFT">停用</a-radio>
+            <a-radio v-if="editingTemplate" value="ARCHIVED">下架</a-radio>
           </a-radio-group>
         </a-form-item>
         <a-collapse ghost>
           <a-collapse-panel key="adv" header="高级：签字和盖章的位置">
             <a-form-item label="会员签字处的关键字" extra="合同里这几个字的位置会放会员签名">
-              <a-input v-model:value="templateForm.memberSignKeyword" :maxlength="40" />
+              <a-input v-model:value="templateForm.memberSignKeyword" :maxlength="20" />
             </a-form-item>
             <a-form-item label="商家盖章处的关键字" extra="合同里这几个字的位置会盖商家章">
-              <a-input v-model:value="templateForm.sealKeyword" :maxlength="40" />
+              <a-input v-model:value="templateForm.sealKeyword" :maxlength="20" />
             </a-form-item>
           </a-collapse-panel>
         </a-collapse>
@@ -223,15 +223,16 @@ import {
   type PlanStatus,
   type TemplateStatus,
 } from '../../api/esign';
-import { errorMessage, errorStatus, isNotFound } from '../../api/http';
+import { errorMessage, errorStatus } from '../../api/http';
 import { useSessionStore } from '../../stores/session';
 import { PLAN_STATUS, TEMPLATE_STATUS } from '../../utils/esign';
+
+const ESIGN_TEMPLATE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 const router = useRouter();
 const session = useSessionStore();
 
 const tab = ref<'plans' | 'templates'>('plans');
-const missing = ref(false);
 const saving = ref(false);
 const formError = ref('');
 
@@ -269,11 +270,7 @@ async function loadPlans(page = planPage.value): Promise<void> {
     plans.value = result.items;
     planTotal.value = result.total;
   } catch (e) {
-    if (isNotFound(e)) {
-      missing.value = true;
-    } else {
-      message.error(errorMessage(e));
-    }
+    message.error(errorMessage(e));
   } finally {
     plansLoading.value = false;
   }
@@ -305,7 +302,7 @@ function openPlan(plan: BenefitPlan | null): void {
     ? plan.items.map((i) => ({ title: i.title, detail: i.detail ?? '' }))
     : [{ title: '', detail: '' }];
   planForm.rules = plan?.rules ?? '';
-  planForm.status = plan?.status === 'DRAFT' ? 'DRAFT' : 'ACTIVE';
+  planForm.status = plan?.status ?? 'ACTIVE';
   formError.value = '';
   planOpen.value = true;
 }
@@ -323,20 +320,16 @@ async function savePlan(): Promise<void> {
     formError.value = '至少写一条权益';
     return;
   }
-  const body = {
-    title,
-    summary: planForm.summary.trim() || undefined,
-    items,
-    rules: planForm.rules.trim() || undefined,
-    status: planForm.status,
-  };
+  const summary = planForm.summary.trim();
+  const rules = planForm.rules.trim();
   saving.value = true;
   formError.value = '';
   try {
     if (editingPlan.value) {
-      await updatePlan(editingPlan.value.id, body);
+      // 修改时传空串才会清空说明和规则。
+      await updatePlan(editingPlan.value.id, { title, summary, items, rules, status: planForm.status });
     } else {
-      await createPlan(body);
+      await createPlan({ title, summary: summary || undefined, items, rules: rules || undefined, status: planForm.status });
     }
     message.success('权益方案已保存');
     planOpen.value = false;
@@ -351,7 +344,7 @@ async function savePlan(): Promise<void> {
 async function setPlanStatus(plan: BenefitPlan, status: PlanStatus): Promise<void> {
   try {
     await updatePlan(plan.id, { status });
-    message.success(status === 'ARCHIVED' ? '已归档，不能再用来发起新的签署' : '已重新启用');
+    message.success(status === 'ARCHIVED' ? '已下架，会员端不再展示（已签过的会员仍能看到）' : '已重新启用');
     await Promise.all([loadPlans(), loadAllPlans()]);
   } catch (e) {
     message.error(errorMessage(e));
@@ -385,11 +378,7 @@ async function loadTemplates(page = templatePage.value): Promise<void> {
     templates.value = result.items;
     templateTotal.value = result.total;
   } catch (e) {
-    if (isNotFound(e)) {
-      missing.value = true;
-    } else {
-      message.error(errorMessage(e));
-    }
+    message.error(errorMessage(e));
   } finally {
     templatesLoading.value = false;
   }
@@ -411,7 +400,7 @@ function openTemplate(template: ContractTemplate | null): void {
   templateForm.name = template?.name ?? '';
   templateForm.esignTemplateId = template?.esignTemplateId ?? '';
   templateForm.benefitPlanId = template?.benefitPlan?.id;
-  templateForm.status = template?.status === 'DRAFT' ? 'DRAFT' : 'ACTIVE';
+  templateForm.status = template?.status ?? 'ACTIVE';
   templateForm.memberSignKeyword = template?.memberSignKeyword ?? '会员签字';
   templateForm.sealKeyword = template?.sealKeyword ?? '商家盖章';
   formError.value = '';
@@ -425,6 +414,10 @@ async function saveTemplate(): Promise<void> {
     formError.value = '请填写模板名称和 e签宝模板编号';
     return;
   }
+  if (!ESIGN_TEMPLATE_ID.test(esignTemplateId)) {
+    formError.value = 'e签宝模板编号只能是字母、数字、下划线或短横线，请从 e签宝后台直接复制';
+    return;
+  }
   saving.value = true;
   formError.value = '';
   const common = {
@@ -435,7 +428,12 @@ async function saveTemplate(): Promise<void> {
   };
   try {
     if (editingTemplate.value) {
-      await updateTemplate(editingTemplate.value.id, { ...common, benefitPlanId: templateForm.benefitPlanId ?? null });
+      const changedId = esignTemplateId !== editingTemplate.value.esignTemplateId ? esignTemplateId : undefined;
+      await updateTemplate(editingTemplate.value.id, {
+        ...common,
+        esignTemplateId: changedId,
+        benefitPlanId: templateForm.benefitPlanId ?? null,
+      });
     } else {
       await createTemplate({ ...common, esignTemplateId, benefitPlanId: templateForm.benefitPlanId });
     }

@@ -111,7 +111,7 @@ const entry = ref<LedgerEntry | null>(null);
 
 const scopeText = computed(() => {
   if (session.superAdmin) {
-    return '全公司所有员工的关键操作：开卡、记账、冲正、门店和员工变动、改密码等。';
+    return '全公司所有员工的关键操作：开卡、记账、冲正、权益单签署、门店和员工变动、改密码等。';
   }
   if (session.managed.length > 0) {
     return '你管理的门店里发生的操作，以及你自己做的操作。';
