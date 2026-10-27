@@ -116,6 +116,11 @@ Page({
     this.load();
   },
 
+  /** 到店消费时出示会员码，门店扫码后才能扣款。 */
+  openPayCode() {
+    wx.navigateTo({ url: '/pages/paycode/paycode' });
+  },
+
   openStores() {
     wx.navigateTo({ url: '/pages/stores/stores' });
   },

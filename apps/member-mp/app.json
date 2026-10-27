@@ -9,7 +9,8 @@
     "pages/benefits/benefits",
     "pages/sign-list/sign-list",
     "pages/sign/sign",
-    "pages/sign-webview/sign-webview"
+    "pages/sign-webview/sign-webview",
+    "pages/paycode/paycode"
   ],
   "window": {
     "navigationBarTitleText": "储值会员",

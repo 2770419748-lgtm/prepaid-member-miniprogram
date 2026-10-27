@@ -23,10 +23,10 @@ node tools/mp-preview/server.mjs apps/member-mp 5180
 ## 支持范围
 
 - `App()`、`Page()`、`getApp()`、`getCurrentPages()`；页面生命周期 `onLoad / onShow / onReady / onHide / onUnload / onPullDownRefresh / onReachBottom / onPageScroll`。
-- WXML：`view text button navigator image input textarea scroll-view block`，`web-view`（不加载外部网页，只画占位并写明地址），`wx:if / wx:elif / wx:else`，`wx:for`（含 `wx:for-item`、`wx:for-index`），`{{ }}` 表达式，`hidden`，`data-*` 和 `bindtap / catchtap`，`button` 的 `open-type="getPhoneNumber"`。
+- WXML：`view text button navigator image input textarea scroll-view canvas block`，`web-view`（不加载外部网页，只画占位并写明地址），`wx:if / wx:elif / wx:else`，`wx:for`（含 `wx:for-item`、`wx:for-index`），`{{ }}` 表达式，`hidden`，`data-*` 和 `bindtap / catchtap`，`button` 的 `open-type="getPhoneNumber"`。
 - WXSS：`rpx`（按 375 宽换算）、`page` 和组件标签选择器、`@import`、`env(safe-area-inset-bottom)`。
 - 外壳：状态栏、导航栏（含返回、胶囊）、`tabBar`（文字和图标）。
-- wx 接口：`request`、本地存储、`login`、`getAccountInfoSync`、`getSystemInfoSync`、`getSetting / authorize / getLocation`、`openLocation`、`makePhoneCall`、`showToast / showLoading / showModal（含 editable）/ showActionSheet`、页面跳转五件套、`setNavigationBarTitle`、`stopPullDownRefresh`、`pageScrollTo`、`setClipboardData`、`downloadFile`（真的请求一次拿状态码，不存文件）、`openDocument`（提示一下）。地图和拨号是示意弹层。
+- wx 接口：`request`、本地存储、`login`、`getAccountInfoSync`、`getSystemInfoSync`、`getSetting / authorize / getLocation`、`openLocation`、`makePhoneCall`、`showToast / showLoading / showModal（含 editable）/ showActionSheet`、页面跳转五件套、`setNavigationBarTitle`、`stopPullDownRefresh`、`pageScrollTo`、`setClipboardData`、`downloadFile`（真的请求一次拿状态码，不存文件）、`openDocument`（提示一下）、`createSelectorQuery`（`select / selectAll` + `fields / boundingClientRect / node`，`canvas type="2d"` 的节点就是浏览器的 canvas）、`scanCode`（结果由场景里的 `scanResult` 给）、屏幕常亮和亮度（空操作）。地图和拨号是示意弹层。
 
 不支持自定义组件 `Component()`、WXS、`template` 和 `import`。没模拟的 wx 接口会在控制台提示，并走 `fail` 回调。
 

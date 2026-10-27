@@ -7,6 +7,7 @@ import { EsignModule } from './esign/esign.module';
 import { HealthModule } from './health/health.module';
 import { MembersModule } from './members/members.module';
 import { OrgModule } from './org/org.module';
+import { PayCodeModule } from './pay-code/pay-code.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { StorageModule } from './storage/storage.module';
@@ -32,6 +33,7 @@ import { WalletModule } from './wallet/wallet.module';
     AuthModule,
     OrgModule,
     MembersModule,
+    PayCodeModule,
     WalletModule,
     ReconciliationModule,
     EsignModule,

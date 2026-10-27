@@ -7,6 +7,7 @@ import { WechatPhoneClient } from '../src/auth/wechat/wechat-phone.client';
 import { configureApp } from '../src/configure-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { FakeWechat, randomPhone } from './support/fake-wechat';
+import { scanPayCode } from './support/pay-code';
 
 interface AuditItem {
   id: string;
@@ -133,11 +134,15 @@ describe('P2 audit log and reconciliation', () => {
     memberId: string,
     storeId: string,
     amountCent: number,
+    payCode?: string,
   ): Promise<string> {
+    // 消费要先扫会员码。没给码时替这位店员扫一张；并发用例先依次扫好再同时提交。
+    const code =
+      kind === 'consume' ? (payCode ?? (await scanPayCode(app, orgId, token, memberId, storeId))) : undefined;
     const response = await http()
       .post(`/wallets/${memberId}/${kind}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ storeId, amountCent });
+      .send({ storeId, amountCent, ...(code ? { payCode: code } : {}) });
     expect(response.status).toBe(201);
     return response.body.entry.id as string;
   }
@@ -453,8 +458,12 @@ describe('P2 audit log and reconciliation', () => {
     it('finds every wallet consistent, including after concurrent bookings', async () => {
       const memberId = await openCard(tokens.clerkA, storeA);
       await move('recharge', tokens.clerkA, memberId, storeA, 50_000);
+      const codes: string[] = [];
+      for (let index = 0; index < 4; index += 1) {
+        codes.push(await scanPayCode(app, orgId, tokens.clerkB, memberId, storeB));
+      }
       await Promise.all([
-        ...Array.from({ length: 4 }, () => move('consume', tokens.clerkB, memberId, storeB, 1_000)),
+        ...codes.map((code) => move('consume', tokens.clerkB, memberId, storeB, 1_000, code)),
         ...Array.from({ length: 4 }, () => move('recharge', tokens.clerkA, memberId, storeA, 700)),
       ]);
       const response = await get(tokens.super, '/reconciliation/check');

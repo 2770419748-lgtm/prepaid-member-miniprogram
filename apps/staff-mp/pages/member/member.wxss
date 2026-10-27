@@ -20,3 +20,8 @@
   padding-top: 24rpx;
   border-top: 2rpx solid var(--line);
 }
+
+.consume-hint {
+  margin-top: 16rpx;
+  text-align: right;
+}

@@ -24,10 +24,13 @@
       <view class="btn btn-primary" hover-class="is-pressed" bindtap="onOpenCard">为他开卡</view>
     </block>
     <text wx:elif="{{noStore}}" class="notice notice-warning">你所在的门店都已停用，暂时不能记账。</text>
-    <view wx:else class="btn-row">
-      <view class="btn btn-plain" hover-class="is-pressed" data-kind="RECHARGE" bindtap="onMove">充值</view>
-      <view class="btn btn-primary" hover-class="is-pressed" data-kind="CONSUME" bindtap="onMove">消费</view>
-    </view>
+    <block wx:else>
+      <view class="btn-row">
+        <view class="btn btn-plain" hover-class="is-pressed" bindtap="onRecharge">充值</view>
+        <view class="btn btn-primary" hover-class="is-pressed" bindtap="onConsume">扫码消费</view>
+      </view>
+      <text class="hint consume-hint">消费要先扫顾客小程序里的会员码</text>
+    </block>
 
     <view class="section-title">
       <text>{{historyTitle}}</text>

@@ -84,3 +84,10 @@ export interface MoveResult {
   /** 同一个请求号重复提交，返回的是第一次的结果，没有再记一笔。 */
   replayed: boolean;
 }
+
+/** 扫会员码以后服务端给的：是哪位会员、余额多少、要在什么时候之前扣款。 */
+export interface ScannedPayCode {
+  member: MemberCard;
+  /** 过了这个时间要请会员刷新会员码重新扫。 */
+  expiresAt: string;
+}

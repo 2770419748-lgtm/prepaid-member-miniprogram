@@ -11,6 +11,7 @@
       location: null,
       phoneDeny: false,
       envVersion: 'develop',
+      scanResult: null,
     },
     window.__MP_PREVIEW__ || {},
   );
@@ -87,7 +88,7 @@
 
   // ---------------------------------------------------------------- WXSS
 
-  const TAGS = 'scroll-view|page|view|text|button|image|navigator|input|textarea|icon|label|form|switch|picker|rich-text';
+  const TAGS = 'scroll-view|page|view|text|button|image|navigator|input|textarea|icon|label|form|switch|picker|rich-text|canvas';
   const TAG_SELECTOR = new RegExp(`(^|[\\s>+~,(])(${TAGS})(?=$|[\\s>+~,.:#\\[)])`, 'g');
 
   function convertUnits(css) {
@@ -267,7 +268,7 @@
       renderChildren(node.childNodes, scope, parent, record);
       return;
     }
-    const domTag = { image: 'img', img: 'img', input: 'input', textarea: 'textarea', text: 'span' }[tag] || 'div';
+    const domTag = { image: 'img', img: 'img', input: 'input', textarea: 'textarea', text: 'span', canvas: 'canvas' }[tag] || 'div';
     const element = document.createElement(domTag);
     element.__wx = true;
     element.__dataset = {};
@@ -385,6 +386,19 @@
         if (api) wx[api]({ url, delta });
       }
     });
+
+    // canvas 的画面在节点上：每次 setData 重绘页面时沿用同一个节点（按 id），和真机一样画过的不会丢。
+    if (tag === 'canvas' && element.id) {
+      record.canvases = record.canvases || new Map();
+      const kept = record.canvases.get(element.id);
+      if (kept) {
+        kept.className = element.className;
+        kept.setAttribute('style', element.getAttribute('style') || '');
+        parent.appendChild(kept);
+        return;
+      }
+      record.canvases.set(element.id, element);
+    }
 
     renderChildren(node.childNodes, scope, element, record);
     parent.appendChild(element);
@@ -1195,6 +1209,74 @@
     navigateBack: asyncApi('navigateBack', ({ delta }) => router.navigateBack(delta)),
     switchTab: asyncApi('switchTab', ({ url }) => router.switchTab(url)),
     reLaunch: asyncApi('reLaunch', ({ url }) => router.reLaunch(url)),
+
+    // 扫码：结果由场景脚本给（shot.scanResult），没给就当店员取消了扫码。
+    scanCode: asyncApi('scanCode', () => {
+      if (preview.scanResult == null) throw new Error('cancel');
+      return { result: String(preview.scanResult), scanType: 'QR_CODE', charSet: 'utf-8', path: '', rawData: '' };
+    }),
+    setKeepScreenOn: asyncApi('setKeepScreenOn', () => ({})),
+    getScreenBrightness: asyncApi('getScreenBrightness', () => ({ value: 0.6 })),
+    setScreenBrightness: asyncApi('setScreenBrightness', () => ({})),
+    setVisualEffectOnCapture: asyncApi('setVisualEffectOnCapture', () => ({})),
+    onUserCaptureScreen() {},
+    offUserCaptureScreen() {},
+
+    createSelectorQuery() {
+      const tasks = [];
+      const describe = (element, fields) => {
+        const rect = element.getBoundingClientRect();
+        return Object.assign(
+          { id: element.id, dataset: Object.assign({}, element.__dataset) },
+          fields.node ? { node: element } : {},
+          fields.size ? { width: rect.width, height: rect.height } : {},
+          fields.rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : {},
+        );
+      };
+      const nodesRef = (selector, all) => {
+        const find = () => {
+          const record = top();
+          if (!record) return [];
+          return all ? Array.from(record.body.querySelectorAll(selector)) : [record.body.querySelector(selector)].filter(Boolean);
+        };
+        const add = (fields, cb) => {
+          tasks.push(() => {
+            const found = find().map((element) => describe(element, fields));
+            const value = all ? found : found[0] || null;
+            if (typeof cb === 'function') cb(value);
+            return value;
+          });
+          return query;
+        };
+        return {
+          fields: (fields, cb) => add(fields || {}, cb),
+          boundingClientRect: (cb) => add({ size: true, rect: true }, cb),
+          node: (cb) => add({ node: true }, cb),
+        };
+      };
+      const query = {
+        in: () => query,
+        select: (selector) => nodesRef(selector, false),
+        selectAll: (selector) => nodesRef(selector, true),
+        exec(cb) {
+          // 等这一帧的 setData 先画到页面上再查，和真机里渲染层回包的时机一致。
+          pending += 1;
+          requestAnimationFrame(() =>
+            setTimeout(() => {
+              pending -= 1;
+              try {
+                const results = tasks.map((task) => task());
+                if (typeof cb === 'function') cb(results);
+              } catch (error) {
+                reportError('createSelectorQuery', error);
+              }
+            }, 0),
+          );
+          return query;
+        },
+      };
+      return query;
+    },
 
     // 真的请求一次（走本机转发），状态码和真机一致；文件内容不落地。
     downloadFile: asyncApi('downloadFile', async ({ url, header = {} }) => {

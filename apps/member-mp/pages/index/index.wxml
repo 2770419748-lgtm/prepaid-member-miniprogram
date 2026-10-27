@@ -30,7 +30,13 @@
       </view>
       <view wx:if="{{disabled}}" class="mc-notice">会员卡已停用，如有疑问请联系门店。</view>
       <view wx:elif="{{!hasCard}}" class="mc-notice">还没开卡。到任一门店报这个手机号就能开卡，开卡后余额会显示在这里。</view>
-      <view wx:else class="mc-foot">余额更新于 {{updatedText}}</view>
+      <view wx:else class="mc-foot">
+        <text>余额更新于 {{updatedText}}</text>
+        <view class="mc-code" hover-class="mc-code-hover" bindtap="openPayCode">
+          <image class="mc-code-icon" src="/images/icon-code-white.png"></image>
+          <text>会员码</text>
+        </view>
+      </view>
     </view>
 
     <view wx:if="{{pending}}" class="sign-banner" bindtap="openPending">

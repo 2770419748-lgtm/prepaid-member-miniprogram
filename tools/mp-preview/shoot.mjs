@@ -15,6 +15,7 @@
 //       authSetting: {},                 // 预置授权，比如 { 'scope.userLocation': true }
 //       location: { latitude, longitude } | 'deny',  // wx.getLocation 返回的位置
 //       phoneDeny: false,                // 手机号授权按钮是否模拟“拒绝”
+//       scanResult: '...' | async () => '...',  // wx.scanCode 扫到的内容；不给就当取消了扫码
 //       fullPage: false,                 // 截整页（按内容高度）
 //       before: async () => {},          // 可选：打开页面前在 Node 里做的准备（比如调接口改数据）
 //       after: async () => {},           // 可选：截完以后恢复
@@ -121,6 +122,7 @@ for (const shot of scenario.shots) {
     location: shot.location ?? null,
     phoneDeny: shot.phoneDeny ?? false,
     envVersion: shot.envVersion ?? 'develop',
+    scanResult: typeof shot.scanResult === 'function' ? await shot.scanResult() : (shot.scanResult ?? null),
   });
   const page = await context.newPage();
   const consoleErrors = [];

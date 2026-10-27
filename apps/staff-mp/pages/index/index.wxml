@@ -12,6 +12,20 @@
 
   <text wx:if="{{noStore}}" class="notice notice-warning">你所在的门店都已停用，暂时不能办理业务。请联系管理员。</text>
 
+  <view wx:else class="scan-card" hover-class="is-pressed" bindtap="onScanConsume">
+    <view class="scan-icon">
+      <view class="scan-corner tl"></view>
+      <view class="scan-corner tr"></view>
+      <view class="scan-corner bl"></view>
+      <view class="scan-corner br"></view>
+      <view class="scan-line"></view>
+    </view>
+    <view class="scan-text">
+      <text class="scan-title">扫码消费</text>
+      <text class="scan-sub">请顾客打开会员小程序出示会员码，扫到后填写消费金额</text>
+    </view>
+  </view>
+
   <view class="card">
     <text class="card-title">查会员余额</text>
     <input

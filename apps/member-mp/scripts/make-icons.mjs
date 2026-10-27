@@ -24,6 +24,7 @@ const shapes = {
   contract: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
   // 实心绿圆 + 白勾，签署成功页用。
   success: '<circle cx="12" cy="12" r="10" fill="#16A34A" stroke="none"/><path d="M7.5 12.5l3 3 6-6.5" stroke="#FFFFFF" stroke-width="2"/>',
+  code: '<rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1"/><path d="M14 14h2.5v2.5M20.5 14v.01M14 20.5h.01M17.5 17.5h3v3h-3z"/>',
 };
 
 const icons = [
@@ -42,6 +43,7 @@ const icons = [
   ['icon-contract', 'contract', GRAY, 96],
   ['icon-sign', 'contract', ORANGE, 96],
   ['icon-success', 'success', GRAY, 192],
+  ['icon-code-white', 'code', '#FFFFFF', 96],
 ];
 
 const browser = await chromium.launch();

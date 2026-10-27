@@ -268,6 +268,16 @@ async function main(): Promise<void> {
     detail: `周店员在社区店又给这个号开卡，系统回答「${messageOf(twice.body)}」。`,
   });
 
+  const member = await login('/auth/member/wx-phone', org.id, memberPhone);
+  /** 王女士在小程序里出示会员码，店员用手机扫。返回扫到的码，扣款时带上。 */
+  async function showAndScan(staffToken: string, storeId: string): Promise<string> {
+    const issued = await api('/members/me/pay-code', { method: 'POST', token: member });
+    expectStatus(issued, 201, '出示会员码');
+    const code = (issued.body as { code: string }).code;
+    expectStatus(await api('/pay-codes/scan', { token: staffToken, body: { code, storeId } }), 200, '扫会员码');
+    return code;
+  }
+
   const recharge = await api(`/wallets/${memberId}/recharge`, {
     token: clerkA,
     body: { storeId: flagship.id, amountCent: 10000, remark: '现金', requestId: randomUUID() },
@@ -279,20 +289,41 @@ async function main(): Promise<void> {
     detail: `钱在店里线下收，系统只记账。余额变成 ${yuan((recharge.body as MoveBody).balanceCent)} 元。`,
   });
 
-  const spend = await api(`/wallets/${memberId}/consume`, {
+  const unscanned = await api(`/wallets/${memberId}/consume`, {
     token: clerkA,
     body: { storeId: flagship.id, amountCent: 3000, requestId: randomUUID() },
+  });
+  expectStatus(unscanned, 400, '没扫码扣款');
+  steps.push({
+    tone: 'blocked',
+    title: '不扫会员码扣不了款',
+    detail: `李店员没扫王女士的会员码就想扣 30.00 元，系统回答「${messageOf(unscanned.body)}」。`,
+  });
+
+  const spend = await api(`/wallets/${memberId}/consume`, {
+    token: clerkA,
+    body: {
+      storeId: flagship.id,
+      amountCent: 3000,
+      requestId: randomUUID(),
+      payCode: await showAndScan(clerkA, flagship.id),
+    },
   });
   expectStatus(spend, 201, '消费');
   steps.push({
     tone: 'ok',
-    title: '在旗舰店消费 30.00 元',
+    title: '王女士出示会员码，李店员扫码后扣 30.00 元',
     detail: `余额变成 ${yuan((spend.body as MoveBody).balanceCent)} 元。`,
   });
 
   const elsewhere = await api(`/wallets/${memberId}/consume`, {
     token: clerkB,
-    body: { storeId: community.id, amountCent: 2000, requestId: randomUUID() },
+    body: {
+      storeId: community.id,
+      amountCent: 2000,
+      requestId: randomUUID(),
+      payCode: await showAndScan(clerkB, community.id),
+    },
   });
   expectStatus(elsewhere, 201, '跨店消费');
   steps.push({
@@ -303,7 +334,12 @@ async function main(): Promise<void> {
 
   const tooMuch = await api(`/wallets/${memberId}/consume`, {
     token: clerkB,
-    body: { storeId: community.id, amountCent: 8000, requestId: randomUUID() },
+    body: {
+      storeId: community.id,
+      amountCent: 8000,
+      requestId: randomUUID(),
+      payCode: await showAndScan(clerkB, community.id),
+    },
   });
   expectStatus(tooMuch, 400, '余额不足');
   steps.push({
@@ -312,14 +348,16 @@ async function main(): Promise<void> {
     detail: `余额只有 50.00 元，想扣 80.00 元，系统回答「${messageOf(tooMuch.body)}」，账上什么也没动。`,
   });
 
+  const codeAtA = await showAndScan(clerkA, flagship.id);
+  const codeAtB = await showAndScan(clerkB, community.id);
   const race = await Promise.all([
     api(`/wallets/${memberId}/consume`, {
       token: clerkA,
-      body: { storeId: flagship.id, amountCent: 4000, requestId: randomUUID() },
+      body: { storeId: flagship.id, amountCent: 4000, requestId: randomUUID(), payCode: codeAtA },
     }),
     api(`/wallets/${memberId}/consume`, {
       token: clerkB,
-      body: { storeId: community.id, amountCent: 4000, requestId: randomUUID() },
+      body: { storeId: community.id, amountCent: 4000, requestId: randomUUID(), payCode: codeAtB },
     }),
   ]);
   const winners = race.filter((result) => result.status === 201);
@@ -398,7 +436,6 @@ async function main(): Promise<void> {
     detail: `同一次「确认」带着同一个请求号，第二次提交系统直接返回第一次的结果。余额 ${yuan((retry.body as MoveBody).balanceCent)} 元。`,
   });
 
-  const member = await login('/auth/member/wx-phone', org.id, memberPhone);
   const wallet = await api('/members/me/wallet', { token: member });
   expectStatus(wallet, 200, '会员查余额');
   const mine = await api('/ledger', { token: member });

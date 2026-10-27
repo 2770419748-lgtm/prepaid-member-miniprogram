@@ -154,3 +154,33 @@ export function refreshSignFlow(id: string): Promise<SignFlowView> {
 export function contractPdfPath(id: string): string {
   return `/members/me/sign-flows/${encodeURIComponent(id)}/pdf`;
 }
+
+/** 会员码：到店消费时出示，门店扫码后才能扣款。码只能用一次，隔一会儿就换新的。 */
+export interface IssuedPayCode {
+  id: string;
+  /** 二维码里的那串数字。 */
+  code: string;
+  expiresAt: string;
+  /** 隔多少秒换一张新码。 */
+  refreshAfterSeconds: number;
+}
+
+/** ACTIVE 等着扫；SCANNED 门店已扫、正在填金额；USED 已扣款；EXPIRED 过期了要换新码。 */
+export type PayCodeStatus = 'ACTIVE' | 'SCANNED' | 'USED' | 'EXPIRED';
+
+export interface PayCodeState {
+  id: string;
+  status: PayCodeStatus;
+  expiresAt: string;
+  storeName: string | null;
+  /** 用这张码扣的那一笔，只有 USED 时有。 */
+  entry: LedgerItem | null;
+}
+
+export function issuePayCode(): Promise<IssuedPayCode> {
+  return request<IssuedPayCode>('/members/me/pay-code', { method: 'POST' });
+}
+
+export function fetchPayCodeState(id: string): Promise<PayCodeState> {
+  return request<PayCodeState>(`/members/me/pay-code/${encodeURIComponent(id)}`);
+}
