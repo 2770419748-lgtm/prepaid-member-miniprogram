@@ -1,0 +1,15 @@
+{
+  "name": "prepaid-member",
+  "private": true,
+  "packageManager": "pnpm@10.33.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter api test",
+    "dev:api": "pnpm --filter api start:dev",
+    "dev:admin": "pnpm --filter admin-web dev"
+  }
+}

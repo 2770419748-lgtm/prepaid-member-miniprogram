@@ -1,0 +1,286 @@
+// 储值会员 · M0 数据模型
+//
+// 账务原则（业务 API 留给后续里程碑）：
+// 1. 金额一律为整数分（cent），禁止用浮点元。
+// 2. 余额挂在会员 Wallet 上，全公司通用，不按门店拆余额。
+// 3. 任何余额变更必须写 LedgerEntry；扣款前校验余额；同一事务内用 Wallet.version 乐观锁。
+// 4. LedgerEntry 禁止硬删（不提供删除入口；关联使用 Restrict）。
+// 5. 时间字段使用 timestamptz。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrgStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum StoreStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum StaffStatus {
+  ACTIVE
+  DISABLED
+}
+
+/// 角色预留。鉴权实现属后续里程碑。
+enum StaffRole {
+  SUPER_ADMIN
+  STORE_MANAGER
+  STAFF
+}
+
+enum MemberStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum LedgerType {
+  RECHARGE
+  CONSUME
+  REVERSAL
+}
+
+enum BenefitPlanStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum ContractTemplateStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum SignFlowStatus {
+  DRAFT
+  PENDING
+  SIGNED
+  REJECTED
+  EXPIRED
+  CANCELED
+}
+
+/// 签署环境。默认沙箱。正式环境仅在 esign.production.enabled 打开后允许写入。
+enum SignEnv {
+  SANDBOX
+  PRODUCTION
+}
+
+model Org {
+  id        String    @id @default(cuid())
+  name      String
+  status    OrgStatus @default(ACTIVE)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  stores            Store[]
+  staff             Staff[]
+  members           Member[]
+  ledgerEntries     LedgerEntry[]
+  benefitPlans      BenefitPlan[]
+  contractTemplates ContractTemplate[]
+  signFlows         SignFlow[]
+  auditLogs         AuditLog[]
+
+  @@map("orgs")
+}
+
+model Store {
+  id        String      @id @default(cuid())
+  orgId     String      @map("org_id")
+  name      String
+  status    StoreStatus @default(ACTIVE)
+  address   String?
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  org           Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  staffRoles    StaffStoreRole[]
+  openedMembers Member[]         @relation("MemberOpenStore")
+  ledgerEntries LedgerEntry[]
+
+  @@index([orgId])
+  @@map("stores")
+}
+
+model Staff {
+  id        String      @id @default(cuid())
+  orgId     String      @map("org_id")
+  phone     String
+  name      String
+  status    StaffStatus @default(ACTIVE)
+  wxOpenId  String?     @map("wx_open_id")
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  org        Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  storeRoles StaffStoreRole[]
+  ledgerOps  LedgerEntry[]    @relation("LedgerOperator")
+  auditLogs  AuditLog[]
+
+  @@unique([orgId, phone])
+  @@index([orgId])
+  @@map("staff")
+}
+
+model StaffStoreRole {
+  id      String    @id @default(cuid())
+  staffId String    @map("staff_id")
+  storeId String    @map("store_id")
+  role    StaffRole
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([staffId, storeId])
+  @@index([storeId])
+  @@map("staff_store_roles")
+}
+
+model Member {
+  id          String       @id @default(cuid())
+  orgId       String       @map("org_id")
+  phone       String
+  wxOpenId    String?      @map("wx_open_id")
+  wxUnionId   String?      @map("wx_union_id")
+  openStoreId String?      @map("open_store_id")
+  status      MemberStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  org       Org           @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  openStore Store?        @relation("MemberOpenStore", fields: [openStoreId], references: [id], onDelete: SetNull)
+  wallet    Wallet?
+  ledger    LedgerEntry[]
+  signFlows SignFlow[]
+
+  @@unique([orgId, phone])
+  @@index([orgId])
+  @@map("members")
+}
+
+/// 会员钱包。余额全公司通用（挂在会员，不按门店拆分）。
+/// balanceCent 单位为分。更新余额必须匹配 version 并加一（乐观锁）。
+model Wallet {
+  id          String   @id @default(cuid())
+  memberId    String   @unique @map("member_id")
+  balanceCent Int      @default(0) @map("balance_cent")
+  version     Int      @default(0)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  member  Member        @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  entries LedgerEntry[]
+
+  @@map("wallets")
+}
+
+/// 账本流水。禁止硬删。金额单位为分。
+/// RECHARGE / CONSUME / REVERSAL 的方向由 type 表达，amountCent 记绝对值。
+model LedgerEntry {
+  id              String     @id @default(cuid())
+  orgId           String     @map("org_id")
+  memberId        String     @map("member_id")
+  walletId        String     @map("wallet_id")
+  storeId         String     @map("store_id")
+  operatorStaffId String?    @map("operator_staff_id")
+  type            LedgerType
+  amountCent      Int        @map("amount_cent")
+  balanceBefore   Int        @map("balance_before")
+  balanceAfter    Int        @map("balance_after")
+  remark          String?
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  org      Org    @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  wallet   Wallet @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  store    Store  @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  operator Staff? @relation("LedgerOperator", fields: [operatorStaffId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, createdAt])
+  @@index([memberId, createdAt])
+  @@index([walletId])
+  @@map("ledger_entries")
+}
+
+model BenefitPlan {
+  id          String            @id @default(cuid())
+  orgId       String            @map("org_id")
+  title       String
+  contentJson Json?             @map("content_json")
+  status      BenefitPlanStatus @default(DRAFT)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  org       Org                @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  templates ContractTemplate[]
+
+  @@index([orgId])
+  @@map("benefit_plans")
+}
+
+model ContractTemplate {
+  id              String                 @id @default(cuid())
+  orgId           String                 @map("org_id")
+  benefitPlanId   String?                @map("benefit_plan_id")
+  esignTemplateId String                 @map("esign_template_id")
+  name            String
+  status          ContractTemplateStatus @default(DRAFT)
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  org         Org           @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  benefitPlan BenefitPlan?  @relation(fields: [benefitPlanId], references: [id], onDelete: SetNull)
+  signFlows   SignFlow[]
+
+  @@index([orgId])
+  @@map("contract_templates")
+}
+
+model SignFlow {
+  id           String         @id @default(cuid())
+  orgId        String         @map("org_id")
+  memberId     String         @map("member_id")
+  templateId   String         @map("template_id")
+  esignFlowId  String?        @map("esign_flow_id")
+  status       SignFlowStatus @default(DRAFT)
+  signUrl      String?        @map("sign_url")
+  pdfObjectKey String?        @map("pdf_object_key")
+  env          SignEnv        @default(SANDBOX)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  org      Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  member   Member           @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  template ContractTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+
+  @@index([orgId])
+  @@index([memberId])
+  @@map("sign_flows")
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  orgId        String   @map("org_id")
+  actorStaffId String?  @map("actor_staff_id")
+  action       String
+  targetType   String?  @map("target_type")
+  targetId     String?  @map("target_id")
+  payloadJson  Json?    @map("payload_json")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  org   Org    @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  actor Staff? @relation(fields: [actorStaffId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, createdAt])
+  @@map("audit_logs")
+}

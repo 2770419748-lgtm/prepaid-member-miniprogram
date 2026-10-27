@@ -1,0 +1,5 @@
+<view class="page">
+  <text class="title">{{title}}</text>
+  <text class="hint">{{hint}}</text>
+  <navigator class="link" open-type="navigateBack">返回首页</navigator>
+</view>
