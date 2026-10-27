@@ -1,0 +1,75 @@
+<view class="page {{detail && detail.canSign && !success ? 'with-bar' : ''}}">
+  <block wx:if="{{loading}}">
+    <view class="card">
+      <view class="skeleton" style="width: 320rpx; height: 36rpx;"></view>
+      <view class="skeleton" style="width: 200rpx; height: 28rpx; margin-top: 24rpx;"></view>
+    </view>
+    <view class="card">
+      <view class="skeleton" style="width: 160rpx; height: 32rpx;"></view>
+      <view class="skeleton" style="height: 28rpx; margin-top: 32rpx;"></view>
+      <view class="skeleton" style="height: 28rpx; margin-top: 24rpx;"></view>
+      <view class="skeleton" style="height: 28rpx; margin-top: 24rpx;"></view>
+    </view>
+  </block>
+
+  <view wx:elif="{{error}}" class="error-box">
+    <view>{{error}}</view>
+    <view class="retry" bindtap="retry">重新加载</view>
+  </view>
+
+  <view wx:elif="{{success}}" class="success">
+    <image class="success-icon" src="/images/icon-success.png"></image>
+    <view class="success-title">签署完成</view>
+    <view class="success-text">「{{detail.title}}」已签署，会员权益已生效。</view>
+    <view wx:if="{{detail.sandbox}}" class="success-test"><text class="tag tag-test">测试签署</text></view>
+    <view class="success-actions">
+      <button class="btn-primary" bindtap="goHome">回到首页</button>
+      <button wx:if="{{detail.hasPdf}}" class="btn-plain success-pdf" bindtap="viewContract">查看合同</button>
+    </view>
+  </view>
+
+  <block wx:else>
+    <view class="card sign-head">
+      <view class="sign-title">{{detail.title}}</view>
+      <view class="sign-tags">
+        <text class="tag tag-{{detail.tone}}">{{detail.statusText}}</text>
+        <text wx:if="{{detail.sandbox}}" class="tag tag-test">测试签署</text>
+      </view>
+      <view class="sign-time">{{detail.timeLabel}} {{detail.timeText}}</view>
+    </view>
+
+    <view wx:if="{{detail.sandbox && detail.canSign}}" class="notice notice-test">当前是测试环境的签署，只用来试用签署流程。</view>
+    <view wx:if="{{detail.note}}" class="notice {{detail.tone === 'ok' ? 'notice-ok' : ''}}">{{detail.note}}</view>
+
+    <view wx:if="{{detail.hasPlan}}" class="card">
+      <view class="card-title">{{detail.planTitle}}</view>
+      <view wx:if="{{detail.summary}}" class="plan-summary">{{detail.summary}}</view>
+      <view class="benefit" wx:for="{{detail.items}}" wx:key="title">
+        <view class="benefit-dot"></view>
+        <view class="benefit-text">
+          <view class="benefit-title">{{item.title}}</view>
+          <view wx:if="{{item.detail}}" class="benefit-detail">{{item.detail}}</view>
+        </view>
+      </view>
+    </view>
+    <view wx:else class="card plan-missing">这份权益单的具体内容，以签署页面上的为准。</view>
+
+    <view wx:if="{{detail.ruleLines.length > 0}}" class="card">
+      <view class="card-title">使用规则</view>
+      <view class="rule-line" wx:for="{{detail.ruleLines}}" wx:key="*this">{{item}}</view>
+    </view>
+
+    <button wx:if="{{detail.hasPdf}}" class="btn-plain" bindtap="viewContract">查看合同</button>
+
+    <view class="footer-note">如对权益内容有疑问，请联系门店</view>
+
+    <view wx:if="{{detail.canSign}}" class="sign-bar">
+      <view class="agree" bindtap="toggleAgree">
+        <view class="check {{agreed ? 'check-on' : ''}}"></view>
+        <text>我已阅读以上权益内容</text>
+      </view>
+      <button class="btn-primary {{agreed ? '' : 'btn-dim'}}" loading="{{opening}}" bindtap="openSign">去签署</button>
+      <view class="sign-bar-hint">将打开电子签署页面，按页面提示完成签署</view>
+    </view>
+  </block>
+</view>

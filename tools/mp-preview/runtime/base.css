@@ -696,3 +696,43 @@ body {
   justify-content: center;
   cursor: pointer;
 }
+
+/* web-view 占位：铺满整页。 */
+.wx-web-view {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f6f7;
+}
+
+.mp-webview-box {
+  width: 260px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.mp-webview-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  border: 2px solid #cbd5e1;
+  background: radial-gradient(circle, transparent 54%, #cbd5e1 56%, #cbd5e1 60%, transparent 62%),
+    linear-gradient(#cbd5e1, #cbd5e1) center / 2px 100% no-repeat,
+    linear-gradient(#cbd5e1, #cbd5e1) center / 100% 2px no-repeat;
+}
+
+.mp-webview-host {
+  font-size: 15px;
+  color: #0f172a;
+  word-break: break-all;
+}
+
+.mp-webview-note {
+  margin-top: 8px;
+}

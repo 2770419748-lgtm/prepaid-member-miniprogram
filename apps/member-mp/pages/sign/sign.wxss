@@ -1,0 +1,129 @@
+/* 底部固定的同意区不能挡住正文。 */
+.with-bar {
+  padding-bottom: calc(320rpx + env(safe-area-inset-bottom));
+}
+
+.sign-head {
+  padding: 36rpx 32rpx;
+}
+
+.sign-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.sign-tags {
+  margin-top: 16rpx;
+}
+
+.sign-tags .tag {
+  margin-right: 12rpx;
+}
+
+.sign-time {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-summary {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #64748b;
+}
+
+.plan-missing {
+  font-size: 28rpx;
+  color: #64748b;
+}
+
+.sign-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 24rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+  background: #ffffff;
+  box-shadow: 0 -8rpx 24rpx rgba(15, 23, 42, 0.06);
+}
+
+.agree {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+  font-size: 28rpx;
+  color: #0f172a;
+}
+
+.check {
+  width: 32rpx;
+  height: 32rpx;
+  margin-right: 16rpx;
+  border-radius: 50%;
+  border: 2rpx solid #94a3b8;
+  box-sizing: border-box;
+  position: relative;
+  flex: none;
+}
+
+.check-on {
+  border-color: #1677ff;
+  background: #1677ff;
+}
+
+/* 勾：一个旋转的直角。 */
+.check-on::after {
+  content: '';
+  position: absolute;
+  left: 9rpx;
+  top: 4rpx;
+  width: 8rpx;
+  height: 14rpx;
+  border-right: 3rpx solid #ffffff;
+  border-bottom: 3rpx solid #ffffff;
+  transform: rotate(45deg);
+}
+
+.sign-bar-hint {
+  margin-top: 16rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #94a3b8;
+}
+
+.success {
+  padding: 96rpx 32rpx 0;
+  text-align: center;
+}
+
+.success-icon {
+  width: 128rpx;
+  height: 128rpx;
+}
+
+.success-title {
+  margin-top: 32rpx;
+  font-size: 40rpx;
+  font-weight: 600;
+}
+
+.success-text {
+  margin-top: 16rpx;
+  font-size: 28rpx;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.success-test {
+  margin-top: 20rpx;
+}
+
+.success-actions {
+  margin-top: 72rpx;
+}
+
+.success-pdf {
+  margin-top: 24rpx;
+}

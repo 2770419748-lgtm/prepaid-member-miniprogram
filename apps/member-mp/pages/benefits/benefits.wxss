@@ -1,0 +1,68 @@
+.plan-summary {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #64748b;
+}
+
+.plan-rules {
+  margin-top: 32rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #e2e8f0;
+}
+
+.plan-rules-title {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.plan-foot {
+  margin-top: 32rpx;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.plan-action {
+  display: flex;
+  align-items: center;
+  font-size: 28rpx;
+  color: #1677ff;
+}
+
+.plan-action .chevron {
+  margin-left: 8rpx;
+  width: 12rpx;
+  height: 12rpx;
+  border-color: #1677ff;
+}
+
+.plan-sign {
+  padding: 0 36rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  border-radius: 999rpx;
+  background: #1677ff;
+  color: #ffffff;
+}
+
+.plan-hint {
+  font-size: 26rpx;
+  color: #94a3b8;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+}
+
+.entry-icon {
+  width: 40rpx;
+  height: 40rpx;
+  flex: none;
+}
+
+.entry-text {
+  flex: 1;
+  margin-left: 20rpx;
+  font-size: 30rpx;
+}

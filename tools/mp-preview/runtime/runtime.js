@@ -346,6 +346,22 @@
       element.addEventListener('focus', () => fire(record, element, 'focus', { value: element.value }));
     }
 
+    // web-view 在真机上铺满整页打开外部网页；预览里不加载，只画一个占位，写明要打开的地址。
+    if (tag === 'web-view') {
+      const src = toText(props.src);
+      let host = src;
+      try {
+        host = new URL(src).host;
+      } catch {
+        // 不是完整地址就原样显示。
+      }
+      element.innerHTML =
+        '<div class="mp-webview-box"><div class="mp-webview-icon"></div>' +
+        `<div class="mp-webview-host">${escapeHtml(host)}</div>` +
+        '<div class="mp-webview-note">真机会在这里打开这个网页（预览不加载外部网页）</div></div>';
+      element.dataset.src = src;
+    }
+
     if (tag === 'scroll-view') {
       element.style.overflowY = 'scroll-y' in props && flag(props['scroll-y']) ? 'auto' : 'hidden';
       element.style.overflowX = 'scroll-x' in props && flag(props['scroll-x']) ? 'auto' : 'hidden';
@@ -1180,7 +1196,17 @@
     switchTab: asyncApi('switchTab', ({ url }) => router.switchTab(url)),
     reLaunch: asyncApi('reLaunch', ({ url }) => router.reLaunch(url)),
 
-    downloadFile: asyncApi('downloadFile', ({ url }) => ({ tempFilePath: `preview://${url}`, statusCode: 200 })),
+    // 真的请求一次（走本机转发），状态码和真机一致；文件内容不落地。
+    downloadFile: asyncApi('downloadFile', async ({ url, header = {} }) => {
+      pending += 1;
+      try {
+        const reply = await fetch('/__request', { method: 'POST', body: JSON.stringify({ url, method: 'GET', header }) }).then((r) => r.json());
+        if (!reply.ok) throw new Error(reply.errMsg);
+        return { tempFilePath: `preview://${url}`, statusCode: reply.statusCode };
+      } finally {
+        pending -= 1;
+      }
+    }),
     openDocument: asyncApi('openDocument', () => {
       openToast({ title: '预览：此处真机打开文件', icon: 'none' });
       return {};

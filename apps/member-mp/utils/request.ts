@@ -78,3 +78,31 @@ export function request<T>(path: string, options: RequestOptions = {}): Promise<
 export function errorText(error: unknown): string {
   return error instanceof ApiError ? error.message : '没有办成，请稍后再试';
 }
+
+/** 下载要登录才能取的文件（签好的合同 PDF），返回本机临时路径。状态码交给调用方判断。 */
+export function download(path: string): Promise<string> {
+  const token = currentToken();
+  return new Promise((resolve, reject) => {
+    wx.downloadFile({
+      url: `${apiBase()}${path}`,
+      header: token ? { Authorization: `Bearer ${token}` } : {},
+      timeout: 30000,
+      success(res) {
+        if (res.statusCode === 200) {
+          resolve(res.tempFilePath);
+          return;
+        }
+        if (res.statusCode === 401) {
+          clearSession();
+          goLogin();
+          reject(new ApiError('登录已过期，请重新登录', 401));
+          return;
+        }
+        reject(new ApiError(friendlyMessage(null, res.statusCode), res.statusCode));
+      },
+      fail() {
+        reject(new ApiError(friendlyMessage(null, 0), 0));
+      },
+    });
+  });
+}

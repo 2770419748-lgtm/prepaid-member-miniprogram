@@ -13,6 +13,16 @@
       <text class="menu-text">使用明细</text>
       <view class="chevron"></view>
     </view>
+    <view class="menu-item" bindtap="openBenefits">
+      <image class="menu-icon" src="/images/icon-benefit.png"></image>
+      <text class="menu-text">会员权益</text>
+      <view class="chevron"></view>
+    </view>
+    <view class="menu-item" bindtap="openSignList">
+      <image class="menu-icon" src="/images/icon-contract.png"></image>
+      <text class="menu-text">我的权益单</text>
+      <view class="chevron"></view>
+    </view>
     <view class="menu-item" bindtap="openStores">
       <image class="menu-icon" src="/images/icon-store-gray.png"></image>
       <text class="menu-text">可用门店</text>

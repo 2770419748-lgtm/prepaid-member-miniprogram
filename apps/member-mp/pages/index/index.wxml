@@ -33,7 +33,35 @@
       <view wx:else class="mc-foot">余额更新于 {{updatedText}}</view>
     </view>
 
-    <view class="card">
+    <view wx:if="{{pending}}" class="sign-banner" bindtap="openPending">
+      <image class="sign-banner-icon" src="/images/icon-sign.png"></image>
+      <view class="sign-banner-text">
+        <view class="sign-banner-title">{{pendingCount > 1 ? '您有 ' + pendingCount + ' 份权益单待签署' : '您有一份权益单待签署'}}</view>
+        <view class="sign-banner-sub">{{pending.title}}，签署后权益生效</view>
+      </view>
+      <view class="sign-banner-go">去签署</view>
+    </view>
+
+    <view wx:if="{{benefit}}" class="card" bindtap="openBenefits">
+      <view class="card-head">
+        <text class="card-title">会员权益</text>
+        <text wx:if="{{benefit.statusText}}" class="tag tag-{{benefit.tone}}">{{benefit.statusText}}</text>
+        <view class="card-more">
+          <text>{{benefit.more ? '全部权益' : '详情'}}</text>
+          <view class="chevron"></view>
+        </view>
+      </view>
+      <view class="rule" wx:for="{{benefit.items}}" wx:key="title">
+        <view class="rule-dot"></view>
+        <view class="rule-text">
+          <text class="rule-title">{{item.title}}</text>
+          <text wx:if="{{item.detail}}" class="rule-detail">{{item.detail}}</text>
+        </view>
+      </view>
+      <view wx:if="{{benefit.hint}}" class="benefit-hint">{{benefit.hint}}</view>
+    </view>
+
+    <view wx:else class="card">
       <view class="card-title">储值说明</view>
       <view class="rule" wx:for="{{rules}}" wx:key="title">
         <view class="rule-dot"></view>
