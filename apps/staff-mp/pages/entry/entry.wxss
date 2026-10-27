@@ -40,3 +40,11 @@
 .strong {
   font-weight: 600;
 }
+
+.code-ok {
+  color: var(--success);
+}
+
+.scan-need {
+  margin-bottom: 32rpx;
+}

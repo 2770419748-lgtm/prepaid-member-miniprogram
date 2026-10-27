@@ -2,7 +2,9 @@ import { fetchLedger, fetchMember } from '../../utils/api';
 import { messageOf } from '../../utils/errors';
 import { LedgerRow, toLedgerRow } from '../../utils/ledger';
 import { formatCent } from '../../utils/money';
+import { consumeEntryUrl } from '../../utils/paycode';
 import { maskPhone } from '../../utils/phone';
+import { scanMemberCode } from '../../utils/scan';
 import { currentStore, rememberMember, requireSession } from '../../utils/session';
 import { dayKey, dayLabel } from '../../utils/time';
 import type { MemberCard } from '../../utils/types';
@@ -94,8 +96,31 @@ Page({
     }
   },
 
-  onMove(event: WechatMiniprogram.BaseEvent<Record<string, never>, { kind: string }>) {
-    wx.navigateTo({ url: `/pages/entry/entry?memberId=${this.data.id}&kind=${event.currentTarget.dataset.kind}` });
+  onRecharge() {
+    wx.navigateTo({ url: `/pages/entry/entry?memberId=${this.data.id}&kind=RECHARGE` });
+  },
+
+  /** 消费要先扫这位会员出示的会员码，扫到才能填金额。 */
+  async onConsume() {
+    const session = requireSession();
+    const store = session ? currentStore(session) : null;
+    if (!store) {
+      return;
+    }
+    const scanned = await scanMemberCode(store.id);
+    if (!scanned) {
+      return;
+    }
+    if (scanned.member.id !== this.data.id) {
+      wx.showModal({
+        title: '不是这位会员的会员码',
+        content: `扫到的是 ${maskPhone(scanned.member.phone)} 的会员码。请让当前会员打开自己的会员码。`,
+        showCancel: false,
+        confirmText: '知道了',
+      });
+      return;
+    }
+    wx.navigateTo({ url: consumeEntryUrl(scanned.member.id, scanned.code, scanned.expiresAt) });
   },
 
   onOpenCard() {

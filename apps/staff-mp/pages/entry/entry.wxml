@@ -19,11 +19,23 @@
     <view class="btn btn-quiet" hover-class="is-pressed" bindtap="onNextMember">办理下一位</view>
   </block>
 
+  <block wx:elif="{{needCode}}">
+    <view class="card scan-need">
+      <text class="card-title">消费要先扫会员码</text>
+      <text class="hint">请顾客打开会员小程序，点「会员码」，再用下面的按钮扫码。扫到才能填扣款金额。</text>
+    </view>
+    <view class="btn btn-primary" hover-class="is-pressed" bindtap="onRescan">扫会员码</view>
+  </block>
+
   <block wx:elif="{{ready}}">
     <view class="card summary">
       <view class="kv"><text class="kv-key">会员</text><text class="kv-value">{{memberLabel}}</text></view>
       <view class="kv"><text class="kv-key">当前余额</text><text class="kv-value">{{balance}} 元</text></view>
       <view class="kv"><text class="kv-key">记账门店</text><text class="kv-value">{{storeName}}</text></view>
+      <view wx:if="{{kind === 'CONSUME'}}" class="kv">
+        <text class="kv-key">会员码</text>
+        <text class="kv-value code-ok">已扫码{{codeText ? ' · ' + codeText : ''}}</text>
+      </view>
     </view>
 
     <view class="card">

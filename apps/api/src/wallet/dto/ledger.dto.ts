@@ -46,6 +46,19 @@ export class MoneyMoveDto {
   requestId?: string;
 }
 
+export class ConsumeDto extends MoneyMoveDto {
+  @ApiProperty({
+    example: '868123456789012345',
+    description:
+      '刚扫到的会员码（顾客会员小程序里的二维码，先调 POST /pay-codes/scan）。' +
+      '扫码的店员在扫码的门店、5 分钟内可用，只能用一次',
+  })
+  @IsString({ message: '请先扫顾客的会员码' })
+  @IsNotEmpty({ message: '请先扫顾客的会员码' })
+  @MaxLength(64, { message: '会员码不对，请重新扫码' })
+  payCode!: string;
+}
+
 export class ReversalDto {
   @ApiProperty({ example: '金额录错', description: '冲正原因，必填' })
   @IsString()

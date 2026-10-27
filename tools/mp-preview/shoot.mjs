@@ -15,12 +15,13 @@
 //       authSetting: {},                 // 预置授权，比如 { 'scope.userLocation': true }
 //       location: { latitude, longitude } | 'deny',  // wx.getLocation 返回的位置
 //       phoneDeny: false,                // 手机号授权按钮是否模拟“拒绝”
+//       scanResult: '...' | async () => '...',  // wx.scanCode 扫到的内容；不给就当取消了扫码
 //       fullPage: false,                 // 截整页（按内容高度）
 //       before: async () => {},          // 可选：打开页面前在 Node 里做的准备（比如调接口改数据）
 //       after: async () => {},           // 可选：截完以后恢复
 //       steps: [{ tap: '.btn' }, { wait: 300 }, { scroll: 400 }, { fill: ['.input', '文字'] },
 //               { pullDown: true }, { expectText: '余额' }, { shot: '02-弹窗', caption: '...' },
-//               { run: async () => {} }],   // run：在 Node 里执行，比如让本机假服务改状态
+//               { run: async (page) => {} }],   // run：在 Node 里执行，比如让本机假服务改状态；page 是 Playwright 页面
 //     }],
 //   }
 
@@ -90,8 +91,8 @@ async function runStep(page, step) {
   } else if (step.eval) {
     await page.evaluate(step.eval);
   } else if (step.run) {
-    // 在 Node 里跑，比如让本机假服务把数据改成下一步要的样子。
-    await step.run();
+    // 在 Node 里跑，比如让本机假服务把数据改成下一步要的样子；需要读页面内容时用传进来的 page。
+    await step.run(page);
   } else if (step.expectText) {
     const text = await page.locator('#phone').innerText();
     if (!text.includes(step.expectText)) throw new Error(`页面上没有找到「${step.expectText}」`);
@@ -121,6 +122,7 @@ for (const shot of scenario.shots) {
     location: shot.location ?? null,
     phoneDeny: shot.phoneDeny ?? false,
     envVersion: shot.envVersion ?? 'develop',
+    scanResult: typeof shot.scanResult === 'function' ? await shot.scanResult() : (shot.scanResult ?? null),
   });
   const page = await context.newPage();
   const consoleErrors = [];

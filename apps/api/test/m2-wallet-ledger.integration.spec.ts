@@ -8,6 +8,7 @@ import { WechatPhoneClient } from '../src/auth/wechat/wechat-phone.client';
 import { configureApp } from '../src/configure-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { FakeWechat, messageOf, randomPhone } from './support/fake-wechat';
+import { scanPayCode } from './support/pay-code';
 
 /**
  * M2 验收：开卡、充值、扣款、冲正、流水查询、并发扣款。
@@ -60,13 +61,22 @@ describe('M2 wallet and ledger', () => {
     return response.body as { id: string; phone: string; balanceCent: number; hasCard: boolean };
   }
 
-  function move(
+  function scan(token: string, memberId: string, storeId: string): Promise<string> {
+    return scanPayCode(app, orgId, token, memberId, storeId);
+  }
+
+  /** 消费没给会员码时，先替这位店员扫一张。并发用例要先依次扫好码再同时提交。 */
+  async function move(
     kind: 'recharge' | 'consume',
     token: string,
     memberId: string,
-    body: { storeId: string; amountCent: unknown; remark?: string; requestId?: string },
+    body: { storeId: string; amountCent: unknown; remark?: string; requestId?: string; payCode?: string },
   ) {
-    return http().post(`/wallets/${memberId}/${kind}`).set('Authorization', `Bearer ${token}`).send(body);
+    const payload =
+      kind === 'consume' && body.payCode === undefined
+        ? { ...body, payCode: await scan(token, memberId, body.storeId) }
+        : body;
+    return http().post(`/wallets/${memberId}/${kind}`).set('Authorization', `Bearer ${token}`).send(payload);
   }
 
   function reverse(token: string, entryId: string, body: { remark: string; requestId?: string }) {
@@ -364,9 +374,10 @@ describe('M2 wallet and ledger', () => {
       expect(reused.status).toBe(409);
 
       const burstId = randomUUID();
+      const payCode = await scan(tokens.clerkA, card.id, storeA);
       const burst = await Promise.all(
         Array.from({ length: 4 }, () =>
-          move('consume', tokens.clerkA, card.id, { storeId: storeA, amountCent: 300, requestId: burstId }),
+          move('consume', tokens.clerkA, card.id, { storeId: storeA, amountCent: 300, requestId: burstId, payCode }),
         ),
       );
       expect(burst.every((response) => response.status === 201)).toBe(true);
@@ -380,13 +391,22 @@ describe('M2 wallet and ledger', () => {
     it('lets at most one of several simultaneous over-drafting deductions through and never goes negative', async () => {
       const card = await openCard(tokens.clerkA, storeA);
       await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 5000 });
-      const results = await Promise.all([
-        move('consume', tokens.clerkA, card.id, { storeId: storeA, amountCent: 3000 }),
-        move('consume', tokens.clerkB, card.id, { storeId: storeB, amountCent: 3000 }),
-        move('consume', tokens.managerA, card.id, { storeId: storeA, amountCent: 3000 }),
-        move('consume', tokens.managerB, card.id, { storeId: storeB, amountCent: 3000 }),
-        move('consume', tokens.super, card.id, { storeId: storeA, amountCent: 3000 }),
-      ]);
+      const cashiers: [string, string][] = [
+        [tokens.clerkA, storeA],
+        [tokens.clerkB, storeB],
+        [tokens.managerA, storeA],
+        [tokens.managerB, storeB],
+        [tokens.super, storeA],
+      ];
+      const codes: string[] = [];
+      for (const [token, storeId] of cashiers) {
+        codes.push(await scan(token, card.id, storeId));
+      }
+      const results = await Promise.all(
+        cashiers.map(([token, storeId], index) =>
+          move('consume', token, card.id, { storeId, amountCent: 3000, payCode: codes[index] }),
+        ),
+      );
       const statuses = results.map((result) => result.status);
       expect(statuses.filter((status) => status === 201)).toHaveLength(1);
       expect(statuses.filter((status) => status !== 201).every((status) => status === 400 || status === 409)).toBe(true);
@@ -399,11 +419,15 @@ describe('M2 wallet and ledger', () => {
     it('keeps every cent when many small deductions and top-ups land at the same time', async () => {
       const card = await openCard(tokens.clerkA, storeA);
       await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 4000 });
-      const consumes = Array.from({ length: 8 }, (_, index) =>
-        move('consume', index % 2 === 0 ? tokens.clerkA : tokens.clerkB, card.id, {
-          storeId: index % 2 === 0 ? storeA : storeB,
-          amountCent: 500,
-        }),
+      const cashier = (index: number): [string, string] =>
+        index % 2 === 0 ? [tokens.clerkA, storeA] : [tokens.clerkB, storeB];
+      const codes: string[] = [];
+      for (let index = 0; index < 8; index += 1) {
+        const [token, storeId] = cashier(index);
+        codes.push(await scan(token, card.id, storeId));
+      }
+      const consumes = codes.map((payCode, index) =>
+        move('consume', cashier(index)[0], card.id, { storeId: cashier(index)[1], amountCent: 500, payCode }),
       );
       const recharges = Array.from({ length: 3 }, () =>
         move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 100 }),
@@ -611,7 +635,8 @@ describe('M2 wallet and ledger', () => {
       await expect(
         prisma.ledgerEntry.update({ where: { id: entry.id }, data: { remark: '偷偷改' } }),
       ).rejects.toThrow(/append-only/);
-      await expect(prisma.$executeRawUnsafe('TRUNCATE ledger_entries')).rejects.toThrow(/append-only/);
+      // 用过的会员码指向流水，数据库先以外键拒绝清空；不管哪道先拦住，流水都清不掉。
+      await expect(prisma.$executeRawUnsafe('TRUNCATE ledger_entries')).rejects.toThrow(/append-only|foreign key/);
       const still = await prisma.ledgerEntry.findUniqueOrThrow({ where: { id: entry.id } });
       expect(still.remark).toBe(entry.remark);
     });

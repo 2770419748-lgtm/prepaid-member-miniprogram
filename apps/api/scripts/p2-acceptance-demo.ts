@@ -296,10 +296,24 @@ async function main(): Promise<void> {
     expectStatus(result, 201, `给${name}开卡`);
     return (result.body as { id: string }).id;
   }
+  const memberTokens = new Map<string, string>();
+  /** 消费前会员出示会员码、店员扫码，扣款时带上扫到的码。 */
+  async function showAndScan(token: string, memberId: string, storeId: string): Promise<string> {
+    const memberToken = memberTokens.get(memberId);
+    if (!memberToken) {
+      throw new Error('会员还没登录小程序');
+    }
+    const issued = await api('/members/me/pay-code', { method: 'POST', token: memberToken });
+    expectStatus(issued, 201, '出示会员码');
+    const code = (issued.body as { code: string }).code;
+    expectStatus(await api('/pay-codes/scan', { token, body: { code, storeId } }), 200, '扫会员码');
+    return code;
+  }
   async function move(kind: 'recharge' | 'consume', token: string, memberId: string, storeId: string, amountCent: number) {
+    const payCode = kind === 'consume' ? await showAndScan(token, memberId, storeId) : undefined;
     const result = await api(`/wallets/${memberId}/${kind}`, {
       token,
-      body: { storeId, amountCent, requestId: randomUUID() },
+      body: { storeId, amountCent, requestId: randomUUID(), ...(payCode ? { payCode } : {}) },
     });
     expectStatus(result, 201, kind === 'recharge' ? '充值' : '消费');
     return (result.body as { entry: { id: string } }).entry.id;
@@ -307,6 +321,8 @@ async function main(): Promise<void> {
 
   const wang = await open(clerkA, flagship.id, phone(5), '王女士');
   const chen = await open(clerkB, community.id, phone(7), '陈先生');
+  memberTokens.set(wang, await login('/auth/member/wx-phone', org.id, phone(5)));
+  memberTokens.set(chen, await login('/auth/member/wx-phone', org.id, phone(7)));
   await move('recharge', clerkA, wang, flagship.id, 100_000);
   await move('recharge', clerkB, chen, community.id, 50_000);
   await move('consume', clerkA, wang, flagship.id, 12_800);
@@ -421,7 +437,7 @@ async function main(): Promise<void> {
     detail: `超级管理员看到今天全部 ${audit.length} 条；张店长看到旗舰店的 ${managerItems.length} 条；周店员只看到自己做的 ${clerkItems.length} 条。会员手机号中间四位打码。`,
   });
 
-  const member = await login('/auth/member/wx-phone', org.id, phone(5));
+  const member = memberTokens.get(wang) as string;
   const memberTry = await api('/audit-logs', { token: member });
   expectStatus(memberTry, 403, '会员查操作记录');
   const memberDaily = await api('/reconciliation/daily', { token: member });

@@ -2,7 +2,7 @@ import { Body, Controller, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccessPrincipal } from '../auth/access-principal';
 import { CurrentPrincipal, Principals, Roles } from '../auth/decorators';
-import { MoneyMoveDto } from './dto/ledger.dto';
+import { ConsumeDto, MoneyMoveDto } from './dto/ledger.dto';
 import { WalletService } from './wallet.service';
 
 @ApiTags('记账')
@@ -24,11 +24,13 @@ export class WalletController {
   }
 
   @Post(':memberId/consume')
-  @ApiOperation({ summary: '消费扣款。余额不足时拒绝，同时扣同一张卡不会扣成负数' })
+  @ApiOperation({
+    summary: '消费扣款。必须带上刚扫到的会员码；余额不足时拒绝，同时扣同一张卡不会扣成负数',
+  })
   consume(
     @CurrentPrincipal() actor: AccessPrincipal,
     @Param('memberId') memberId: string,
-    @Body() dto: MoneyMoveDto,
+    @Body() dto: ConsumeDto,
   ) {
     return this.wallets.consume(actor, memberId, dto);
   }

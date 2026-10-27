@@ -401,6 +401,12 @@ body {
   animation: mp-spin 0.8s linear infinite;
 }
 
+.wx-canvas {
+  display: block;
+  width: 300px;
+  height: 150px;
+}
+
 .wx-image {
   display: inline-block;
   width: 320px;

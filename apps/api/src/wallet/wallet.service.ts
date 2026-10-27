@@ -9,8 +9,9 @@ import { LedgerType, Prisma } from '@prisma/client';
 import { AuditAction, AuditLogWriter } from '../audit/audit-log.writer';
 import { AccessPrincipal } from '../auth/access-principal';
 import { assertStoreAccess, isSuperAdmin } from '../auth/staff-access';
+import { PayCodeService } from '../pay-code/pay-code.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { MoneyMoveDto, ReversalDto } from './dto/ledger.dto';
+import { ConsumeDto, MoneyMoveDto, ReversalDto } from './dto/ledger.dto';
 import { ledgerInclude, LedgerRecord, StaffLedgerView, toStaffLedgerView } from './ledger.view';
 
 /** 钱包余额是 Int（分）。再往上加会溢出。 */
@@ -41,6 +42,8 @@ interface Movement {
   remark: string | null;
   reversalOfId: string | null;
   requestId: string | null;
+  /** 消费扣款用的会员码，和流水同一事务标成已用。 */
+  payCodeId: string | null;
 }
 
 /** 乐观锁没抢到：别人先改了这只钱包。 */
@@ -77,14 +80,16 @@ export class WalletService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogWriter,
+    private readonly payCodes: PayCodeService,
   ) {}
 
   recharge(actor: AccessPrincipal, memberId: string, dto: MoneyMoveDto): Promise<MoveResult> {
-    return this.move(actor, memberId, dto, LedgerType.RECHARGE, 1);
+    return this.move(actor, memberId, dto, LedgerType.RECHARGE, 1, null);
   }
 
-  consume(actor: AccessPrincipal, memberId: string, dto: MoneyMoveDto): Promise<MoveResult> {
-    return this.move(actor, memberId, dto, LedgerType.CONSUME, -1);
+  /** 消费扣款必须带上这位店员在这家门店刚扫到的会员码。码只能用一次。 */
+  consume(actor: AccessPrincipal, memberId: string, dto: ConsumeDto): Promise<MoveResult> {
+    return this.move(actor, memberId, dto, LedgerType.CONSUME, -1, dto.payCode);
   }
 
   /**
@@ -130,6 +135,7 @@ export class WalletService {
       remark: cleanRemark(dto.remark),
       reversalOfId: original.id,
       requestId: dto.requestId ?? null,
+      payCodeId: null,
     });
   }
 
@@ -139,14 +145,11 @@ export class WalletService {
     dto: MoneyMoveDto,
     type: LedgerType,
     direction: 1 | -1,
+    payCode: string | null,
   ): Promise<MoveResult> {
     assertStoreAccess(actor.roles, dto.storeId);
-    const replay = await this.replay(actor.orgId, dto.requestId, {
-      memberId,
-      type,
-      amountCent: dto.amountCent,
-      storeId: dto.storeId,
-    });
+    const sameRequest = { memberId, type, amountCent: dto.amountCent, storeId: dto.storeId };
+    const replay = await this.replay(actor.orgId, dto.requestId, sameRequest);
     if (replay) {
       return replay;
     }
@@ -170,6 +173,19 @@ export class WalletService {
     if (!member.wallet) {
       throw new BadRequestException('会员还没开卡');
     }
+    let payCodeId: string | null = null;
+    if (payCode != null) {
+      try {
+        payCodeId = (await this.payCodes.assertUsable(actor, memberId, store.id, payCode)).id;
+      } catch (error) {
+        // 同一请求号的另一次提交（连点、网络重试）可能刚刚用掉了这张码：返回那一笔，不报「已经用过了」。
+        const replayed = await this.replay(actor.orgId, dto.requestId, sameRequest);
+        if (replayed) {
+          return replayed;
+        }
+        throw error;
+      }
+    }
     return this.apply({
       orgId: actor.orgId,
       memberId,
@@ -181,6 +197,7 @@ export class WalletService {
       remark: cleanRemark(dto.remark),
       reversalOfId: null,
       requestId: dto.requestId ?? null,
+      payCodeId,
     });
   }
 
@@ -242,6 +259,10 @@ export class WalletService {
       },
       include: ledgerInclude,
     });
+    // 放在写流水之后：同一请求号并发提交时先撞流水的唯一约束，走重放，而不是报码已用过。
+    if (movement.payCodeId) {
+      await this.payCodes.markUsed(tx, movement.payCodeId, movement.operatorStaffId, movement.storeId, entry.id);
+    }
     await this.audit.write(tx, {
       orgId: movement.orgId,
       actorStaffId: movement.operatorStaffId,
@@ -256,6 +277,7 @@ export class WalletService {
         balanceBefore: wallet.balanceCent,
         balanceAfter,
         ...(movement.reversalOfId ? { reversalOfId: movement.reversalOfId } : {}),
+        ...(movement.payCodeId ? { payCodeId: movement.payCodeId } : {}),
       },
     });
     return { entry: toStaffLedgerView(entry), balanceCent: balanceAfter, replayed: false };

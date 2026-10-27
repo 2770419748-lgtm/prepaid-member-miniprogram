@@ -6,6 +6,7 @@ import type {
   MoveResult,
   MyStoresResult,
   PageResult,
+  ScannedPayCode,
   StaffLoginResult,
 } from './types';
 
@@ -38,6 +39,13 @@ export interface MoneyMove {
   amountCent: number;
   remark?: string;
   requestId: string;
+  /** 消费必须带上刚扫到的会员码。充值不用。 */
+  payCode?: string;
+}
+
+/** 店员扫顾客出示的会员码。之后 5 分钟内，这位店员在这家门店可以用这张码扣一次款。 */
+export function scanPayCode(code: string, storeId: string) {
+  return request<ScannedPayCode>('POST', '/pay-codes/scan', { body: { code, storeId } });
 }
 
 export function recordMove(memberId: string, kind: 'RECHARGE' | 'CONSUME', body: MoneyMove) {

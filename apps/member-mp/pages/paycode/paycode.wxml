@@ -1,0 +1,87 @@
+<view class="page">
+  <view class="code-card">
+    <view class="cc-head">
+      <text class="cc-title">会员码</text>
+      <text class="cc-sub">到店消费时出示，由门店扫码扣款</text>
+    </view>
+
+    <view wx:if="{{view === 'loading'}}" class="qr-box">
+      <view class="skeleton qr-skeleton"></view>
+    </view>
+
+    <view wx:elif="{{view === 'blocked'}}" class="cc-message">
+      <text>{{message}}</text>
+    </view>
+
+    <view wx:elif="{{view === 'error'}}" class="cc-message">
+      <text>{{message}}</text>
+      <view class="retry" bindtap="onRetry">重新获取</view>
+    </view>
+
+    <view wx:elif="{{view === 'used'}}" class="done">
+      <view class="done-icon"></view>
+      <text class="done-title">消费成功</text>
+      <view class="done-amount">
+        <text>{{used.amountText}}</text>
+        <text class="done-unit">元</text>
+      </view>
+      <view class="done-rows">
+        <view class="done-row">
+          <text class="muted">门店</text>
+          <text>{{used.storeName}}</text>
+        </view>
+        <view class="done-row">
+          <text class="muted">时间</text>
+          <text>{{used.timeText}}</text>
+        </view>
+        <view class="done-row">
+          <text class="muted">剩余余额</text>
+          <text class="strong">{{used.balanceText}} 元</text>
+        </view>
+      </view>
+    </view>
+
+    <block wx:else>
+      <view class="qr-box">
+        <canvas type="2d" id="qr" class="qr"></canvas>
+        <view wx:if="{{view === 'scanned'}}" class="qr-mask">
+          <view class="scan-dot"></view>
+          <text class="mask-title">{{storeName ? storeName + '已扫码' : '门店已扫码'}}</text>
+          <text class="mask-sub">正在确认消费金额，请稍候</text>
+        </view>
+      </view>
+      <view class="cc-balance">
+        <text class="muted">可用余额</text>
+        <text class="balance">{{balanceText}}</text>
+        <text class="muted">元</text>
+      </view>
+      <view wx:if="{{view === 'code'}}" class="cc-refresh" bindtap="onRefresh">
+        <text>每 {{refreshSeconds}} 秒自动更新</text>
+        <text class="link refresh-link">刷新</text>
+      </view>
+      <view wx:else class="cc-refresh">
+        <text>扣款完成后这里会显示结果</text>
+      </view>
+    </block>
+  </view>
+
+  <block wx:if="{{view === 'used'}}">
+    <button class="btn-primary" hover-class="button-hover" bindtap="onDone">完成</button>
+    <button class="btn-plain gap" hover-class="none" bindtap="onViewEntry">查看这笔明细</button>
+  </block>
+
+  <view wx:else class="tips">
+    <view class="tip">
+      <view class="tip-dot"></view>
+      <text>会员码只能用一次，扫过就作废</text>
+    </view>
+    <view class="tip">
+      <view class="tip-dot"></view>
+      <text>请勿截图或发给他人，截图的码无法使用</text>
+    </view>
+    <view class="tip">
+      <view class="tip-dot"></view>
+      <text>消费金额由门店填写，扣款后这里会显示结果，明细里也能查到</text>
+    </view>
+  </view>
+</view>

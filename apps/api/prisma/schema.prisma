@@ -92,6 +92,7 @@ model Org {
   contractTemplates ContractTemplate[]
   signFlows         SignFlow[]
   auditLogs         AuditLog[]
+  payCodes          MemberPayCode[]
 
   @@map("orgs")
 }
@@ -120,6 +121,7 @@ model Store {
   ledgerEntries LedgerEntry[]
   auditLogs     AuditLog[]
   signFlows     SignFlow[]
+  payCodeScans  MemberPayCode[]
 
   @@index([orgId])
   @@map("stores")
@@ -146,6 +148,7 @@ model Staff {
   ledgerOps          LedgerEntry[]    @relation("LedgerOperator")
   auditLogs          AuditLog[]
   initiatedSignFlows SignFlow[]       @relation("SignFlowInitiator")
+  payCodeScans       MemberPayCode[]
 
   @@unique([orgId, phone])
   @@index([orgId])
@@ -184,6 +187,7 @@ model Member {
   wallet    Wallet?
   ledger    LedgerEntry[]
   signFlows SignFlow[]
+  payCodes  MemberPayCode[]
 
   @@unique([orgId, phone])
   @@index([orgId])
@@ -235,6 +239,7 @@ model LedgerEntry {
   operator   Staff?       @relation("LedgerOperator", fields: [operatorStaffId], references: [id], onDelete: SetNull)
   reversalOf LedgerEntry? @relation("LedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
   reversedBy LedgerEntry? @relation("LedgerReversal")
+  payCode    MemberPayCode?
 
   @@unique([orgId, requestId])
   @@index([orgId, createdAt])
@@ -242,6 +247,47 @@ model LedgerEntry {
   @@index([storeId, createdAt])
   @@index([walletId])
   @@map("ledger_entries")
+}
+
+/// 会员码的状态。过期不单独存，按 expiresAt / claimExpiresAt 判断。
+enum PayCodeStatus {
+  /// 会员小程序正在出示，还没被扫。
+  ISSUED
+  /// 店员已扫码，在 claimExpiresAt 之前可由这位店员在这家门店扣一次款。
+  SCANNED
+  /// 已经用来扣过款，不能再用。
+  USED
+}
+
+/// 会员码：会员小程序出示的二维码。消费扣款必须先由店员扫码，所以店员不能在会员不在场时扣款。
+/// 只能用一次、出示后很快过期，会员换新码时旧的未扫码作废。库里只存码的哈希。
+model MemberPayCode {
+  id               String        @id @default(cuid())
+  orgId            String        @map("org_id")
+  memberId         String        @map("member_id")
+  /// 码的 SHA-256。码本身只在发给会员小程序时出现一次。
+  codeHash         String        @unique @map("code_hash")
+  status           PayCodeStatus @default(ISSUED)
+  /// 没扫的码到这个时间作废。
+  expiresAt        DateTime      @map("expires_at") @db.Timestamptz(6)
+  scannedAt        DateTime?     @map("scanned_at") @db.Timestamptz(6)
+  scannedByStaffId String?       @map("scanned_by_staff_id")
+  scannedStoreId   String?       @map("scanned_store_id")
+  /// 扫码后要在这个时间之前扣款，过了要重新扫。
+  claimExpiresAt   DateTime?     @map("claim_expires_at") @db.Timestamptz(6)
+  usedAt           DateTime?     @map("used_at") @db.Timestamptz(6)
+  /// 用这个码扣的那笔流水。
+  ledgerEntryId    String?       @unique @map("ledger_entry_id")
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  org          Org          @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  member       Member       @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  scannedBy    Staff?       @relation(fields: [scannedByStaffId], references: [id], onDelete: SetNull)
+  scannedStore Store?       @relation(fields: [scannedStoreId], references: [id], onDelete: Restrict)
+  ledgerEntry  LedgerEntry? @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict)
+
+  @@index([memberId, status])
+  @@map("member_pay_codes")
 }
 
 model BenefitPlan {

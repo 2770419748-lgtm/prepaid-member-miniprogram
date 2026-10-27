@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.18.0",
+    "jsqr": "1.4.0",
     "miniprogram-api-typings": "^4.0.8",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"

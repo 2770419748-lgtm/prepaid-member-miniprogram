@@ -70,6 +70,32 @@
   border-top: 1rpx solid #e2e8f0;
   font-size: 24rpx;
   color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 会员码入口：到店消费时最常用的一步，放在余额旁边。 */
+.mc-code {
+  display: flex;
+  align-items: center;
+  height: 64rpx;
+  padding: 0 28rpx 0 22rpx;
+  border-radius: 999rpx;
+  background: #1677ff;
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.mc-code-hover {
+  background: #0958d9;
+}
+
+.mc-code-icon {
+  width: 36rpx;
+  height: 36rpx;
+  margin-right: 10rpx;
 }
 
 .mc-notice {

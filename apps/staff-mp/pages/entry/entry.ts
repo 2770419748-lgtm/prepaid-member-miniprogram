@@ -3,7 +3,10 @@ import { ApiError, messageOf } from '../../utils/errors';
 import { LEDGER_TYPE_LABELS } from '../../utils/labels';
 import { memberLabel } from '../../utils/ledger';
 import { formatCent, formatChange, parseYuanToCent } from '../../utils/money';
+import { needsRescan, untilText, validUntilText } from '../../utils/paycode';
+import { maskPhone } from '../../utils/phone';
 import { newRequestId } from '../../utils/request-id';
+import { scanMemberCode } from '../../utils/scan';
 import { currentStore, rememberMember, requireSession } from '../../utils/session';
 import { formatDateTime } from '../../utils/time';
 
@@ -49,6 +52,10 @@ Page({
     submitting: false,
     uncertain: false,
     done: null as Done | null,
+    /** 消费：店员刚扫到的会员码。没有码不能扣款。 */
+    payCode: '',
+    codeText: '',
+    needCode: false,
   },
 
   pending: null as Pending | null,
@@ -57,13 +64,20 @@ Page({
     const kind: Kind = query.kind === 'RECHARGE' ? 'RECHARGE' : 'CONSUME';
     const label = LEDGER_TYPE_LABELS[kind];
     wx.setNavigationBarTitle({ title: label });
+    const payCode = kind === 'CONSUME' ? (query.payCode ?? '') : '';
     this.setData({
       memberId: query.memberId ?? '',
       kind,
       kindLabel: label,
       submitText: `确认${label}`,
       remarkPlaceholder: kind === 'RECHARGE' ? '如：现金、转账' : '如：消费项目',
+      payCode,
+      codeText: payCode ? untilText(query.until) : '',
+      needCode: kind === 'CONSUME' && !payCode,
     });
+    if (this.data.needCode) {
+      return;
+    }
     this.load();
   },
 
@@ -184,6 +198,7 @@ Page({
         amountCent: pending.amountCent,
         requestId: pending.requestId,
         ...(pending.remark ? { remark: pending.remark } : {}),
+        ...(this.data.kind === 'CONSUME' ? { payCode: this.data.payCode } : {}),
       });
       this.pending = null;
       const { entry } = result;
@@ -209,10 +224,53 @@ Page({
       // 明确没记上（例如别人刚扣过、余额不够了）：放弃这个请求号，刷新余额后可重新填写。
       this.pending = null;
       this.setData({ uncertain: false });
+      if (needsRescan(error)) {
+        // 会员码过期或用过了：请顾客刷新会员码再扫一次，金额不用重填。
+        wx.showModal({
+          title: '没有记上',
+          content: messageOf(error),
+          confirmText: '重新扫码',
+          cancelText: '取消',
+          confirmColor: '#1677FF',
+          success: (res) => {
+            if (res.confirm) {
+              this.onRescan();
+            }
+          },
+        });
+        return;
+      }
       wx.showModal({ title: '没有记上', content: messageOf(error), showCancel: false, confirmText: '知道了' });
       this.load();
     } finally {
       this.setData({ submitting: false });
+    }
+  },
+
+  /** 重新扫这位会员的会员码。扫到别人的码不换。 */
+  async onRescan() {
+    const session = requireSession();
+    const store = session ? currentStore(session) : null;
+    if (!store) {
+      return;
+    }
+    const scanned = await scanMemberCode(store.id);
+    if (!scanned) {
+      return;
+    }
+    if (scanned.member.id !== this.data.memberId) {
+      wx.showModal({
+        title: '不是这位会员的会员码',
+        content: `扫到的是 ${maskPhone(scanned.member.phone)} 的会员码。请让当前会员打开自己的会员码。`,
+        showCancel: false,
+        confirmText: '知道了',
+      });
+      return;
+    }
+    const first = this.data.needCode;
+    this.setData({ payCode: scanned.code, codeText: validUntilText(scanned.expiresAt), needCode: false });
+    if (first) {
+      this.load();
     }
   },
 

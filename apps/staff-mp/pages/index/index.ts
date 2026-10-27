@@ -2,7 +2,9 @@ import { fetchMyStores, findMemberByPhone } from '../../utils/api';
 import { messageOf } from '../../utils/errors';
 import { ROLE_LABELS } from '../../utils/labels';
 import { memberLabel } from '../../utils/ledger';
+import { consumeEntryUrl } from '../../utils/paycode';
 import { isMainlandMobile, maskPhone, normalizePhone } from '../../utils/phone';
+import { scanMemberCode } from '../../utils/scan';
 import {
   currentStore,
   recentMembers,
@@ -93,6 +95,20 @@ Page({
       this.setData({ phoneError: messageOf(error) });
     } finally {
       this.setData({ searching: false });
+    }
+  },
+
+  /** 扫顾客出示的会员码，扫到就去填消费金额。 */
+  async onScanConsume() {
+    const session = requireSession();
+    const store = session ? currentStore(session) : null;
+    if (!store) {
+      return;
+    }
+    const scanned = await scanMemberCode(store.id);
+    if (scanned) {
+      rememberMember(scanned.member);
+      wx.navigateTo({ url: consumeEntryUrl(scanned.member.id, scanned.code, scanned.expiresAt) });
     }
   },
 
