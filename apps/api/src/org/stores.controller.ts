@@ -33,7 +33,7 @@ export class StoresController {
 
   @Patch(':id')
   @Roles('SUPER_ADMIN', 'STORE_MANAGER')
-  @ApiOperation({ summary: '修改门店。店长只能改自己店的名称和地址' })
+  @ApiOperation({ summary: '修改门店。店长只能改自己店的地址、坐标、电话和营业时间' })
   update(
     @CurrentPrincipal() actor: AccessPrincipal,
     @Param('id') id: string,

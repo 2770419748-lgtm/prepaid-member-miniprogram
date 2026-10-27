@@ -7,6 +7,8 @@ export const AuditAction = {
   StaffCreate: 'STAFF_CREATE',
   StaffUpdate: 'STAFF_UPDATE',
   StaffRolesReplace: 'STAFF_ROLES_REPLACE',
+  StaffPasswordChange: 'STAFF_PASSWORD_CHANGE',
+  StaffPasswordReset: 'STAFF_PASSWORD_RESET',
   MemberIdentityCreate: 'MEMBER_IDENTITY_CREATE',
 } as const;
 

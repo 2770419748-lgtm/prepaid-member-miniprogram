@@ -16,9 +16,41 @@ function requireName(value: string): string {
   return name;
 }
 
-function cleanAddress(value: string): string | null {
-  const address = value.trim();
-  return address.length > 0 ? address : null;
+function cleanText(value: string): string | null {
+  const text = value.trim();
+  return text.length > 0 ? text : null;
+}
+
+function toDecimal(value: number): Prisma.Decimal {
+  return new Prisma.Decimal(value.toFixed(6));
+}
+
+/** 修改时：两个都传空则清空；两个都是数字则写入；只传一边则拒绝。 */
+function applyCoords(
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): { lat: Prisma.Decimal | null; lng: Prisma.Decimal | null } {
+  if (lat === null && lng === null) {
+    return { lat: null, lng: null };
+  }
+  if (typeof lat === 'number' && typeof lng === 'number') {
+    return { lat: toDecimal(lat), lng: toDecimal(lng) };
+  }
+  throw new BadRequestException('经纬度需要同时填写');
+}
+
+/** 新建时：两个都空则不记坐标。只填一个则拒绝。 */
+function requiredCoords(
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): { lat: Prisma.Decimal | null; lng: Prisma.Decimal | null } {
+  if ((lat === undefined || lat === null) && (lng === undefined || lng === null)) {
+    return { lat: null, lng: null };
+  }
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    throw new BadRequestException('经纬度需要同时填写');
+  }
+  return { lat: toDecimal(lat), lng: toDecimal(lng) };
 }
 
 @Injectable()
@@ -61,12 +93,17 @@ export class StoresService {
       throw new ForbiddenException('无权执行该操作');
     }
     const name = requireName(dto.name);
+    const coords = requiredCoords(dto.lat, dto.lng);
     const created = await this.prisma.$transaction(async (tx) => {
       const store = await tx.store.create({
         data: {
           orgId: actor.orgId,
           name,
-          address: dto.address === undefined ? null : cleanAddress(dto.address),
+          address: dto.address === undefined ? null : cleanText(dto.address),
+          lat: coords.lat,
+          lng: coords.lng,
+          contactPhone: dto.phone === undefined ? null : cleanText(dto.phone),
+          businessHours: dto.businessHours === undefined ? null : cleanText(dto.businessHours),
           status: StoreStatus.ACTIVE,
         },
       });
@@ -76,7 +113,14 @@ export class StoresService {
         action: AuditAction.StoreCreate,
         targetType: 'Store',
         targetId: store.id,
-        payload: { name: store.name, address: store.address },
+        payload: {
+          name: store.name,
+          address: store.address,
+          lat: coords.lat == null ? null : coords.lat.toNumber(),
+          lng: coords.lng == null ? null : coords.lng.toNumber(),
+          phone: store.contactPhone,
+          businessHours: store.businessHours,
+        },
       });
       return store;
     });
@@ -84,7 +128,15 @@ export class StoresService {
   }
 
   async update(actor: AccessPrincipal, storeId: string, dto: UpdateStoreDto): Promise<StoreView> {
-    if (dto.name === undefined && dto.address === undefined && dto.status === undefined) {
+    if (
+      dto.name === undefined &&
+      dto.address === undefined &&
+      dto.status === undefined &&
+      dto.lat === undefined &&
+      dto.lng === undefined &&
+      dto.phone === undefined &&
+      dto.businessHours === undefined
+    ) {
       throw new BadRequestException('没有可更新字段');
     }
     const current = await this.requireStore(actor.orgId, storeId);
@@ -99,7 +151,18 @@ export class StoresService {
       data.name = requireName(dto.name);
     }
     if (dto.address !== undefined) {
-      data.address = cleanAddress(dto.address);
+      data.address = cleanText(dto.address);
+    }
+    if (dto.phone !== undefined) {
+      data.contactPhone = cleanText(dto.phone);
+    }
+    if (dto.businessHours !== undefined) {
+      data.businessHours = cleanText(dto.businessHours);
+    }
+    if (dto.lat !== undefined || dto.lng !== undefined) {
+      const coords = applyCoords(dto.lat, dto.lng);
+      data.lat = coords.lat;
+      data.lng = coords.lng;
     }
     if (dto.status !== undefined) {
       data.status = dto.status;
@@ -115,6 +178,14 @@ export class StoresService {
         payload: {
           ...(dto.name !== undefined ? { name: data.name } : {}),
           ...(dto.address !== undefined ? { address: data.address } : {}),
+          ...(dto.phone !== undefined ? { phone: data.contactPhone } : {}),
+          ...(dto.businessHours !== undefined ? { businessHours: data.businessHours } : {}),
+          ...(dto.lat !== undefined || dto.lng !== undefined
+            ? {
+                lat: data.lat instanceof Prisma.Decimal ? data.lat.toNumber() : null,
+                lng: data.lng instanceof Prisma.Decimal ? data.lng.toNumber() : null,
+              }
+            : {}),
           ...(dto.status !== undefined ? { status: dto.status } : {}),
         },
       });

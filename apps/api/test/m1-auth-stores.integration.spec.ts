@@ -33,6 +33,8 @@ function phone(): string {
   return `13${randomInt(100000000, 1000000000).toString()}`;
 }
 
+const initialPassword = 'Init12345';
+
 function messageOf(body: { message?: unknown }): string {
   return typeof body.message === 'string' ? body.message : JSON.stringify(body.message);
 }
@@ -328,7 +330,7 @@ describe('M1 auth and store boundaries', () => {
     const created = await request(app.getHttpServer())
       .post('/staff')
       .set('Authorization', `Bearer ${superToken}`)
-      .send({ phone: phone(), name: '新店长', storeId: storeB, role: 'STORE_MANAGER' });
+      .send({ phone: phone(), name: '新店长', storeId: storeB, role: 'STORE_MANAGER', password: initialPassword });
     expect(created.status).toBe(201);
     expect(created.body.roles).toEqual([
       expect.objectContaining({ storeId: storeB, role: 'STORE_MANAGER' }),
@@ -351,20 +353,20 @@ describe('M1 auth and store boundaries', () => {
     const cross = await request(app.getHttpServer())
       .post('/staff')
       .set('Authorization', `Bearer ${managerToken}`)
-      .send({ phone: phone(), name: '越权员工', storeId: storeB, role: 'STAFF' });
+      .send({ phone: phone(), name: '越权员工', storeId: storeB, role: 'STAFF', password: initialPassword });
     expect(cross.status).toBe(403);
 
     const promote = await request(app.getHttpServer())
       .post('/staff')
       .set('Authorization', `Bearer ${managerToken}`)
-      .send({ phone: phone(), name: '越权店长', storeId: storeA, role: 'STORE_MANAGER' });
+      .send({ phone: phone(), name: '越权店长', storeId: storeA, role: 'STORE_MANAGER', password: initialPassword });
     expect(promote.status).toBe(403);
     expect(messageOf(promote.body)).toContain('店长只能新建普通店员');
 
     const hired = await request(app.getHttpServer())
       .post('/staff')
       .set('Authorization', `Bearer ${managerToken}`)
-      .send({ phone: phone(), name: '本店新店员', storeId: storeA, role: 'STAFF' });
+      .send({ phone: phone(), name: '本店新店员', storeId: storeA, role: 'STAFF', password: initialPassword });
     expect(hired.status).toBe(201);
 
     const grant = await request(app.getHttpServer())
@@ -387,7 +389,7 @@ describe('M1 auth and store boundaries', () => {
     const hired = await request(app.getHttpServer())
       .post('/staff')
       .set('Authorization', `Bearer ${superToken}`)
-      .send({ phone: hiredPhone, name: '即将停用', storeId: storeA, role: 'STAFF' });
+      .send({ phone: hiredPhone, name: '即将停用', storeId: storeA, role: 'STAFF', password: initialPassword });
     expect(hired.status).toBe(201);
     const token = await login('/auth/staff/wx-phone', 'soon-disabled');
     const disabled = await request(app.getHttpServer())
@@ -406,7 +408,7 @@ describe('M1 auth and store boundaries', () => {
     const hired = await request(app.getHttpServer())
       .post('/staff')
       .set('Authorization', `Bearer ${superToken}`)
-      .send({ phone: hiredPhone, name: '即将降级', storeId: storeA, role: 'STORE_MANAGER' });
+      .send({ phone: hiredPhone, name: '即将降级', storeId: storeA, role: 'STORE_MANAGER', password: initialPassword });
     expect(hired.status).toBe(201);
     const token = await login('/auth/staff/wx-phone', 'soon-demoted');
     expect(payloadOf(token).roles).toEqual([expect.objectContaining({ role: 'STORE_MANAGER' })]);
@@ -418,7 +420,7 @@ describe('M1 auth and store boundaries', () => {
     const create = await request(app.getHttpServer())
       .post('/staff')
       .set('Authorization', `Bearer ${token}`)
-      .send({ phone: phone(), name: '降级后还想建人', storeId: storeA, role: 'STAFF' });
+      .send({ phone: phone(), name: '降级后还想建人', storeId: storeA, role: 'STAFF', password: initialPassword });
     expect(create.status).toBe(403);
     const own = await request(app.getHttpServer())
       .get(`/stores/${storeA}`)
@@ -428,5 +430,227 @@ describe('M1 auth and store boundaries', () => {
       where: { orgId, action: 'STAFF_ROLES_REPLACE', targetId: hired.body.id as string },
     });
     expect(log?.actorStaffId).toBe(superId);
+  });
+
+  it('stops a manager from promoting a clerk or changing another manager', async () => {
+    const promote = await request(app.getHttpServer())
+      .put(`/staff/${clerkId}/roles`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({ roles: [{ storeId: storeA, role: 'STORE_MANAGER' }] });
+    expect(promote.status).toBe(403);
+    expect(messageOf(promote.body)).toContain('店长只能分配普通店员');
+
+    const kept = await request(app.getHttpServer())
+      .put(`/staff/${clerkId}/roles`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({ roles: [{ storeId: storeA, role: 'STAFF' }] });
+    expect(kept.status).toBe(200);
+    expect(kept.body.roles).toEqual([expect.objectContaining({ storeId: storeA, role: 'STAFF' })]);
+
+    const self = await request(app.getHttpServer())
+      .put(`/staff/${managerId}/roles`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({ roles: [{ storeId: storeA, role: 'STAFF' }] });
+    expect(self.status).toBe(403);
+    expect(messageOf(self.body)).toContain('不能修改自己的角色');
+
+    const peerPhone = phone();
+    const peer = await request(app.getHttpServer())
+      .post('/staff')
+      .set('Authorization', `Bearer ${superToken}`)
+      .send({ phone: peerPhone, name: '王店长', storeId: storeA, role: 'STORE_MANAGER', password: initialPassword });
+    expect(peer.status).toBe(201);
+    const revoke = await request(app.getHttpServer())
+      .put(`/staff/${peer.body.id as string}/roles`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({ roles: [] });
+    expect(revoke.status).toBe(403);
+    expect(messageOf(revoke.body)).toContain('不能修改店长的角色');
+    const demote = await request(app.getHttpServer())
+      .put(`/staff/${peer.body.id as string}/roles`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({ roles: [{ storeId: storeA, role: 'STAFF' }] });
+    expect(demote.status).toBe(403);
+    expect(messageOf(demote.body)).toContain('不能修改店长的角色');
+
+    const rename = await request(app.getHttpServer())
+      .patch(`/staff/${peer.body.id as string}`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({ name: '改掉店长' });
+    expect(rename.status).toBe(403);
+    expect(messageOf(rename.body)).toContain('不能修改店长');
+
+    const still = await prisma.staffStoreRole.findMany({ where: { staffId: peer.body.id as string } });
+    expect(still).toEqual([expect.objectContaining({ storeId: storeA, role: 'STORE_MANAGER' })]);
+  });
+
+  it('lets a member read usable stores and keeps staff routes closed', async () => {
+    const placed = await request(app.getHttpServer())
+      .patch(`/stores/${storeA}`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({
+        address: '示范路 18 号',
+        lat: 31.230416,
+        lng: 121.473701,
+        phone: '021-12345678',
+        businessHours: '每天 10:00-22:00',
+      });
+    expect(placed.status).toBe(200);
+    expect(placed.body).toMatchObject({
+      address: '示范路 18 号',
+      phone: '021-12345678',
+      businessHours: '每天 10:00-22:00',
+    });
+    expect(placed.body.lat).toBeCloseTo(31.230416, 5);
+    expect(placed.body.lng).toBeCloseTo(121.473701, 5);
+
+    const closed = await request(app.getHttpServer())
+      .post('/stores')
+      .set('Authorization', `Bearer ${superToken}`)
+      .send({ name: '暂停门店', address: '不对外', phone: '021-00000000', businessHours: '暂停' });
+    expect(closed.status).toBe(201);
+    const disabled = await request(app.getHttpServer())
+      .patch(`/stores/${closed.body.id as string}`)
+      .set('Authorization', `Bearer ${superToken}`)
+      .send({ status: 'DISABLED' });
+    expect(disabled.status).toBe(200);
+
+    const list = await request(app.getHttpServer())
+      .get('/members/stores')
+      .set('Authorization', `Bearer ${memberToken}`);
+    expect(list.status).toBe(200);
+    const ids = list.body.map((item: { id: string }) => item.id) as string[];
+    expect(ids).toContain(storeA);
+    expect(ids).not.toContain(closed.body.id);
+    const flagship = list.body.find((item: { id: string }) => item.id === storeA);
+    expect(Object.keys(flagship).sort()).toEqual(
+      ['address', 'businessHours', 'id', 'lat', 'lng', 'name', 'phone'].sort(),
+    );
+    expect(flagship).toMatchObject({
+      name: placed.body.name,
+      address: '示范路 18 号',
+      phone: '021-12345678',
+      businessHours: '每天 10:00-22:00',
+    });
+    expect(flagship.lat).toBeCloseTo(31.230416, 5);
+
+    const staffOnMember = await request(app.getHttpServer())
+      .get('/members/stores')
+      .set('Authorization', `Bearer ${clerkToken}`);
+    expect(staffOnMember.status).toBe(403);
+    const memberOnStaff = await request(app.getHttpServer())
+      .get('/staff')
+      .set('Authorization', `Bearer ${memberToken}`);
+    expect(memberOnStaff.status).toBe(403);
+  });
+
+  it('logs staff in with a password, locks after five failures, and requires a new password', async () => {
+    const hiredPhone = phone();
+    const hired = await request(app.getHttpServer())
+      .post('/staff')
+      .set('Authorization', `Bearer ${superToken}`)
+      .send({ phone: hiredPhone, name: '网页店员', storeId: storeA, role: 'STAFF', password: initialPassword });
+    expect(hired.status).toBe(201);
+    expect(hired.body.mustChangePassword).toBe(true);
+    expect(JSON.stringify(hired.body)).not.toContain('passwordHash');
+    expect(JSON.stringify(hired.body)).not.toContain('$2');
+
+    const unknown = await request(app.getHttpServer())
+      .post('/auth/staff/password/login')
+      .send({ phone: phone(), password: initialPassword, orgId });
+    expect(unknown.status).toBe(401);
+    expect(messageOf(unknown.body)).toContain('手机号或密码错误');
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const wrong = await request(app.getHttpServer())
+        .post('/auth/staff/password/login')
+        .send({ phone: hiredPhone, password: 'wrong-pass', orgId });
+      expect(wrong.status).toBe(401);
+      expect(messageOf(wrong.body)).toContain('手机号或密码错误');
+    }
+    const fifth = await request(app.getHttpServer())
+      .post('/auth/staff/password/login')
+      .send({ phone: hiredPhone, password: 'wrong-pass', orgId });
+    expect(fifth.status).toBe(403);
+    expect(messageOf(fifth.body)).toContain('登录已锁定');
+
+    const duringLock = await request(app.getHttpServer())
+      .post('/auth/staff/password/login')
+      .send({ phone: hiredPhone, password: initialPassword, orgId });
+    expect(duringLock.status).toBe(403);
+    expect(messageOf(duringLock.body)).toContain('登录已锁定');
+
+    await prisma.staff.update({
+      where: { id: hired.body.id as string },
+      data: { lockedUntil: new Date(Date.now() - 1000) },
+    });
+    const unlocked = await request(app.getHttpServer())
+      .post('/auth/staff/password/login')
+      .send({ phone: hiredPhone, password: initialPassword, orgId });
+    expect(unlocked.status).toBe(201);
+    expect(unlocked.body.mustChangePassword).toBe(true);
+    expect(unlocked.body.principalType).toBe('STAFF');
+    expect(JSON.stringify(unlocked.body)).not.toContain('passwordHash');
+    const webToken = unlocked.body.accessToken as string;
+
+    const same = await request(app.getHttpServer())
+      .post('/auth/staff/password/change')
+      .set('Authorization', `Bearer ${webToken}`)
+      .send({ currentPassword: initialPassword, newPassword: initialPassword });
+    expect(same.status).toBe(400);
+
+    const changed = await request(app.getHttpServer())
+      .post('/auth/staff/password/change')
+      .set('Authorization', `Bearer ${webToken}`)
+      .send({ currentPassword: initialPassword, newPassword: 'Changed123' });
+    expect(changed.status).toBe(201);
+    expect(changed.body).toEqual({ mustChangePassword: false });
+    const changedLog = await prisma.auditLog.findFirst({
+      where: { orgId, action: 'STAFF_PASSWORD_CHANGE', targetId: hired.body.id as string },
+    });
+    expect(changedLog?.actorStaffId).toBe(hired.body.id);
+    expect(JSON.stringify(changedLog?.payloadJson ?? {})).not.toContain('Changed123');
+
+    const again = await request(app.getHttpServer())
+      .post('/auth/staff/password/login')
+      .send({ phone: hiredPhone, password: 'Changed123', orgId });
+    expect(again.status).toBe(201);
+    expect(again.body.mustChangePassword).toBe(false);
+
+    const memberChange = await request(app.getHttpServer())
+      .post('/auth/staff/password/change')
+      .set('Authorization', `Bearer ${memberToken}`)
+      .send({ currentPassword: initialPassword, newPassword: 'Changed123' });
+    expect(memberChange.status).toBe(403);
+
+    const managerReset = await request(app.getHttpServer())
+      .post(`/staff/${hired.body.id as string}/password/reset`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({ password: 'Reset12345' });
+    expect(managerReset.status).toBe(403);
+
+    const reset = await request(app.getHttpServer())
+      .post(`/staff/${hired.body.id as string}/password/reset`)
+      .set('Authorization', `Bearer ${superToken}`)
+      .send({ password: 'Reset12345' });
+    expect(reset.status).toBe(201);
+    expect(reset.body.mustChangePassword).toBe(true);
+    expect(JSON.stringify(reset.body)).not.toContain('Reset12345');
+    const old = await request(app.getHttpServer())
+      .post('/auth/staff/password/login')
+      .send({ phone: hiredPhone, password: 'Changed123', orgId });
+    expect(old.status).toBe(401);
+    const fresh = await request(app.getHttpServer())
+      .post('/auth/staff/password/login')
+      .send({ phone: hiredPhone, password: 'Reset12345', orgId });
+    expect(fresh.status).toBe(201);
+    expect(fresh.body.mustChangePassword).toBe(true);
+
+    wechat.bind('web-clerk', hiredPhone);
+    const mini = await request(app.getHttpServer())
+      .post('/auth/staff/wx-phone')
+      .send({ code: 'web-clerk', phoneCode: 'phone', orgId });
+    expect(mini.status).toBe(201);
+    expect(mini.body.principalType).toBe('STAFF');
   });
 });

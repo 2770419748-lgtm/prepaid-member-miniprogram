@@ -6,7 +6,7 @@
 > **落点：** `apps/api`（NestJS + Prisma + PostgreSQL）  
 > **预估：** 约 6 人天 · **依赖 M0**  
 > **硬约束对齐：** `docs/tech/tech-final.md` · `docs/tasks/m0-kickoff.md`（定稿第 3.1 / 6–8 节）  
-> **实现状态：** 已在合入 main 的 M0 上落地。没有新增数据表。合入须技术部审阅且 CI 通过后，由总经理评估。
+> **实现状态：** 已在合入 main 的 M0 上落地。门店增加了导航和营业时间字段，员工增加了网页后台密码字段，没有新增数据表。合入须技术部审阅且 CI 通过后，由总经理评估。
 
 ---
 
@@ -67,7 +67,10 @@ M0 应已具备：
 | orgId | FK → Org | |
 | name | string | |
 | status | | ACTIVE / DISABLED（可调） |
-| address | string? | 可调 |
+| address | string? | 详细地址 |
+| lat / lng | decimal? | 纬度 / 经度，约六位小数。接口字段名为 `lat`、`lng` |
+| contactPhone | string? | 联系电话。接口字段名为 `phone` |
+| businessHours | string? | 营业时间，原文 |
 | createdAt / updatedAt | | |
 
 ### Staff
@@ -77,6 +80,9 @@ M0 应已具备：
 | id | | PK |
 | orgId | FK → Org | |
 | phone | string | 登录关联 |
+| passwordHash | string? | 网页后台密码的 bcrypt 哈希。不明文保存，不返回给调用方 |
+| mustChangePassword | boolean | 初始密码登录后必须修改 |
+| failedLoginCount / lockedUntil | | 连续错 5 次锁定 15 分钟 |
 | name | string | |
 | status | | ACTIVE / DISABLED |
 | wxOpenId | string? | 店员小程序 openid（可调） |
@@ -115,9 +121,9 @@ M0 应已具备：
 | 角色 | 门店范围 | 账号 | 本模块能力 |
 | --- | --- | --- | --- |
 | `SUPER_ADMIN` | 全部门店 | 全公司账号 | 门店 CRUD、店员分配任意店、查全部 |
-| `STORE_MANAGER` | 本店 + 下属 | 本店店员 | 本店店员管理；不可跨店 |
+| `STORE_MANAGER` | 本店 | 本店普通店员 | 可维护本店地址、坐标、电话、营业时间；只能管理普通店员，不能任命店长，也不能改自己或其他店长 |
 | `STAFF` | 本店 | — | 只读本店信息（开卡/记账在 M2） |
-| 会员端 | — | 仅自己 | 登录、读自己资料；不可访店员 API |
+| 会员端 | — | 仅自己 | 登录、读自己资料、读可使用门店；没有员工相关接口 |
 
 - 店员操作一律带 `storeId`（后续账务记门店）。  
 - 余额不按门店隔离（M2）；本模块只需保证角色守卫正确。
@@ -132,9 +138,11 @@ M0 应已具备：
 
 | 方法 | 路径 | 鉴权 | 请求要点 | 响应要点 |
 | --- | --- | --- | --- | --- |
-| POST | `/auth/member/wx-phone` | 无 | `code`（wx.login）+ 手机号授权 `phoneCode`（或文档约定字段）；标识会员端 `WECHAT_MEMBER_*` | JWT + member 摘要；若无 Member 则**仅登录会话**或返回需开卡标记（开卡属 M2，勿在此写余额） |
-| POST | `/auth/staff/wx-phone` | 无 | 同上，用 `WECHAT_STAFF_*`；手机号须已存在于 `Staff` 且 ACTIVE | JWT + staff + roles[]（含 storeId, role） |
-| GET | `/auth/me` | 登录 | — | 当前身份：member 或 staff+roles |
+| POST | `/auth/member/wx-phone` | 无 | `code`（wx.login）+ 手机号授权 `phoneCode`；会员端 `WECHAT_MEMBER_*`。仅小程序 | JWT + member 摘要；第一次登录只登记身份，不建余额。未开卡时 `needsCard` 为真 |
+| POST | `/auth/staff/wx-phone` | 无 | 同上，用 `WECHAT_STAFF_*`。仅小程序。手机号须已存在于 `Staff` 且在职 | JWT + staff + roles[] |
+| POST | `/auth/staff/password/login` | 无 | 网页后台。`phone`、`password`，多家公司时带 `orgId` | JWT + `mustChangePassword`。连续错 5 次锁定 15 分钟。不返回密码 |
+| POST | `/auth/staff/password/change` | 员工 | `currentPassword`、`newPassword` | 修改成功后 `mustChangePassword` 为假 |
+| GET | `/auth/me` | 登录 | — | 当前身份：member 或 staff+roles。员工结果含 `mustChangePassword` |
 
 说明：测试号阶段按微信开放文档换 session / 手机号；密钥只读 env，不进仓。
 
@@ -154,21 +162,23 @@ M0 应已具备：
 | GET | `/staff` | 超管全公司；店长本店 | 列表 |
 | POST | `/staff` | 超管；店长可建本店 `STAFF`（可调） | body: phone, name, storeId, role |
 | PATCH | `/staff/:id` | 超管 / 本店店长 | 停用、改名等 |
-| PUT | `/staff/:id/roles` | 超管；店长限本店且不可赋超管 | 设置 `StaffStoreRole` |
+| PUT | `/staff/:id/roles` | 超管可设任意角色。店长只能给普通店员分配店员，不能改自己或其他店长 | 设置 `StaffStoreRole` |
+| POST | `/staff/:id/password/reset` | 仅超级管理员 | 重置网页后台初始密码，并要求下次登录修改。不接受短信验证码 |
 | GET | `/staff/me/stores` | 任意店员 | 当前账号可操作门店 |
 
 ### 5.4 会员只读（可选本里程碑）
 
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
-| GET | `/members/me` | 会员 JWT | 自己的资料（无余额字段或占位 0，余额以 M2 为准） |
+| GET | `/members/me` | 会员 JWT | 自己的资料（无余额，余额以 M2 为准） |
+| GET | `/members/stores` | 会员 JWT | 在营门店的名称、详细地址、经纬度、电话、营业时间。不含员工信息。停用门店不返回 |
 
 ---
 
 ## 6. 业务规则与硬约束
 
-1. **登录 = 微信授权手机号**（测试号）；禁止伪造手机号后门进生产路径（本地 dev mock 须用独立开关且默认关）。  
-2. 店员登录：手机号必须已在 `Staff` 中；未录入店员不可登录后台/商家小程序。  
+1. **小程序登录 = 微信授权手机号**（测试号）。网页后台员工登录 = 手机号 + 密码，密码只存 bcrypt 哈希，不接短信。禁止伪造手机号后门进生产路径（本地 dev mock 须用独立开关且默认关；`NODE_ENV=production` 时强制关闭）。  
+2. 店员登录：手机号必须已在 `Staff` 中；未录入店员不可登录后台或商家小程序。网页后台连续密码错误 5 次锁定 15 分钟。新建或重置的是初始密码，第一次登录必须修改（`mustChangePassword`）。  
 3. 会员登录：可先建/更新 `Member` 的微信标识与手机号；**开卡状态 / 余额**由 M2 店员录入流程定义（本模块勿实现充值）。  
 4. JWT 载荷建议：`sub`, `orgId`, `principalType: MEMBER|STAFF`, `roles?: {storeId, role}[]`。  
 5. 数据隔离：非超管查询必须按 `storeId ∈ token.roles` 过滤。  
@@ -227,14 +237,16 @@ M0 应已具备：
 
 ### 登录
 
-会员和员工都用微信手机号登录，两套测试号配置分开（`WECHAT_MEMBER_*` 与 `WECHAT_STAFF_*`）。
+小程序用微信手机号登录，两套测试号配置分开（`WECHAT_MEMBER_*` 与 `WECHAT_STAFF_*`）。网页后台的员工登录用手机号和密码，不使用短信验证码。
 
-- 员工必须事先录入且为在职，否则拒绝。
+- 员工必须事先录入且为在职，否则小程序登录拒绝。网页后台密码错误时只回答「手机号或密码错误」，不透露账号是否存在。
+- 新建员工时设置初始密码，只保存 bcrypt 哈希。第一次用初始密码登录网页后台时，结果里 `mustChangePassword` 为真，员工要调用修改密码接口换成自己的密码。超级管理员可以重置密码，重置后再次要求修改。
+- 同一账号连续输错 5 次后锁定 15 分钟。锁定期间即使密码正确也不能登录。锁定结束后重新计数。
 - 会员第一次登录会登记手机号和微信标识，不建余额、不开卡。还没有开卡门店时，结果里 `needsCard` 为真。
 - 只有一家在营公司时可以不填公司；有多家时必须指定。
-- 本地可以用假手机号演示，开关是 `WECHAT_PHONE_MOCK`，默认关闭。`NODE_ENV=production` 时即使写成 true 也不生效。
+- 本地可以用假手机号演示小程序登录，开关是 `WECHAT_PHONE_MOCK`，默认关闭。`NODE_ENV=production` 时即使写成 true 也不生效。服务启动时如果假手机号开着，会打出警告。
 
-超级管理员只要在任意一家门店拥有该角色，就可以管全公司。店和店之间没有上下级；店长的「下属」指本店员工。
+超级管理员只要在任意一家门店拥有该角色，就可以管全公司。店和店之间没有上下级。店长只能管理本店的普通店员。
 
 ### 权限
 
@@ -246,29 +258,31 @@ flowchart TB
   member[会员]
   allStores[全部门店]
   ownStore[自己的门店]
+  usable[在营门店的地址和电话]
   selfOnly[只看自己的资料]
   denied[越权操作被拒绝]
 
-  super -->|建门店、建员工、分配角色、查看| allStores
-  manager -->|查看和管理| ownStore
-  manager -->|看其他门店或建门店| denied
+  super -->|建门店、建员工、分配角色、重置密码| allStores
+  manager -->|查看和维护本店资料| ownStore
+  manager -->|把店员提为店长，或改其他店长| denied
   clerk -->|只查看| ownStore
   clerk -->|建店、管员工| denied
   member -->|登录后| selfOnly
-  member -->|进入门店或员工功能| denied
+  member -->|查看可使用门店| usable
+  member -->|进入员工功能| denied
 ```
 
 高级角色包含低级角色能做的事：超级管理员 > 店长 > 店员。门店范围仍然隔离，只有超级管理员不受门店限制。
 
-店长可以改自己店的名称和地址，不能改营业状态，不能新建门店，只能在本店新建普通店员，不能把人设成超级管理员。店员只能看自己的店。会员只能看自己的资料，资料里没有余额。
+店长可以改自己店的名称、详细地址、经纬度、电话和营业时间，不能改营业状态，不能新建门店。店长只能在本店新建普通店员，只能把普通店员继续设成店员；不能把店员提为店长，不能修改自己的角色，也不能撤销或修改其他店长。店员只能看自己的店。会员没有员工接口，只能看自己的资料（没有余额）和在营门店列表。门店列表给出名称、详细地址、经纬度、电话和营业时间，供一键导航和拨号。停用的门店不出现。
 
 ### 会留下记录的操作
 
-创建门店、修改门店、创建员工、修改员工、重设门店角色、会员第一次登记。不提供查询接口，查询留给后续审计。记录里不写密钥。
+创建门店、修改门店、创建员工、修改员工、重设门店角色、员工自己修改密码、超级管理员重置密码、会员第一次登记。不提供查询接口，查询留给后续审计。记录里不写密钥，也不写密码。
 
 ### 怎么自己再跑一遍
 
-数据库迁移后启动服务（演示时把 `WECHAT_PHONE_MOCK` 设为 true，正式环境不要设）：
+数据库迁移后启动服务（演示时把 `WECHAT_PHONE_MOCK` 设为 true，正式环境不要设）。本地种子账号 `13800000000` 的初始密码是 `Init12345`，第一次网页登录必须修改：
 
 ```bash
 pnpm --filter api prisma:migrate

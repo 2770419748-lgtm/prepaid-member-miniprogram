@@ -1,4 +1,8 @@
 import { PrismaClient, StaffRole } from '@prisma/client';
+import { hash } from 'bcryptjs';
+
+/** 本地种子账号的初始密码。第一次登录网页后台必须修改。 */
+const INITIAL_PASSWORD = 'Init12345';
 
 const prisma = new PrismaClient();
 
@@ -36,8 +40,19 @@ async function main(): Promise<void> {
         phone: STAFF_PHONE,
         name: '超级管理员',
         status: 'ACTIVE',
+        passwordHash: await hash(INITIAL_PASSWORD, 10),
+        mustChangePassword: true,
       },
     }));
+  if (!staff.passwordHash) {
+    await prisma.staff.update({
+      where: { id: staff.id },
+      data: {
+        passwordHash: await hash(INITIAL_PASSWORD, 10),
+        mustChangePassword: true,
+      },
+    });
+  }
 
   await prisma.staffStoreRole.upsert({
     where: { staffId_storeId: { staffId: staff.id, storeId: store.id } },

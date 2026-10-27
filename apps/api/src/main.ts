@@ -36,6 +36,9 @@ async function bootstrap(): Promise<void> {
   const wechat = app.get(WechatAppConfig);
   Logger.log(`esign.production.enabled=${esign.productionEnabled}`, 'Bootstrap');
   Logger.log(`wechat.phoneMock=${wechat.mockEnabled}`, 'Bootstrap');
+  if (wechat.mockEnabled) {
+    Logger.warn('微信假手机号已打开，只用于开发演示。NODE_ENV=production 时会强制关闭。', 'Bootstrap');
+  }
 
   const port = Number(process.env.API_PORT || 3000);
   await app.listen(port);

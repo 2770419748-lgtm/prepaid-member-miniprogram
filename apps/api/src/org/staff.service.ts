@@ -8,11 +8,19 @@ import {
 import { Prisma, StaffRole, StaffStatus } from '@prisma/client';
 import { AuditAction, AuditLogWriter } from '../audit/audit-log.writer';
 import { AccessPrincipal } from '../auth/access-principal';
+import { hashPassword } from '../auth/password';
 import { assertCanManageStore, isSuperAdmin, managedStoreIds } from '../auth/staff-access';
 import { PageResult } from '../common/page';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateStaffDto, ReplaceStaffRolesDto, StaffListQueryDto, UpdateStaffDto } from './dto/staff.dto';
+import {
+  CreateStaffDto,
+  ReplaceStaffRolesDto,
+  ResetStaffPasswordDto,
+  StaffListQueryDto,
+  UpdateStaffDto,
+} from './dto/staff.dto';
 import { StaffRoleView, StaffView, toStaffView } from './staff.view';
+import { toStoreView } from './store.view';
 
 const staffInclude = {
   storeRoles: { include: { store: { select: { id: true, name: true } } } },
@@ -62,10 +70,7 @@ export class StaffService {
       return {
         unrestricted: true,
         stores: stores.map((store) => ({
-          id: store.id,
-          name: store.name,
-          status: store.status,
-          address: store.address,
+          ...this.storeCard(store),
           role: StaffRole.SUPER_ADMIN,
         })),
       };
@@ -84,10 +89,7 @@ export class StaffService {
         }
         return [
           {
-            id: store.id,
-            name: store.name,
-            status: store.status,
-            address: store.address,
+            ...this.storeCard(store),
             role: role.role,
           },
         ];
@@ -107,6 +109,7 @@ export class StaffService {
         throw new ForbiddenException('店长只能新建普通店员');
       }
     }
+    const passwordHash = await hashPassword(dto.password);
     try {
       const created = await this.prisma.$transaction(async (tx) => {
         const staff = await tx.staff.create({
@@ -115,6 +118,8 @@ export class StaffService {
             phone: dto.phone,
             name,
             status: StaffStatus.ACTIVE,
+            passwordHash,
+            mustChangePassword: true,
             storeRoles: { create: { storeId: store.id, role: dto.role } },
           },
           include: staffInclude,
@@ -204,8 +209,14 @@ export class StaffService {
     const superAdmin = isSuperAdmin(actor.roles);
     const managed = managedStoreIds(actor.roles);
     if (!superAdmin) {
+      if (actor.sub === current.id) {
+        throw new ForbiddenException('不能修改自己的角色');
+      }
       if (current.storeRoles.some((role) => role.role === StaffRole.SUPER_ADMIN)) {
         throw new ForbiddenException('无权修改超级管理员');
+      }
+      if (current.storeRoles.some((role) => role.role === StaffRole.STORE_MANAGER)) {
+        throw new ForbiddenException('不能修改店长的角色');
       }
       if (managed.length === 0) {
         throw new ForbiddenException('无权执行该操作');
@@ -213,6 +224,9 @@ export class StaffService {
       for (const role of dto.roles) {
         if (role.role === StaffRole.SUPER_ADMIN) {
           throw new ForbiddenException('不可分配超级管理员');
+        }
+        if (role.role !== StaffRole.STAFF) {
+          throw new ForbiddenException('店长只能分配普通店员');
         }
         if (!managed.includes(role.storeId)) {
           throw new ForbiddenException('无权操作该门店');
@@ -251,6 +265,54 @@ export class StaffService {
     return this.present(actor, updated);
   }
 
+  async resetPassword(
+    actor: AccessPrincipal,
+    staffId: string,
+    dto: ResetStaffPasswordDto,
+  ): Promise<StaffView> {
+    if (!isSuperAdmin(actor.roles)) {
+      throw new ForbiddenException('无权执行该操作');
+    }
+    const current = await this.requireStaff(actor.orgId, staffId);
+    const passwordHash = await hashPassword(dto.password);
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const staff = await tx.staff.update({
+        where: { id: current.id },
+        data: {
+          passwordHash,
+          mustChangePassword: true,
+          failedLoginCount: 0,
+          lockedUntil: null,
+        },
+        include: staffInclude,
+      });
+      await this.audit.write(tx, {
+        orgId: actor.orgId,
+        actorStaffId: actor.sub,
+        action: AuditAction.StaffPasswordReset,
+        targetType: 'Staff',
+        targetId: staff.id,
+        payload: { mustChangePassword: true },
+      });
+      return staff;
+    });
+    return this.present(actor, updated);
+  }
+
+  private storeCard(store: Parameters<typeof toStoreView>[0]) {
+    const view = toStoreView(store);
+    return {
+      id: view.id,
+      name: view.name,
+      status: view.status,
+      address: view.address,
+      lat: view.lat,
+      lng: view.lng,
+      phone: view.phone,
+      businessHours: view.businessHours,
+    };
+  }
+
   private managerScope(actor: AccessPrincipal): string[] | null {
     if (isSuperAdmin(actor.roles)) {
       return null;
@@ -276,6 +338,9 @@ export class StaffService {
   private assertManagerCanTouch(actor: AccessPrincipal, staff: StaffWithRoles): void {
     if (staff.storeRoles.some((role) => role.role === StaffRole.SUPER_ADMIN)) {
       throw new ForbiddenException('无权修改超级管理员');
+    }
+    if (staff.id === actor.sub || staff.storeRoles.some((role) => role.role === StaffRole.STORE_MANAGER)) {
+      throw new ForbiddenException('不能修改店长');
     }
     const managed = new Set(managedStoreIds(actor.roles));
     if (!staff.storeRoles.some((role) => managed.has(role.storeId))) {

@@ -16,4 +16,10 @@ export class MembersController {
   me(@CurrentPrincipal() principal: AccessPrincipal) {
     return this.members.me(principal);
   }
+
+  @Get('stores')
+  @ApiOperation({ summary: '可使用的门店。返回名称、地址、坐标、电话和营业时间，供导航和拨号' })
+  stores(@CurrentPrincipal() principal: AccessPrincipal) {
+    return this.members.usableStores(principal);
+  }
 }

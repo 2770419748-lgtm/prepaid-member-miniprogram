@@ -18,6 +18,8 @@ interface Step {
   tone: 'ok' | 'blocked';
 }
 
+const initialPassword = 'Init12345';
+
 const roleLabel: Record<string, string> = {
   SUPER_ADMIN: '超级管理员',
   STORE_MANAGER: '店长',
@@ -138,12 +140,12 @@ function render(steps: Step[], when: string): string {
 <body>
   <main>
     <h1>账号与门店验收</h1>
-    <p class="lead">超级管理员建门店、建员工、分配角色。店长只能看自己的店，越权会被拒绝。</p>
+    <p class="lead">超级管理员建门店、建员工、分配角色。店长只能看自己的店，不能把店员提为店长。会员只能看可使用的门店。</p>
     <p class="meta">验收时间：${esc(when)}。结果来自刚刚跑起来的服务，不是手写示例。</p>
     ${cards}
     <footer>
       正式签署保持关闭。没有做小程序里的支付。<br />
-      演示没有连接真实微信，用的是开发环境里的测试登录；正式环境不允许用假手机号登录。
+      小程序演示没有连接真实微信。网页后台用手机号和密码，不使用短信。正式环境不允许用假手机号登录。
     </footer>
   </main>
 </body>
@@ -174,7 +176,14 @@ async function main(): Promise<void> {
 
   const flagship = await api('/stores', {
     token: superToken,
-    body: { name: '旗舰店', address: '示范路 1 号' },
+    body: {
+      name: '旗舰店',
+      address: '示范路 1 号',
+      lat: 31.230416,
+      lng: 121.473701,
+      phone: '021-12345678',
+      businessHours: '每天 10:00-22:00',
+    },
   });
   expectStatus(flagship, 201, '创建旗舰店');
   const community = await api('/stores', {
@@ -192,12 +201,24 @@ async function main(): Promise<void> {
 
   const manager = await api('/staff', {
     token: superToken,
-    body: { phone: '13800010002', name: '张店长', storeId: flagshipId, role: 'STORE_MANAGER' },
+    body: {
+      phone: '13800010002',
+      name: '张店长',
+      storeId: flagshipId,
+      role: 'STORE_MANAGER',
+      password: initialPassword,
+    },
   });
   expectStatus(manager, 201, '创建店长');
   const clerk = await api('/staff', {
     token: superToken,
-    body: { phone: '13800010003', name: '李店员', storeId: flagshipId, role: 'STAFF' },
+    body: {
+      phone: '13800010003',
+      name: '李店员',
+      storeId: flagshipId,
+      role: 'STAFF',
+      password: initialPassword,
+    },
   });
   expectStatus(clerk, 201, '创建店员');
   const managerRole = ((manager.body as { roles?: { role?: string; storeName?: string }[] }).roles ?? [])[0];
@@ -265,6 +286,78 @@ async function main(): Promise<void> {
     detail: `会员只能看自己的资料，还没有开卡，也没有余额。查看员工时，系统回答「${messageOf(memberStaff.body)}」。`,
   });
 
+  const memberStores = await api('/members/stores', { method: 'GET', token: memberToken });
+  expectStatus(memberStores, 200, '会员查看可使用门店');
+  const usable = (memberStores.body as {
+    name?: string;
+    address?: string;
+    phone?: string;
+    businessHours?: string;
+    lat?: number;
+    lng?: number;
+  }[]).find((item) => item.name === '旗舰店');
+  if (!usable?.address || !usable.phone || !usable.businessHours || usable.lat == null || usable.lng == null) {
+    throw new Error('会员门店列表缺少地址、电话、营业时间或坐标');
+  }
+  if ((memberStores.body as { name?: string }[]).some((item) => item.name === '初始门店') === false) {
+    throw new Error('在营门店应该出现在会员列表里');
+  }
+  steps.push({
+    tone: 'ok',
+    title: '会员能看到可使用的门店',
+    detail: `旗舰店：${usable.address}，电话 ${usable.phone}，${usable.businessHours}。坐标 ${usable.lat}，${usable.lng}。列表里没有员工信息。`,
+  });
+
+  const passwordLogin = await api('/auth/staff/password/login', {
+    body: { phone: '13800010002', password: initialPassword, orgId: org.id },
+  });
+  expectStatus(passwordLogin, 201, '网页后台登录');
+  if ((passwordLogin.body as { mustChangePassword?: boolean }).mustChangePassword !== true) {
+    throw new Error('初始密码登录后应要求修改密码');
+  }
+  steps.push({
+    tone: 'ok',
+    title: '网页后台用手机号和初始密码登录',
+    detail: '张店长用手机号和初始密码登录网页后台。系统要求第一次登录先修改密码。这里不用短信验证码。',
+  });
+
+  const clerkId = (clerk.body as { id?: string }).id;
+  const promote = await api(`/staff/${clerkId}/roles`, {
+    method: 'PUT',
+    token: managerToken,
+    body: { roles: [{ storeId: flagshipId, role: 'STORE_MANAGER' }] },
+  });
+  expectStatus(promote, 403, '店长提拔店员');
+  steps.push({
+    tone: 'blocked',
+    title: '店长不能把店员提为店长',
+    detail: `张店长试图把李店员改成店长，系统回答「${messageOf(promote.body)}」。`,
+  });
+
+  const peer = await api('/staff', {
+    token: superToken,
+    body: {
+      phone: '13800010005',
+      name: '王店长',
+      storeId: flagshipId,
+      role: 'STORE_MANAGER',
+      password: initialPassword,
+    },
+  });
+  expectStatus(peer, 201, '创建另一位店长');
+  const peerId = (peer.body as { id: string }).id;
+  const revoke = await api(`/staff/${peerId}/roles`, {
+    method: 'PUT',
+    token: managerToken,
+    body: { roles: [{ storeId: flagshipId, role: 'STAFF' }] },
+  });
+  expectStatus(revoke, 403, '店长修改其他店长');
+  steps.push({
+    tone: 'blocked',
+    title: '店长不能修改其他店长的角色',
+    detail: `张店长试图把王店长改成店员，系统回答「${messageOf(revoke.body)}」。`,
+  });
+
   const logs = await prisma.auditLog.findMany({
     where: { orgId: org.id, action: { in: ['STORE_CREATE', 'STAFF_CREATE'] } },
     include: { actor: true },
@@ -298,7 +391,54 @@ async function main(): Promise<void> {
   }).format(new Date());
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, render(steps, when), 'utf8');
+  const artifactDir = dirname(output);
+  writeFileSync(
+    `${artifactDir}/m1-member-stores.html`,
+    panel(
+      '会员可使用的门店',
+      '会员打开门店列表时，只能看到在营门店的名称、地址、坐标、电话和营业时间，没有员工信息。',
+      `<pre>${esc(JSON.stringify(memberStores.body, null, 2))}</pre>`,
+    ),
+    'utf8',
+  );
+  writeFileSync(
+    `${artifactDir}/m1-role-denial.html`,
+    panel(
+      '店长不能改角色',
+      '店长只能管理普通店员。下面两次操作都被拒绝。',
+      `<section class="blocked"><h2>把店员提为店长</h2><p>${esc(messageOf(promote.body))}</p></section>
+       <section class="blocked"><h2>修改另一位店长</h2><p>${esc(messageOf(revoke.body))}</p></section>`,
+    ),
+    'utf8',
+  );
   console.log(`acceptance html written ${output}`);
+}
+
+function panel(title: string, lead: string, body: string): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(title)}</title>
+  <style>
+    body { margin: 0; background: #f6f5f2; color: #1d1c1a; font-family: "Noto Sans CJK SC", "Noto Sans SC", sans-serif; }
+    main { max-width: 880px; margin: 0 auto; padding: 40px 28px 64px; }
+    h1 { font-size: 32px; margin: 0 0 8px; }
+    .lead { font-size: 18px; line-height: 1.6; }
+    pre { background: #fff; border: 1px solid #e4e0d8; border-radius: 12px; padding: 18px; overflow: auto; font-size: 16px; line-height: 1.5; }
+    section { background: #fff; border: 1px solid #e4e0d8; border-left: 6px solid #9a3b32; border-radius: 12px; padding: 18px; margin: 0 0 12px; }
+    h2 { margin: 0 0 6px; font-size: 20px; }
+    p { margin: 0; line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>${esc(title)}</h1>
+    <p class="lead">${esc(lead)}</p>
+    ${body}
+  </main>
+</body>
+</html>`;
 }
 
 main()

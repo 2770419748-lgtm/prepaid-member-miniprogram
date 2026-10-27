@@ -9,6 +9,7 @@ import {
   IsString,
   Matches,
   MaxLength,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
 import { PageQueryDto } from './page-query.dto';
@@ -41,6 +42,20 @@ export class CreateStaffDto {
   @ApiProperty({ enum: StaffRole, description: '超级管理员、店长或店员。店长只能新建店员' })
   @IsEnum(StaffRole)
   role!: StaffRole;
+
+  @ApiProperty({ description: '网页后台初始密码，8 到 64 位。第一次登录必须修改', minLength: 8 })
+  @IsString()
+  @MinLength(8)
+  @MaxLength(64)
+  password!: string;
+}
+
+export class ResetStaffPasswordDto {
+  @ApiProperty({ description: '新的初始密码。员工下次登录网页后台必须修改', minLength: 8 })
+  @IsString()
+  @MinLength(8)
+  @MaxLength(64)
+  password!: string;
 }
 
 export class UpdateStaffDto {
@@ -77,7 +92,7 @@ export class RoleAssignmentDto {
 export class ReplaceStaffRolesDto {
   @ApiProperty({
     type: [RoleAssignmentDto],
-    description: '超级管理员用这份名单替换全部角色；店长只能改自己门店里的角色，且不能设成超级管理员',
+    description: '超级管理员用这份名单替换全部角色。店长只能给普通店员分配店员角色，不能改自己或其他店长',
   })
   @IsArray()
   @ValidateNested({ each: true })

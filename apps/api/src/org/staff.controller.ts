@@ -2,7 +2,13 @@ import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/c
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccessPrincipal } from '../auth/access-principal';
 import { CurrentPrincipal, Principals, Roles } from '../auth/decorators';
-import { CreateStaffDto, ReplaceStaffRolesDto, StaffListQueryDto, UpdateStaffDto } from './dto/staff.dto';
+import {
+  CreateStaffDto,
+  ReplaceStaffRolesDto,
+  ResetStaffPasswordDto,
+  StaffListQueryDto,
+  UpdateStaffDto,
+} from './dto/staff.dto';
 import { StaffService } from './staff.service';
 
 @ApiTags('员工')
@@ -32,9 +38,20 @@ export class StaffController {
     return this.staff.create(actor, dto);
   }
 
+  @Post(':id/password/reset')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: '超级管理员重置网页后台密码。员工下次登录必须修改' })
+  resetPassword(
+    @CurrentPrincipal() actor: AccessPrincipal,
+    @Param('id') id: string,
+    @Body() dto: ResetStaffPasswordDto,
+  ) {
+    return this.staff.resetPassword(actor, id, dto);
+  }
+
   @Patch(':id')
   @Roles('STORE_MANAGER')
-  @ApiOperation({ summary: '修改员工姓名或停用。店长不能改超级管理员，也不能改别的店' })
+  @ApiOperation({ summary: '修改员工姓名或停用。店长只能改普通店员' })
   update(
     @CurrentPrincipal() actor: AccessPrincipal,
     @Param('id') id: string,
@@ -45,7 +62,7 @@ export class StaffController {
 
   @Put(':id/roles')
   @Roles('STORE_MANAGER')
-  @ApiOperation({ summary: '设置员工在各门店的角色。店长不能任命超级管理员' })
+  @ApiOperation({ summary: '设置员工在各门店的角色。店长只能给普通店员分配店员角色' })
   replaceRoles(
     @CurrentPrincipal() actor: AccessPrincipal,
     @Param('id') id: string,

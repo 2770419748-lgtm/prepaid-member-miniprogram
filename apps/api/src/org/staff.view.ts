@@ -13,6 +13,7 @@ export interface StaffView {
   name: string;
   status: 'ACTIVE' | 'DISABLED';
   wxOpenId: string | null;
+  mustChangePassword: boolean;
   roles: StaffRoleView[];
 }
 
@@ -24,6 +25,7 @@ export function toStaffView(
     name: string;
     status: 'ACTIVE' | 'DISABLED';
     wxOpenId: string | null;
+    mustChangePassword: boolean;
   },
   roles: StaffRoleView[],
 ): StaffView {
@@ -34,6 +36,7 @@ export function toStaffView(
     name: staff.name,
     status: staff.status,
     wxOpenId: staff.wxOpenId,
+    mustChangePassword: staff.mustChangePassword,
     roles,
   };
 }
