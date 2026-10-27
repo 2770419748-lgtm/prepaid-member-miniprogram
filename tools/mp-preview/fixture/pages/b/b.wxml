@@ -1,0 +1,2 @@
+<view class="box" wx:for="{{items}}" wx:key="*this">第 {{item}} 行</view>
+<view class="count">共 {{items.length}} 行</view>

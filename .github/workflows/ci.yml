@@ -61,5 +61,6 @@ jobs:
       - name: typecheck
         run: pnpm -r typecheck
 
-      - name: api unit tests
-        run: pnpm --filter api test
+      # 每个包自己的 test 脚本都会跑（没有 test 脚本的包跳过）。新包加测试不用改这里。
+      - name: unit tests
+        run: pnpm -r --if-present test

@@ -1,0 +1,10 @@
+page {
+  background: #f8fafc;
+  font-size: 28rpx;
+}
+.box {
+  margin: 24rpx 32rpx;
+  padding: 24rpx;
+  background: #fff;
+  border-radius: 24rpx;
+}

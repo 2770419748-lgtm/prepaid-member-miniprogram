@@ -1,0 +1,19 @@
+{
+  "pages": ["pages/a/a", "pages/b/b", "pages/c/c"],
+  "window": {
+    "navigationBarTitleText": "预览自检",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f8fafc"
+  },
+  "tabBar": {
+    "color": "#64748b",
+    "selectedColor": "#1677ff",
+    "backgroundColor": "#ffffff",
+    "list": [
+      { "pagePath": "pages/a/a", "text": "甲页" },
+      { "pagePath": "pages/b/b", "text": "乙页" }
+    ]
+  },
+  "requiredPrivateInfos": ["getLocation"]
+}
