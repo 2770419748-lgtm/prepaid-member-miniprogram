@@ -7,7 +7,7 @@
 - [技术方案定稿](./tech/tech-final.md)
 - [架构与模块边界](./architecture.md)
 - [电子签开关](./esign-switch.md)
-- [UI/UX 设计规范 v1](./design/ui-design.md)（主色 `#1677FF`，由产品设计维护）
+- [UI/UX 设计规范 v1.1](./design/ui-design.md)（主色 `#1677FF`，由产品设计维护）· [设计侧交接说明](./design/DESIGN-HANDOFF.md)
 
 ## 任务说明
 
@@ -25,6 +25,4 @@
 
 ## 进度
 
-- [进度日志](./PROGRESS.md)
-
-前端任务说明与进度日志不在本变更中修改。
+- [交接进度](./PROGRESS.md)（截至 2026-10-28，给接下来用 Claude 接手的人）
