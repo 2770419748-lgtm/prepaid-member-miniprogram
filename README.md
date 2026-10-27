@@ -59,4 +59,8 @@ pnpm --filter api test
 - 不要在默认配置下打开正式签署。`ESIGN_PRODUCTION_ENABLED` 必须保持 `false`，直到主体与企业章就绪并由运维显式打开。说明见 [docs/esign-switch.md](docs/esign-switch.md)。
 - 不要把密钥提交进仓。AppID、Secret、JWT、数据库口令与对象存储密钥只放本地 `.env`。
 
-文档索引、技术方案、任务说明与进度见 [docs/README.md](docs/README.md)。架构与模块边界见 [docs/architecture.md](docs/architecture.md)。进度见 [docs/PROGRESS.md](docs/PROGRESS.md)。
+## 文档
+
+- [前端](docs/frontend/README.md)：储值会员小程序的会员端（M3）与商家网页后台任务说明
+- [进度](docs/PROGRESS.md)
+

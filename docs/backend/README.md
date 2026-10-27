@@ -25,11 +25,11 @@
 
 | 文件 | 路径 | 人天 | 依赖 |
 | --- | --- | --- | --- |
-| README（本文件） | `docs/tasks/backend/README.md` | — | — |
-| M1 账号门店 | `docs/tasks/backend/m1-auth-stores.md` | 约 6 | M0 |
-| M2 账务 | `docs/tasks/backend/m2-ledger.md` | 约 10 | M1 |
-| M4 e签宝沙箱 | `docs/tasks/backend/m4-esign-sandbox.md` | 约 10 | M2；企业章正式能力等 M6 |
-| P2 审计对账 | `docs/tasks/backend/p2-audit.md` | 约 4 | M2 |
+| README（本文件） | `docs/backend/README.md` | — | — |
+| M1 账号门店 | `docs/backend/m1-auth-stores.md` | 约 6 | M0 |
+| M2 账务 | `docs/backend/m2-ledger.md` | 约 10 | M1 |
+| M4 e签宝沙箱 | `docs/backend/m4-esign-sandbox.md` | 约 10 | M2；企业章正式能力等 M6 |
+| P2 审计对账 | `docs/backend/p2-audit.md` | 约 4 | M2 |
 
 ---
 
@@ -110,4 +110,4 @@ apps/staff-mp     # 商家小程序
 
 ## 9. 风格参考
 
-前端说明目录：`docs/tasks/frontend/`（结构可对照；后端以本目录与 M0 为准）。
+前端说明目录：`docs/frontend/`（结构可对照；后端以本目录与 M0 为准）。

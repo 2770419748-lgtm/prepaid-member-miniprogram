@@ -1,28 +1,26 @@
 # 文档索引
 
-公开文案使用「储值会员」「会员权益」等通用名，不写具体产品名。密钥不进仓。
-
-## 进度
-
-- [进度日志](./PROGRESS.md)
+公开文案使用「储值会员」「会员权益」，不写具体产品名。
 
 ## 规范
 
 - [技术方案定稿](./tech/tech-final.md)
 - [架构与模块边界](./architecture.md)
 - [电子签开关](./esign-switch.md)
-- [视觉规范](./design/README.md)
+- [UI/UX 设计规范 v1](./design/ui-design.md)（主色 `#1677FF`，由产品设计维护）
 
 ## 任务说明
 
 - [M0 开工说明 · 工程基础](./tasks/m0-kickoff.md)
-- [前端任务说明](./tasks/frontend/README.md)
-  - [M3 会员小程序](./tasks/frontend/m3-member-mp.md)
-  - [商家网页后台](./tasks/frontend/admin-web.md)
-- [后端任务说明](./tasks/backend/README.md)
-  - [M1 账号与门店](./tasks/backend/m1-auth-stores.md)
-  - [M2 账务](./tasks/backend/m2-ledger.md)
-  - [M4 电子签沙箱](./tasks/backend/m4-esign-sandbox.md)
-  - [P2 审计与对账](./tasks/backend/p2-audit.md)
+- [前端任务说明](./frontend/README.md)（会员端 M3、商家网页后台，目录 `docs/frontend/`）
+- [后端任务说明](./backend/README.md)
+  - [M1 账号与门店](./backend/m1-auth-stores.md)
+  - [M2 账务](./backend/m2-ledger.md)
+  - [M4 电子签沙箱](./backend/m4-esign-sandbox.md)
+  - [P2 审计与对账](./backend/p2-audit.md)
 
-任务说明是 2026-10-27 入库的定稿副本。其中「当前空仓」描述的是写说明时的状态，实际进度以 [进度日志](./PROGRESS.md) 为准。
+## 进度
+
+- [进度日志](./PROGRESS.md)
+
+前端任务说明与进度日志不在本变更中修改。
