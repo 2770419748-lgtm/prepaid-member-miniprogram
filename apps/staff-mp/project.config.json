@@ -1,11 +1,15 @@
 {
-  "description": "储值会员商家小程序占位。用微信开发者工具打开本目录，AppID 填测试号。",
+  "description": "储值会员商家小程序（店员开卡、记账、查余额）。用微信开发者工具打开本目录，AppID 填测试号。",
   "packOptions": {
     "ignore": [
       { "type": "file", "value": "package.json" },
       { "type": "file", "value": "tsconfig.json" },
+      { "type": "file", "value": "tsconfig.test.json" },
       { "type": "file", "value": "README.md" },
-      { "type": "folder", "value": "node_modules" }
+      { "type": "folder", "value": "node_modules" },
+      { "type": "folder", "value": "tests" },
+      { "type": "folder", "value": "preview" },
+      { "type": "folder", "value": "dist" }
     ],
     "include": []
   },

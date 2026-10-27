@@ -1,5 +1,29 @@
 <view class="page">
-  <text class="title">{{title}}</text>
-  <text class="hint">{{hint}}</text>
-  <navigator class="link" open-type="navigateBack">返回首页</navigator>
+  <view class="card profile">
+    <view class="avatar"><text>{{initial}}</text></view>
+    <view class="row-main">
+      <text class="profile-name">{{name}}</text>
+      <text class="muted">{{phone}}</text>
+    </view>
+  </view>
+
+  <view class="list">
+    <view class="row" hover-class="{{canSwitch ? 'is-pressed' : 'none'}}" bindtap="onSwitchStore">
+      <text class="row-main row-title">当前门店</text>
+      <text class="row-value">{{storeName}}</text>
+      <text wx:if="{{canSwitch}}" class="row-arrow">›</text>
+    </view>
+    <view class="row">
+      <text class="row-main row-title">我的角色</text>
+      <text class="row-value">{{roleLabel}}</text>
+    </view>
+    <view class="row">
+      <text class="row-main row-title">能办理业务的门店</text>
+      <text class="row-value">{{storeCount}}</text>
+    </view>
+  </view>
+
+  <text class="notice notice-info about">本小程序只记账，不收款。钱在门店线下收取；会员的余额在公司所有门店通用。</text>
+
+  <view class="btn btn-quiet logout" hover-class="is-pressed" bindtap="onLogout">退出登录</view>
 </view>

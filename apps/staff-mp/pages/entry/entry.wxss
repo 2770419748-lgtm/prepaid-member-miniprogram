@@ -1,0 +1,42 @@
+.summary {
+  padding-top: 16rpx;
+  padding-bottom: 16rpx;
+}
+
+.amount-line {
+  display: flex;
+  align-items: center;
+  padding: 8rpx 0 16rpx;
+  border-bottom: 2rpx solid var(--line);
+}
+
+.amount-symbol {
+  font-size: 56rpx;
+  font-weight: 600;
+  margin-right: 16rpx;
+}
+
+.amount-input {
+  flex: 1;
+  height: 112rpx;
+  font-size: 72rpx;
+  font-weight: 600;
+}
+
+.after {
+  margin-top: 12rpx;
+}
+
+.remark {
+  margin-top: 16rpx;
+  padding-bottom: 0;
+}
+
+.done-change {
+  font-size: 56rpx;
+  font-weight: 600;
+}
+
+.strong {
+  font-weight: 600;
+}

@@ -1,4 +1,4 @@
 {
-  "desc": "储值会员商家小程序占位站点地图",
-  "rules": [{ "action": "allow", "page": "*" }]
+  "desc": "商家小程序只供店员登录后使用，不需要被微信搜索收录。",
+  "rules": [{ "action": "disallow", "page": "*" }]
 }

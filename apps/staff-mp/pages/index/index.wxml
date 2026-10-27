@@ -1,5 +1,57 @@
 <view class="page">
-  <text class="title">{{title}}</text>
-  <text class="hint">{{hint}}</text>
-  <navigator class="link" url="/pages/mine/mine">我的</navigator>
+  <view class="store-bar" hover-class="{{canSwitch ? 'is-pressed' : 'none'}}" bindtap="onSwitchStore">
+    <view class="store-main">
+      <text class="muted">当前门店</text>
+      <view class="store-line">
+        <text class="store-name">{{storeName}}</text>
+        <text wx:if="{{roleLabel}}" class="tag tag-primary">{{roleLabel}}</text>
+      </view>
+    </view>
+    <text wx:if="{{canSwitch}}" class="link">切换 ›</text>
+  </view>
+
+  <text wx:if="{{noStore}}" class="notice notice-warning">你所在的门店都已停用，暂时不能办理业务。请联系管理员。</text>
+
+  <view class="card">
+    <text class="card-title">查会员余额</text>
+    <input
+      class="search-input"
+      type="number"
+      maxlength="11"
+      placeholder="输入会员手机号"
+      placeholder-class="placeholder"
+      confirm-type="search"
+      value="{{phone}}"
+      bindinput="onPhoneInput"
+      bindconfirm="onSearch"
+    />
+    <text wx:if="{{phoneError}}" class="error">{{phoneError}}</text>
+    <view class="btn btn-primary search-btn {{searching ? 'is-disabled' : ''}}" hover-class="is-pressed" bindtap="onSearch">{{searching ? '正在查询…' : '查询'}}</view>
+
+    <view wx:if="{{result}}" class="result">
+      <text class="result-text">{{result.text}}</text>
+      <view class="btn btn-plain" hover-class="is-pressed" bindtap="onOpenForResult">为这个手机号开卡</view>
+    </view>
+  </view>
+
+  <view class="entry-card" hover-class="is-pressed" bindtap="onOpenCard">
+    <view class="entry-icon"><text>＋</text></view>
+    <view class="row-main">
+      <text class="row-title">新会员开卡</text>
+      <text class="row-sub">登记手机号，开一张余额为 0 的会员卡</text>
+    </view>
+    <text class="row-arrow">›</text>
+  </view>
+
+  <block wx:if="{{recent.length}}">
+    <view class="section-title"><text>最近办理</text></view>
+    <view class="list">
+      <view wx:for="{{recent}}" wx:key="id" class="row" hover-class="is-pressed" data-id="{{item.id}}" bindtap="onRecent">
+        <text class="row-main row-title">{{item.label}}</text>
+        <text class="row-arrow">›</text>
+      </view>
+    </view>
+  </block>
+
+  <text class="footnote">只记账，不收款。钱在门店线下收取。</text>
 </view>

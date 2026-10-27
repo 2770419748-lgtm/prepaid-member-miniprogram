@@ -1,0 +1,48 @@
+<view class="page">
+  <view class="head">
+    <text class="head-store">{{storeName}}</text>
+    <text class="muted">{{summary}}</text>
+  </view>
+
+  <view class="chips">
+    <view
+      wx:for="{{ranges}}"
+      wx:key="value"
+      class="chip {{item.value === range ? 'chip-on' : ''}}"
+      data-value="{{item.value}}"
+      bindtap="onRange"
+    >{{item.label}}</view>
+  </view>
+  <view class="chips">
+    <view
+      wx:for="{{types}}"
+      wx:key="value"
+      class="chip {{item.value === type ? 'chip-on' : ''}}"
+      data-value="{{item.value}}"
+      bindtap="onType"
+    >{{item.label}}</view>
+  </view>
+
+  <text wx:if="{{error}}" class="notice notice-danger">{{error}}</text>
+
+  <block wx:for="{{days}}" wx:for-item="day" wx:key="key">
+    <view class="section-title"><text>{{day.label}}</text></view>
+    <view class="list">
+      <view wx:for="{{day.rows}}" wx:key="id" class="row" hover-class="is-pressed" data-id="{{item.id}}" bindtap="onEntry">
+        <view class="row-main">
+          <text class="row-title">{{item.title}} <text wx:if="{{item.reversed}}" class="tag tag-gray">已冲正</text></text>
+          <text class="row-sub">{{item.member}}</text>
+          <text class="row-sub">{{item.meta}}</text>
+        </view>
+        <view class="row-side">
+          <text class="row-amount {{item.tone}}">{{item.change}}</text>
+          <text class="row-sub">余额 {{item.balanceAfter}}</text>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <text wx:if="{{!loading && !error && !days.length}}" class="empty">{{emptyText}}</text>
+  <text wx:if="{{loading}}" class="loading-more">正在加载…</text>
+  <text wx:elif="{{days.length && !hasMore}}" class="loading-more">没有更多了</text>
+</view>
