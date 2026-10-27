@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { ApiError } from '../utils/errors';
-import { cleanScanned, consumeEntryUrl, needsRescan, validUntilText } from '../utils/paycode';
+import { cleanScanned, consumeEntryUrl, needsRescan, untilText, validUntilText } from '../utils/paycode';
 
 test('扫到的内容去掉空白和换行', () => {
   assert.equal(cleanScanned(' 8681 2345 6789 012345\n'), '868123456789012345');
@@ -10,8 +10,14 @@ test('扫到的内容去掉空白和换行', () => {
 test('扫码后带着会员、码和有效期去填金额', () => {
   assert.equal(
     consumeEntryUrl('member-1', '868123456789012345', '2026-10-27T10:25:00.000Z'),
-    '/pages/entry/entry?kind=CONSUME&memberId=member-1&payCode=868123456789012345&until=2026-10-27T10%3A25%3A00.000Z',
+    '/pages/entry/entry?kind=CONSUME&memberId=member-1&payCode=868123456789012345&until=1793096700000',
   );
+});
+
+test('记账页从地址里的毫秒数读出有效期，读不出来就不显示', () => {
+  assert.equal(untilText('1793096700000'), '18:25 前有效');
+  assert.equal(untilText(undefined), '');
+  assert.equal(untilText('2026-10-27T10%3A25%3A00.000Z'), '');
 });
 
 test('有效期按北京时间显示', () => {

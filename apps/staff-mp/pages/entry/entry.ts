@@ -3,7 +3,7 @@ import { ApiError, messageOf } from '../../utils/errors';
 import { LEDGER_TYPE_LABELS } from '../../utils/labels';
 import { memberLabel } from '../../utils/ledger';
 import { formatCent, formatChange, parseYuanToCent } from '../../utils/money';
-import { needsRescan, validUntilText } from '../../utils/paycode';
+import { needsRescan, untilText, validUntilText } from '../../utils/paycode';
 import { maskPhone } from '../../utils/phone';
 import { newRequestId } from '../../utils/request-id';
 import { scanMemberCode } from '../../utils/scan';
@@ -72,7 +72,7 @@ Page({
       submitText: `确认${label}`,
       remarkPlaceholder: kind === 'RECHARGE' ? '如：现金、转账' : '如：消费项目',
       payCode,
-      codeText: payCode && query.until ? validUntilText(query.until) : '',
+      codeText: payCode ? untilText(query.until) : '',
       needCode: kind === 'CONSUME' && !payCode,
     });
     if (this.data.needCode) {
