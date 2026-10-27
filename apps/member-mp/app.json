@@ -5,7 +5,11 @@
     "pages/mine/mine",
     "pages/login/login",
     "pages/ledger-detail/ledger-detail",
-    "pages/stores/stores"
+    "pages/stores/stores",
+    "pages/benefits/benefits",
+    "pages/sign-list/sign-list",
+    "pages/sign/sign",
+    "pages/sign-webview/sign-webview"
   ],
   "window": {
     "navigationBarTitleText": "储值会员",

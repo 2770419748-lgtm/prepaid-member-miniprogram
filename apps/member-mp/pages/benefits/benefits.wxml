@@ -1,0 +1,53 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="card">
+    <view class="skeleton" style="width: 240rpx; height: 32rpx;"></view>
+    <view class="skeleton" style="height: 28rpx; margin-top: 32rpx;"></view>
+    <view class="skeleton" style="height: 28rpx; margin-top: 24rpx;"></view>
+    <view class="skeleton" style="height: 28rpx; margin-top: 24rpx;"></view>
+  </view>
+
+  <view wx:elif="{{error}}" class="error-box">
+    <view>{{error}}</view>
+    <view class="retry" bindtap="retry">重新加载</view>
+  </view>
+
+  <view wx:elif="{{cards.length === 0}}" class="empty">
+    <text>暂时还没有会员权益</text>
+    <text class="empty-hint">如需了解，请到门店咨询</text>
+  </view>
+
+  <block wx:else>
+    <view wx:for="{{cards}}" wx:for-item="card" wx:key="id" class="card plan">
+      <view class="card-head">
+        <text class="card-title">{{card.title}}</text>
+        <text wx:if="{{card.statusText}}" class="tag tag-{{card.tone}}">{{card.statusText}}</text>
+      </view>
+      <view wx:if="{{card.summary}}" class="plan-summary">{{card.summary}}</view>
+      <view class="benefit" wx:for="{{card.items}}" wx:key="title">
+        <view class="benefit-dot"></view>
+        <view class="benefit-text">
+          <view class="benefit-title">{{item.title}}</view>
+          <view wx:if="{{item.detail}}" class="benefit-detail">{{item.detail}}</view>
+        </view>
+      </view>
+      <view wx:if="{{card.ruleLines.length > 0}}" class="plan-rules">
+        <view class="plan-rules-title">使用规则</view>
+        <view class="rule-line" wx:for="{{card.ruleLines}}" wx:key="*this">{{item}}</view>
+      </view>
+      <view class="plan-foot">
+        <view wx:if="{{card.action === 'sign'}}" class="plan-action plan-sign" data-id="{{card.flowId}}" bindtap="openFlow">去签署</view>
+        <view wx:elif="{{card.action === 'view'}}" class="plan-action" data-id="{{card.flowId}}" bindtap="openFlow">
+          <text>查看权益单</text>
+          <view class="chevron"></view>
+        </view>
+        <text wx:else class="plan-hint">如需办理，请到门店咨询</text>
+      </view>
+    </view>
+
+    <view class="card entry" bindtap="openList">
+      <image class="entry-icon" src="/images/icon-contract.png"></image>
+      <view class="entry-text">我的权益单</view>
+      <view class="chevron"></view>
+    </view>
+  </block>
+</view>

@@ -1,0 +1,45 @@
+.flow-card {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.flow-row {
+  display: flex;
+  align-items: center;
+  padding: 32rpx 0;
+  border-bottom: 1rpx solid #e2e8f0;
+}
+
+.flow-row:last-child {
+  border-bottom: none;
+}
+
+.flow-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.flow-title {
+  font-size: 30rpx;
+  font-weight: 500;
+}
+
+.flow-tags {
+  margin-top: 12rpx;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.flow-tags .tag {
+  margin-right: 12rpx;
+}
+
+.flow-date {
+  font-size: 24rpx;
+  color: #64748b;
+}
+
+.flow-row .chevron {
+  margin-left: 24rpx;
+}

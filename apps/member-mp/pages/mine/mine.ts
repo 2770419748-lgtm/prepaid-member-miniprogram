@@ -29,6 +29,14 @@ Page({
     wx.switchTab({ url: '/pages/ledger/ledger' });
   },
 
+  openBenefits() {
+    wx.navigateTo({ url: '/pages/benefits/benefits' });
+  },
+
+  openSignList() {
+    wx.navigateTo({ url: '/pages/sign-list/sign-list' });
+  },
+
   openStores() {
     wx.navigateTo({ url: '/pages/stores/stores' });
   },

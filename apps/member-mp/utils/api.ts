@@ -90,3 +90,67 @@ export function fetchLedgerEntry(id: string): Promise<LedgerItem> {
 export function fetchStores(): Promise<StoreView[]> {
   return request<StoreView[]>('/members/stores');
 }
+
+// ---- 会员权益和权益单签署。字段和 docs/backend/m4-esign-sandbox.md 4.4 一致。
+
+export type SignStatus = 'DRAFT' | 'PENDING' | 'SIGNED' | 'REJECTED' | 'EXPIRED' | 'CANCELED';
+
+export interface BenefitItem {
+  title: string;
+  detail: string | null;
+}
+
+export interface BenefitContent {
+  summary: string | null;
+  items: BenefitItem[];
+  rules: string | null;
+}
+
+export interface MemberBenefit extends BenefitContent {
+  id: string;
+  title: string;
+  /** 这个方案最能代表现状的一份权益单：已签 > 待签 > 最近一份。没发起过是 null。 */
+  signFlow: { id: string; status: SignStatus; updatedAt: string } | null;
+}
+
+export interface SignFlowView {
+  id: string;
+  title: string;
+  status: SignStatus;
+  env: 'SANDBOX' | 'PRODUCTION';
+  /** 测试环境签署，界面标「测试签署」。 */
+  sandbox: boolean;
+  benefitPlan: ({ id: string; title: string } & BenefitContent) | null;
+  hasPdf: boolean;
+  signedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function fetchBenefits(): Promise<MemberBenefit[]> {
+  return request<MemberBenefit[]>('/members/me/benefits');
+}
+
+export function fetchSignFlows(query: { page: number; pageSize: number; status?: SignStatus }): Promise<PageResult<SignFlowView>> {
+  return request<PageResult<SignFlowView>>('/members/me/sign-flows', { data: query });
+}
+
+export function fetchSignFlow(id: string): Promise<SignFlowView> {
+  return request<SignFlowView>(`/members/me/sign-flows/${encodeURIComponent(id)}`);
+}
+
+/** 签署链接每次打开前现取，不缓存。 */
+export function fetchSignUrl(id: string): Promise<{ signUrl: string; sandbox: boolean }> {
+  return request<{ signUrl: string; sandbox: boolean }>(`/members/me/sign-flows/${encodeURIComponent(id)}/sign-url`, {
+    method: 'POST',
+  });
+}
+
+/** 从签署页回来时调，向电子签平台核对一次状态。 */
+export function refreshSignFlow(id: string): Promise<SignFlowView> {
+  return request<SignFlowView>(`/members/me/sign-flows/${encodeURIComponent(id)}/refresh`, { method: 'POST' });
+}
+
+export function contractPdfPath(id: string): string {
+  return `/members/me/sign-flows/${encodeURIComponent(id)}/pdf`;
+}

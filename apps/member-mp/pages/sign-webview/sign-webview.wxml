@@ -1,0 +1,2 @@
+<web-view wx:if="{{url}}" src="{{url}}"></web-view>
+<view wx:else class="error-box">签署链接不对，请返回重新打开</view>

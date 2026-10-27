@@ -74,3 +74,9 @@ export function dateTime(value: string | Date): string {
   const p = beijing(value);
   return `${p.year}-${two(p.month)}-${two(p.day)} ${two(p.hour)}:${two(p.minute)}`;
 }
+
+/** 「2026年10月27日」。 */
+export function dateText(value: string | Date): string {
+  const p = beijing(value);
+  return `${p.year}年${p.month}月${p.day}日`;
+}

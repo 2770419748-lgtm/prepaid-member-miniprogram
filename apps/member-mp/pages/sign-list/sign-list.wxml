@@ -1,0 +1,33 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="card">
+    <view class="skeleton" style="height: 72rpx;"></view>
+    <view class="skeleton" style="height: 72rpx; margin-top: 24rpx;"></view>
+  </view>
+
+  <view wx:elif="{{error}}" class="error-box">
+    <view>{{error}}</view>
+    <view class="retry" bindtap="retry">重新加载</view>
+  </view>
+
+  <view wx:elif="{{rows.length === 0}}" class="empty">
+    <text>还没有权益单</text>
+    <text class="empty-hint">到门店办理会员权益后，权益单会显示在这里</text>
+  </view>
+
+  <block wx:else>
+    <view class="card flow-card">
+      <view wx:for="{{rows}}" wx:key="id" class="flow-row" data-id="{{item.id}}" bindtap="openFlow">
+        <view class="flow-main">
+          <view class="flow-title">{{item.title}}</view>
+          <view class="flow-tags">
+            <text class="tag tag-{{item.tone}}">{{item.statusText}}</text>
+            <text wx:if="{{item.sandbox}}" class="tag tag-test">测试签署</text>
+            <text class="flow-date">{{item.dateText}}</text>
+          </view>
+        </view>
+        <view class="chevron"></view>
+      </view>
+    </view>
+    <view class="footer-note">{{loadingMore ? '正在加载…' : finished ? '没有更多了' : '上拉加载更多'}}</view>
+  </block>
+</view>

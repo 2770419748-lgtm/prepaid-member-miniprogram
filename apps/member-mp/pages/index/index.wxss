@@ -162,3 +162,58 @@
 .mc-notice {
   position: relative;
 }
+
+.benefit-hint {
+  margin-top: 24rpx;
+  font-size: 24rpx;
+  color: #94a3b8;
+}
+
+/* 待签提醒条：浅橙底，不抢余额的层级；首页主按钮仍然只有一个。 */
+.sign-banner {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24rpx;
+  padding: 28rpx 28rpx;
+  border-radius: 24rpx;
+  background: #fff7ed;
+}
+
+.sign-banner-icon {
+  width: 48rpx;
+  height: 48rpx;
+  flex: none;
+}
+
+.sign-banner-text {
+  flex: 1;
+  min-width: 0;
+  margin-left: 20rpx;
+}
+
+.sign-banner-title {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #9a3412;
+}
+
+.sign-banner-sub {
+  margin-top: 4rpx;
+  font-size: 24rpx;
+  color: #b45309;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sign-banner-go {
+  margin-left: 16rpx;
+  padding: 0 24rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #f59e0b;
+  color: #b45309;
+  font-size: 26rpx;
+  flex: none;
+}
