@@ -31,7 +31,7 @@ enum StaffStatus {
   DISABLED
 }
 
-/// 角色预留。鉴权实现属后续里程碑。
+/// 店员角色。登录后的权限判断按此枚举：超级管理员、店长、店员。
 enum StaffRole {
   SUPER_ADMIN
   STORE_MANAGER
@@ -96,13 +96,22 @@ model Org {
 }
 
 model Store {
-  id        String      @id @default(cuid())
-  orgId     String      @map("org_id")
-  name      String
-  status    StoreStatus @default(ACTIVE)
-  address   String?
-  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id            String      @id @default(cuid())
+  orgId         String      @map("org_id")
+  name          String
+  status        StoreStatus @default(ACTIVE)
+  /// 详细地址，供会员导航展示。
+  address       String?
+  /// 纬度，约六位小数。
+  lat           Decimal?    @db.Decimal(9, 6)
+  /// 经度，约六位小数。
+  lng           Decimal?    @db.Decimal(10, 6)
+  /// 联系电话，供会员拨号。
+  contactPhone  String?     @map("contact_phone")
+  /// 营业时间，原文展示。
+  businessHours String?     @map("business_hours")
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   org           Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
   staffRoles    StaffStoreRole[]
@@ -114,14 +123,20 @@ model Store {
 }
 
 model Staff {
-  id        String      @id @default(cuid())
-  orgId     String      @map("org_id")
-  phone     String
-  name      String
-  status    StaffStatus @default(ACTIVE)
-  wxOpenId  String?     @map("wx_open_id")
-  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                 String      @id @default(cuid())
+  orgId              String      @map("org_id")
+  phone              String
+  name               String
+  status             StaffStatus @default(ACTIVE)
+  wxOpenId           String?     @map("wx_open_id")
+  /// 网页后台密码，只存 bcrypt 哈希。小程序登录不使用。
+  passwordHash       String?     @map("password_hash")
+  /// 使用初始密码登录网页后台后必须修改。
+  mustChangePassword Boolean     @default(true) @map("must_change_password")
+  failedLoginCount   Int         @default(0) @map("failed_login_count")
+  lockedUntil        DateTime?   @map("locked_until") @db.Timestamptz(6)
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   org        Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
   storeRoles StaffStoreRole[]

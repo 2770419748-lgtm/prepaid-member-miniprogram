@@ -21,5 +21,5 @@
     "esModuleInterop": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*", "test/**/*", "prisma/seed.ts"]
+  "include": ["src/**/*", "test/**/*", "prisma/seed.ts", "scripts/**/*"]
 }

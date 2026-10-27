@@ -14,23 +14,24 @@
 
 ## 后端模块
 
-已接入的只有配置、数据库、健康检查和电子签开关：
+已接入配置、数据库、健康检查、电子签开关，以及 M1 的账号、门店和员工（待合入，见 [PROGRESS.md](./PROGRESS.md)）：
 
 - `ConfigModule`：读取环境变量
 - `PrismaModule`：PostgreSQL
 - `HealthModule`：`GET /health`
 - `EsignConfigModule`：`esign.production.enabled` 读取与沙箱校验
+- `AuthModule`：小程序微信登录、网页后台密码登录、JWT、角色鉴权
+- `OrgModule`：组织、门店、员工
+- `MembersModule`：会员资料与可使用门店
 
-空模块只标边界，没有业务代码：
+尚未实现的模块只标边界：
 
 | 模块 | 标记 | 后续内容 |
 | --- | --- | --- |
-| `AuthModule` | TODO(M1) | 微信登录、JWT、角色鉴权 |
-| `OrgModule` | TODO(M1) | 组织、门店、员工 |
-| `WalletModule` | TODO(M2) | 线下充值 / 消费 / 冲正 |
+| `WalletModule` | TODO(M2) | 线下充值 / 消费 / 冲正。M1 合入前不要开工 |
 | `EsignModule` | TODO(M4) | 模板与签署流程；真实调用不在本里程碑 |
 
-角色预留：`SUPER_ADMIN`、`STORE_MANAGER`、`STAFF`。
+角色：`SUPER_ADMIN`、`STORE_MANAGER`、`STAFF`。店长只能管理普通店员。
 
 ## 账务
 

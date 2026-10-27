@@ -14,6 +14,17 @@ interface HttpRequestLike {
   url: string;
 }
 
+function exceptionMessage(exception: HttpException): unknown {
+  const response = exception.getResponse();
+  if (typeof response === 'string') {
+    return response;
+  }
+  if (typeof response === 'object' && response && 'message' in response) {
+    return (response as { message: unknown }).message;
+  }
+  return response;
+}
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
@@ -30,7 +41,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const message =
       exception instanceof HttpException
-        ? exception.getResponse()
+        ? exceptionMessage(exception)
         : 'Internal server error';
 
     if (!(exception instanceof HttpException)) {
