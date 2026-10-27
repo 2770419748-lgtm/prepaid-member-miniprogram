@@ -1,0 +1,11 @@
+{
+  "pages": ["pages/index/index", "pages/mine/mine"],
+  "window": {
+    "navigationBarTitleText": "储值会员",
+    "navigationBarBackgroundColor": "#1677ff",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5f5f5"
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}

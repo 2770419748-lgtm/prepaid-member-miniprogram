@@ -1,0 +1,33 @@
+# dependencies / build
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.turbo/
+
+# secrets — 真实环境变量不得进仓
+.env
+.env.local
+.env.*.local
+apps/api/.env
+
+# keep committed examples
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# WeChat DevTools private config
+project.private.config.json
+miniprogram_npm/
+
+# local object storage placeholder
+.storage/

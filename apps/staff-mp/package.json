@@ -1,0 +1,13 @@
+{
+  "name": "staff-mp",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "miniprogram-api-typings": "^4.0.8",
+    "typescript": "^5.7.2"
+  }
+}

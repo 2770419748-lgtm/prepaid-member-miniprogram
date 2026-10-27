@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # 占位连接串，仅供 prisma validate 解析 schema。本工作流不打印该值，也不连接生产库。
+      DATABASE_URL: postgresql://prepaid:prepaid@localhost:5432/prepaid_member?schema=public
+      ESIGN_PRODUCTION_ENABLED: "false"
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: install
+        run: pnpm install --frozen-lockfile
+
+      - name: prisma validate
+        run: pnpm --filter api exec prisma validate
+
+      - name: prisma generate
+        run: pnpm --filter api exec prisma generate
+
+      - name: lint
+        run: pnpm -r lint
+
+      - name: typecheck
+        run: pnpm -r typecheck
+
+      - name: api unit tests
+        run: pnpm --filter api test
