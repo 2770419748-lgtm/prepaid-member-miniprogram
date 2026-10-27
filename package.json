@@ -8,7 +8,7 @@
   "scripts": {
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter api test",
+    "test": "pnpm -r --if-present test",
     "dev:api": "pnpm --filter api start:dev",
     "dev:admin": "pnpm --filter admin-web dev"
   }

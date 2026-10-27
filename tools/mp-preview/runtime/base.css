@@ -1,0 +1,698 @@
+/* 预览外壳：模拟一台 375 宽的手机，以及微信基础组件的默认样式。 */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #e5e7eb;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', 'WenQuanYi Zen Hei', 'Noto Sans CJK SC', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#phone {
+  position: relative;
+  width: 375px;
+  height: 812px;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #fff;
+  --safe-bottom: 34px;
+}
+
+#phone.mp-tab-page {
+  --safe-bottom: 0px;
+}
+
+#statusbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  padding: 0 22px 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15px;
+  font-weight: 600;
+  z-index: 20;
+}
+
+.sb-icons {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sb-icons svg {
+  fill: currentColor;
+}
+
+.sb-battery {
+  display: inline-block;
+  width: 24px;
+  height: 11px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 1px;
+  opacity: 0.9;
+}
+
+.sb-battery span {
+  display: block;
+  width: 80%;
+  height: 100%;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+#navbar {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  right: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+
+.nb-title {
+  font-size: 17px;
+  font-weight: 600;
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nb-back {
+  position: absolute;
+  left: 4px;
+  top: 0;
+  height: 44px;
+  width: 44px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+#phone.mp-can-back .nb-back {
+  display: flex;
+}
+
+.nb-capsule {
+  position: absolute;
+  right: 7px;
+  top: 6px;
+  width: 87px;
+  height: 32px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  border: 0.5px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.6);
+  color: #000;
+}
+
+#phone.mp-nav-white .nb-capsule {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.15);
+  color: #fff;
+}
+
+.cap-dots {
+  display: flex;
+  gap: 3px;
+}
+
+.cap-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.cap-split {
+  width: 0.5px;
+  height: 18px;
+  background: currentColor;
+  opacity: 0.25;
+}
+
+.cap-close i {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  position: relative;
+}
+
+.cap-close i::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+#phone.mp-nav-custom #navbar {
+  background: transparent !important;
+}
+
+#phone.mp-nav-custom .nb-title,
+#phone.mp-nav-custom .nb-back {
+  visibility: hidden;
+}
+
+#viewport {
+  position: absolute;
+  top: 88px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+#phone.mp-nav-custom #viewport {
+  top: 0;
+}
+
+#phone.mp-tab-page #viewport {
+  bottom: 84px;
+}
+
+.mp-window {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  /* 让页面里的 position: fixed 相对窗口区域定位，和真机一致。 */
+  transform: translateZ(0);
+}
+
+.mp-scroller {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+
+.mp-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.mp-refresh {
+  display: none;
+  height: 50px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mp-refresh i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #b2b2b2;
+  animation: mp-dot 0.9s infinite ease-in-out;
+}
+
+.mp-refresh i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.mp-refresh i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.mp-refreshing .mp-refresh {
+  display: flex;
+}
+
+@keyframes mp-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+#tabbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 84px;
+  padding-bottom: 34px;
+  display: none;
+  border-top: 0.5px solid rgba(0, 0, 0, 0.18);
+  z-index: 20;
+}
+
+#phone.mp-tab-page #tabbar {
+  display: flex;
+}
+
+#tabbar.mp-border-white {
+  border-top-color: rgba(255, 255, 255, 0.3);
+}
+
+.mp-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.mp-tab img {
+  width: 24px;
+  height: 24px;
+}
+
+/* 全页截图：撑开到内容高度。 */
+#phone.mp-expanded {
+  height: auto;
+}
+
+#phone.mp-expanded #viewport,
+#phone.mp-expanded .mp-window.mp-active,
+#phone.mp-expanded .mp-window.mp-active .mp-scroller {
+  position: relative;
+  inset: auto;
+  top: auto;
+  bottom: auto;
+  overflow: visible;
+}
+
+#phone.mp-expanded #viewport {
+  margin-top: 88px;
+}
+
+#phone.mp-expanded.mp-nav-custom #viewport {
+  margin-top: 0;
+}
+
+#phone.mp-expanded.mp-tab-page #viewport {
+  margin-bottom: 84px;
+}
+
+.mp-window:not(.mp-active) {
+  display: none;
+}
+
+/* ---------- 微信基础组件默认样式（近似 style v2） ---------- */
+
+.wx-page {
+  display: block;
+  min-height: 100%;
+}
+
+.wx-view,
+.wx-navigator,
+.wx-scroll-view,
+.wx-form,
+.wx-label {
+  display: block;
+}
+
+.wx-text {
+  display: inline;
+  white-space: pre-line;
+}
+
+.wx-button {
+  position: relative;
+  display: block;
+  width: 184px;
+  margin: 0 auto;
+  padding: 8px 24px;
+  box-sizing: border-box;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.41176471;
+  text-align: center;
+  text-decoration: none;
+  border-radius: 4px;
+  color: #000;
+  background-color: #f2f2f2;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+}
+
+.wx-button::after {
+  content: ' ';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200%;
+  height: 200%;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  transform: scale(0.5);
+  transform-origin: 0 0;
+  box-sizing: border-box;
+  border-radius: 10px;
+}
+
+.wx-button[data-type='primary'] {
+  color: #fff;
+  background-color: #07c160;
+}
+
+.wx-button[data-size='mini'] {
+  display: inline-block;
+  width: auto;
+  padding: 0 0.75em;
+  line-height: 2;
+  font-size: 16px;
+}
+
+.wx-button[data-disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.wx-button .mp-btn-loading {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: mp-spin 0.8s linear infinite;
+}
+
+.wx-image {
+  display: inline-block;
+  width: 320px;
+  height: 240px;
+  overflow: hidden;
+}
+
+.wx-input,
+.wx-textarea {
+  display: block;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+}
+
+.wx-navigator {
+  cursor: pointer;
+}
+
+[data-tap] {
+  cursor: pointer;
+}
+
+/* ---------- 弹层：toast、loading、modal、action sheet、地图、拨号 ---------- */
+
+#overlays {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+#overlays > * {
+  pointer-events: auto;
+}
+
+.mp-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.mp-toast {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  transform: translate(-50%, -50%);
+  min-width: 120px;
+  max-width: 260px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba(17, 17, 17, 0.75);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.mp-toast.mp-has-icon {
+  width: 136px;
+  min-height: 136px;
+  padding-top: 28px;
+}
+
+.mp-toast-icon {
+  display: block;
+  margin: 0 auto 10px;
+  width: 40px;
+  height: 40px;
+  font-size: 40px;
+  line-height: 40px;
+}
+
+.mp-spinner {
+  display: block;
+  margin: 0 auto 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-right-color: transparent;
+  animation: mp-spin 0.8s linear infinite;
+}
+
+@keyframes mp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mp-toast-transparent {
+  position: absolute;
+  inset: 0;
+}
+
+.mp-modal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 300px;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  text-align: center;
+}
+
+.mp-modal-title {
+  padding: 32px 24px 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #000;
+}
+
+.mp-modal-content {
+  padding: 16px 24px 32px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: rgba(0, 0, 0, 0.5);
+  white-space: pre-line;
+}
+
+.mp-modal-title + .mp-modal-content {
+  padding-top: 12px;
+}
+
+.mp-modal-content textarea {
+  width: 100%;
+  min-height: 72px;
+  border: 0;
+  border-radius: 6px;
+  background: #f7f7f7;
+  padding: 10px 12px;
+  font: inherit;
+  color: #000;
+  resize: none;
+  text-align: left;
+}
+
+.mp-modal-actions {
+  display: flex;
+  border-top: 0.5px solid rgba(0, 0, 0, 0.1);
+}
+
+.mp-modal-actions button {
+  flex: 1;
+  height: 56px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mp-modal-actions button + button {
+  border-left: 0.5px solid rgba(0, 0, 0, 0.1);
+}
+
+.mp-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #f7f7f7;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+  padding-bottom: 34px;
+}
+
+.mp-sheet-title {
+  padding: 16px 24px;
+  background: #fff;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.5);
+  text-align: center;
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.1);
+}
+
+.mp-sheet-item {
+  padding: 16px;
+  background: #fff;
+  font-size: 17px;
+  text-align: center;
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+}
+
+.mp-sheet-cancel {
+  margin-top: 8px;
+  padding: 16px;
+  background: #fff;
+  font-size: 17px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.mp-map {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.mp-map-canvas {
+  position: relative;
+  flex: 1;
+  background-color: #eef2ec;
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.9) 6px, transparent 6px),
+    linear-gradient(rgba(255, 255, 255, 0.9) 6px, transparent 6px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+  background-size: 140px 110px, 140px 110px, 28px 22px, 28px 22px;
+  background-position: 40px 20px, 40px 20px, 0 0, 0 0;
+}
+
+.mp-map-pin {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 28px;
+  height: 28px;
+  margin: -28px 0 0 -14px;
+  border-radius: 50% 50% 50% 0;
+  background: #fa5151;
+  transform: rotate(-45deg);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.mp-map-pin::after {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 9px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.mp-map-note {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+}
+
+.mp-map-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 54px;
+  background: #fff;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.mp-map-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mp-map-name {
+  font-size: 19px;
+  font-weight: 600;
+  color: #000;
+}
+
+.mp-map-address {
+  margin-top: 6px;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.5);
+  line-height: 1.4;
+}
+
+.mp-map-go {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: 50%;
+  background: #07c160;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}

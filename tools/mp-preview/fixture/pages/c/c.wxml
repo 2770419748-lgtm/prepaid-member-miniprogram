@@ -1,0 +1,2 @@
+<view class="box">来自 {{from}}</view>
+<view class="box bar"><button class="call-btn" size="mini" bindtap="call">打电话</button></view>

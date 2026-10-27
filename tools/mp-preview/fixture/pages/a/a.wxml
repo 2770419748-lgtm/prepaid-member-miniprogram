@@ -1,0 +1,20 @@
+<view class="box">
+  <view wx:for="{{list}}" wx:key="id" class="row row-{{index}}" data-item-id="{{item.id}}" bindtap="pick">{{index + 1}}. {{item.name}}</view>
+  <view class="picked">{{picked}}</view>
+</view>
+<view class="box">
+  <view wx:if="{{mode === 'a'}}" class="mode">模式甲</view>
+  <view wx:elif="{{mode === 'b'}}" class="mode">模式乙</view>
+  <view wx:else class="mode">其他模式</view>
+  <view class="launched">{{launched ? '已启动' : '未启动'}}</view>
+  <view class="refreshed">刷新 {{refreshed}} 次</view>
+</view>
+<view class="box">
+  <button class="phone-btn" type="primary" open-type="getPhoneNumber" bindgetphonenumber="onPhone">手机号</button>
+  <view class="phone">{{phone}}</view>
+  <button class="ask-btn" bindtap="ask">填原因</button>
+  <view class="reason">{{reason}}</view>
+  <button class="loc-btn" bindtap="locate">定位</button>
+  <view class="far">{{far}}</view>
+  <navigator class="to-c" url="/pages/c/c?from=a">去丙页</navigator>
+</view>
