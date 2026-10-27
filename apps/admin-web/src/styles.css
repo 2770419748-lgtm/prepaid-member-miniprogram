@@ -1,0 +1,53 @@
+:root {
+  --pm-primary: #1677ff;
+  --pm-text: #0f172a;
+  --pm-text-secondary: #64748b;
+  --pm-border: #e2e8f0;
+  --pm-page-bg: #f8fafc;
+  --pm-success: #16a34a;
+  --pm-warning: #d97706;
+  --pm-danger: #dc2626;
+}
+
+body {
+  background: var(--pm-page-bg);
+  color: var(--pm-text);
+}
+
+.pm-amount-plus {
+  color: var(--pm-success);
+  font-variant-numeric: tabular-nums;
+}
+
+.pm-amount-minus {
+  color: var(--pm-danger);
+  font-variant-numeric: tabular-nums;
+}
+
+.pm-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.pm-page-title {
+  margin: 0 0 16px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+
+.pm-page-sub {
+  margin: -12px 0 16px;
+  color: var(--pm-text-secondary);
+}
+
+.pm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.pm-toolbar .pm-spacer {
+  flex: 1;
+}

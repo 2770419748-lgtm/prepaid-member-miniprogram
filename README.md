@@ -26,7 +26,7 @@ pnpm --filter admin-web dev
 - API：<http://localhost:3000/health>  
   期望 `{ "ok": true, "esignProductionEnabled": false, "db": "up" }`
 - 商家后台：<http://localhost:5173>  
-  登录页为占位，可进入概览壳。接口地址来自 `apps/admin-web/.env.development` 的 `VITE_API_BASE`。
+  种子账号 `13800000000`，初始密码 `Init12345`，第一次登录要改密码。接口地址来自 `apps/admin-web/.env.development` 的 `VITE_API_BASE`。页面说明见 [docs/frontend/admin-web.md](docs/frontend/admin-web.md)。
 
 可选对象存储占位（默认不启动）：
 
