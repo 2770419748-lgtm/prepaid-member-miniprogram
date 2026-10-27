@@ -1,6 +1,6 @@
 import { message } from 'ant-design-vue';
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
-import { handleUnauthorized } from '../api/http';
+import { handleMustChangePassword, handleUnauthorized } from '../api/http';
 import type { StaffRole } from '../api/types';
 import AdminLayout from '../layouts/AdminLayout.vue';
 import { useSessionStore } from '../stores/session';
@@ -163,4 +163,16 @@ handleUnauthorized(() => {
   session.logout();
   message.warning('登录已过期，请重新登录');
   void router.push({ name: 'login' });
+});
+
+handleMustChangePassword(() => {
+  const session = useSessionStore();
+  if (!session.loggedIn) {
+    return;
+  }
+  session.requirePasswordChange();
+  if (router.currentRoute.value.name !== 'change-password') {
+    message.warning('请先修改初始密码');
+    void router.push({ name: 'change-password' });
+  }
 });

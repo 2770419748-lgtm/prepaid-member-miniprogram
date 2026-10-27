@@ -136,10 +136,12 @@ model Staff {
   wxOpenId           String?     @map("wx_open_id")
   /// 网页后台密码，只存 bcrypt 哈希。小程序登录不使用。
   passwordHash       String?     @map("password_hash")
-  /// 使用初始密码登录网页后台后必须修改。
+  /// 使用初始密码登录网页后台后必须修改。改之前，密码登录的凭证只能改密码、看本人信息（服务端拦截）。
   mustChangePassword Boolean     @default(true) @map("must_change_password")
   failedLoginCount   Int         @default(0) @map("failed_login_count")
   lockedUntil        DateTime?   @map("locked_until") @db.Timestamptz(6)
+  /// 登录版本号，写进登录凭证。改密码、重置密码时加一，之前签发的凭证全部作废。
+  sessionVersion     Int         @default(0) @map("session_version")
   createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 

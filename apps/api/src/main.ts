@@ -1,38 +1,34 @@
 import 'reflect-metadata';
 
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { WechatAppConfig } from './auth/wechat/wechat-app.config';
 import { configureApp } from './configure-app';
 import { EsignConfigService } from './esign-config/esign-config.service';
+import { configureExposure } from './http-exposure';
 
 async function bootstrap(): Promise<void> {
   // rawBody：e签宝回调要用原始请求体验签。
-  const app = await NestFactory.create(AppModule, { cors: true, rawBody: true });
+  // abortOnError=false：启动检查（例如正式环境的 JWT 密钥）不通过时把原因抛出来，由下面打印后退出。
+  const app = await NestFactory.create(AppModule, { rawBody: true, abortOnError: false });
   configureApp(app);
 
-  const swagger = new DocumentBuilder()
-    .setTitle('储值会员')
-    .setDescription('账号、门店与员工。不做小程序内支付。正式签署默认关闭。')
-    .setVersion('1')
-    .addBearerAuth()
-    .addTag('登录')
-    .addTag('门店')
-    .addTag('员工')
-    .addTag('会员')
-    .addTag('权益单')
-    .addTag('健康检查')
-    .build();
-  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swagger), {
-    customSiteTitle: '储值会员接口',
-    swaggerOptions: {
-      docExpansion: 'list',
-      defaultModelsExpandDepth: -1,
-      persistAuthorization: true,
-    },
+  const config = app.get(ConfigService);
+  const production = config.get<string>('NODE_ENV') === 'production';
+  const { corsOrigins, docs } = configureExposure(app, {
+    production,
+    corsOrigins: config.get<string>('CORS_ORIGINS'),
   });
+  if (corsOrigins === true) {
+    Logger.log('cors.origins=任意网页（开发环境）', 'Bootstrap');
+  } else if (corsOrigins.length === 0) {
+    Logger.warn('CORS_ORIGINS 没有配置：浏览器里的商家后台不能跨域调接口。后台和接口不同域名时要配置。', 'Bootstrap');
+  } else {
+    Logger.log(`cors.origins=${corsOrigins.join(',')}`, 'Bootstrap');
+  }
+  Logger.log(`docs=${docs ? '/docs' : '正式环境不开放'}`, 'Bootstrap');
 
   const esign = app.get(EsignConfigService);
   const wechat = app.get(WechatAppConfig);
@@ -52,4 +48,7 @@ async function bootstrap(): Promise<void> {
   Logger.log(`api listening on ${port}`, 'Bootstrap');
 }
 
-void bootstrap();
+bootstrap().catch((error: unknown) => {
+  Logger.error(`接口没有启动：${error instanceof Error ? error.message : String(error)}`, 'Bootstrap');
+  process.exit(1);
+});

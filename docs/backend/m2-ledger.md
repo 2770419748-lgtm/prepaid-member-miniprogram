@@ -61,9 +61,9 @@
 | GET | `/members` | 店员及以上 | `phone?`（完整号精确查）, `keyword?`, `page`, `pageSize` | 分页会员卡 |
 | GET | `/members/:id` | 店员及以上 | — | 会员卡，含总余额 |
 | GET | `/members/me/wallet` | 会员 | — | `{ hasCard, balanceCent, openedAt, updatedAt }` |
-| POST | `/wallets/:memberId/recharge` | 店员及以上 | `storeId`, `amountCent`, `remark?`, `requestId?` | `{ entry, balanceCent, replayed }` |
+| POST | `/wallets/:memberId/recharge` | 店员及以上 | `storeId`, `amountCent`, `remark?`, `requestId`（必填） | `{ entry, balanceCent, replayed }` |
 | POST | `/wallets/:memberId/consume` | 店员及以上 | 同上，另加必填 `payCode`（刚扫到的会员码） | 同上。余额不足 400；码的问题见 [pay-code.md](./pay-code.md) |
-| POST | `/ledger/:id/reversal` | 超管或原门店店长 | `remark`, `requestId?` | 同上。已冲过 409 |
+| POST | `/ledger/:id/reversal` | 超管或原门店店长 | `remark`, `requestId`（必填） | 同上。已冲过 409 |
 | GET | `/ledger` | 店员按范围；会员只看自己 | `memberId?`, `storeId?`, `type?`, `from?`, `to?`, `page`, `pageSize` | 分页流水 |
 | GET | `/ledger/:id` | 同上 | — | 一条流水 |
 
@@ -75,7 +75,7 @@
 
 `from` 含、`to` 不含，ISO 时间，例如 `2026-10-01T00:00:00+08:00`。
 
-**防重复提交：** 前端每次点「确认」生成一个 `requestId`（8–64 位字母、数字、`-`、`_`，UUID 即可），网络重试或连点时带同一个号。同一组织内同一个号只会记一笔：重复提交返回第一次的结果并带 `replayed: true`；同一个号换了金额或会员则 409。
+**防重复提交：** 充值、扣款、冲正都**必须**带 `requestId`（8–64 位字母、数字、`-`、`_`，UUID 即可），不带返回 400（2026-10-28 起，见 [security-hardening.md](./security-hardening.md)）。前端每次点「确认」生成一个，网络重试或连点时带同一个号。同一组织内同一个号只会记一笔：重复提交（包括同时提交）返回第一次的结果并带 `replayed: true`；同一个号换了金额或会员则 409。
 
 **没有的东西：** 没有修改或删除流水的接口；没有任何支付、支付回调路由；不接受客户端传余额。
 

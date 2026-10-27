@@ -36,7 +36,7 @@
 | POST | `/members/me/pay-code` | 会员 | — | `{ id, code, expiresAt, refreshAfterSeconds }`。没开卡或卡已停用 400 |
 | GET | `/members/me/pay-code/:id` | 会员 | — | `{ id, status, expiresAt, storeName, entry }`。`status`：`ACTIVE` 等着扫、`SCANNED` 门店已扫、`USED` 已扣款（`entry` 是那一笔，会员视角）、`EXPIRED` 过期。不是自己的码 404 |
 | POST | `/pay-codes/scan` | 店员及以上 | `code`（扫到的原文）, `storeId` | `{ member, expiresAt }`：会员卡（同 `GET /members/:id`）和扫码锁定的到期时间 |
-| POST | `/wallets/:memberId/consume` | 店员及以上 | `storeId`, `amountCent`, `payCode`, `remark?`, `requestId?` | 同 M2。`payCode` 必填 |
+| POST | `/wallets/:memberId/consume` | 店员及以上 | `storeId`, `amountCent`, `payCode`, `remark?`, `requestId`（必填） | 同 M2。`payCode` 必填 |
 
 扫码和扣款的报错都是白话，员工小程序直接显示：
 

@@ -7,6 +7,8 @@
 // 演示用的超级管理员是 prisma/seed.ts 建的 13800000000。不要对着任何正式环境跑。
 // 消费都按真机的顺序走：会员在会员小程序出示会员码 → 店员扫码 → 带着会员码扣款。截图里「扫到」的码也是这样现拿的。
 
+import { randomUUID } from 'node:crypto';
+
 const API = process.env.API_BASE ?? 'http://localhost:3000';
 
 const SUPER_ADMIN = '13800000000';
@@ -82,7 +84,13 @@ async function ensureMember(token, storeId, { phone, name }) {
 function move(token, memberId, kind, storeId, yuan, remark, payCode) {
   return call('POST', `/wallets/${memberId}/${kind}`, {
     token,
-    body: { storeId, amountCent: Math.round(yuan * 100), ...(remark ? { remark } : {}), ...(payCode ? { payCode } : {}) },
+    body: {
+      storeId,
+      amountCent: Math.round(yuan * 100),
+      requestId: randomUUID(),
+      ...(remark ? { remark } : {}),
+      ...(payCode ? { payCode } : {}),
+    },
   });
 }
 

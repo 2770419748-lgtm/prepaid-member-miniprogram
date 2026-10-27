@@ -81,7 +81,10 @@ try {
     await pw.nth(1).fill('Zhao123456');
     await pw.nth(2).fill('Zhao123456');
     await page.click('button[type=submit]');
-    await page.waitForURL('**/dashboard');
+    // 改完以后之前的登录全部作废，回到登录页用新密码重新登录。
+    await page.waitForURL('**/login');
+    await shot(page, '03b-改密后重新登录');
+    await login(page, '13800000004', 'Zhao123456');
     await page.waitForTimeout(1200);
     await shot(page, '04-店员看到的概览和菜单');
     await page.context().close();

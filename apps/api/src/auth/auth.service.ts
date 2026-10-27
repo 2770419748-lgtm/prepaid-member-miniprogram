@@ -8,7 +8,7 @@ import { Prisma, Staff, StaffStoreRole } from '@prisma/client';
 import { AuditAction, AuditLogWriter } from '../audit/audit-log.writer';
 import { toMemberView } from '../members/member.view';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccessPrincipal } from './access-principal';
+import { AccessPrincipal, LoginMethod } from './access-principal';
 import { AccessTokenService } from './access-token.service';
 import { ChangeStaffPasswordDto, StaffPasswordLoginDto } from './dto/staff-password.dto';
 import { WxPhoneLoginDto } from './dto/wx-phone-login.dto';
@@ -72,7 +72,7 @@ export class AuthService {
       where: { id: staff.id },
       data: { wxOpenId: identity.openId },
     });
-    return this.issueStaffSession(staff);
+    return this.issueStaffSession(staff, 'WECHAT');
   }
 
   async loginStaffWithPassword(dto: StaffPasswordLoginDto) {
@@ -101,9 +101,10 @@ export class AuthService {
       where: { id: staff.id },
       data: { failedLoginCount: 0, lockedUntil: null },
     });
-    return this.issueStaffSession(staff);
+    return this.issueStaffSession(staff, 'PASSWORD');
   }
 
+  /** 改完以后这位员工之前的登录全部作废（网页和小程序都要重新登录）。 */
   async changeStaffPassword(principal: AccessPrincipal, dto: ChangeStaffPasswordDto) {
     if (principal.principalType !== 'STAFF') {
       throw new ForbiddenException('无权执行该操作');
@@ -128,6 +129,7 @@ export class AuthService {
           mustChangePassword: false,
           failedLoginCount: 0,
           lockedUntil: null,
+          sessionVersion: { increment: 1 },
         },
       });
       await this.audit.write(tx, {
@@ -177,7 +179,7 @@ export class AuthService {
     };
   }
 
-  private issueStaffSession(staff: StaffLoginRecord) {
+  private issueStaffSession(staff: StaffLoginRecord, method: LoginMethod) {
     const roles = staff.storeRoles.map((role) => ({
       storeId: role.storeId,
       role: role.role,
@@ -189,6 +191,7 @@ export class AuthService {
         orgId: staff.orgId,
         principalType: 'STAFF' as const,
         roles: roles.map((role) => ({ storeId: role.storeId, role: role.role })),
+        session: { version: staff.sessionVersion, method },
       }),
       tokenType: 'Bearer' as const,
       expiresIn: this.tokens.expiresInSeconds,

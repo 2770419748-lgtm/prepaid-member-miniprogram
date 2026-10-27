@@ -6,10 +6,12 @@
 //   node tools/mp-preview/shoot.mjs apps/member-mp/preview/scenario.mjs --out /tmp/member-shots
 //
 // 只连本机接口（API_BASE，默认 http://127.0.0.1:3000），会在本机库里建演示门店、演示会员、几笔流水和权益单；
-// 重复运行不会重复记账。演示账号用种子超级管理员 13800000000（密码默认 Init12345，可用 PREVIEW_STAFF_PASSWORD 改）。
+// 重复运行不会重复记账。演示账号用种子超级管理员 13800000000，按员工小程序的方式用（假）微信手机号登录：
+// 网页后台的初始密码登录在改密前什么都做不了，脚本不碰它。
 // 「签署」演示每次用一位新会员（手机号按时间生成），这样每次都从「待签署」开始。
 // 消费都按真机的顺序走：会员出示会员码 → 门店扫码 → 带着会员码扣款。「会员码」演示用另一位会员，每次跑都会扣一笔。
 
+import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 
 const API = (process.env.API_BASE ?? 'http://127.0.0.1:3000').replace(/\/$/, '');
@@ -18,7 +20,6 @@ const jsQR = createRequire(import.meta.url)('jsqr');
 /** 和 preview/fake-esign.mjs 里登记的演示模板一致。 */
 const ESIGN_TEMPLATE_ID = 'member-benefit-demo';
 const STAFF_PHONE = '13800000000';
-const STAFF_PASSWORD = process.env.PREVIEW_STAFF_PASSWORD ?? 'Init12345';
 
 const MEMBER_PHONE = '13900001111';
 const MEMBER_NAME = '林女士';
@@ -80,9 +81,9 @@ async function call(path, { method = 'GET', token, body } = {}) {
 }
 
 async function staffToken() {
-  const login = await call('/auth/staff/password/login', {
+  const login = await call('/auth/staff/wx-phone', {
     method: 'POST',
-    body: { phone: STAFF_PHONE, password: STAFF_PASSWORD },
+    body: { code: 'preview', phoneCode: 'preview', mockPhone: STAFF_PHONE },
   });
   return login.accessToken;
 }
@@ -105,7 +106,7 @@ async function scanFor(memberToken, staffToken, storeId) {
 /** 门店扫码以后扣款：消费必须带着刚扫的会员码。 */
 async function consumeWithCode(memberToken, staffToken, memberId, storeId, amountCent, remark = '演示') {
   const payCode = await scanFor(memberToken, staffToken, storeId);
-  return call(`/wallets/${memberId}/consume`, { method: 'POST', token: staffToken, body: { storeId, amountCent, remark, payCode } });
+  return call(`/wallets/${memberId}/consume`, { method: 'POST', token: staffToken, body: { storeId, amountCent, remark, payCode, requestId: randomUUID() } });
 }
 
 /** 认出会员码页上画的二维码，和店员手机扫到的一样。 */
@@ -199,10 +200,10 @@ async function prepare() {
   const ledger = await call(`/ledger?memberId=${member.id}&pageSize=1`, { token });
   if (ledger.total === 0) {
     const consume = (store, amountCent) => consumeWithCode(memberLogin.token, token, member.id, store.id, amountCent);
-    await call(`/wallets/${member.id}/recharge`, { method: 'POST', token, body: { storeId: hubin.id, amountCent: 100000, remark: '演示' } });
+    await call(`/wallets/${member.id}/recharge`, { method: 'POST', token, body: { storeId: hubin.id, amountCent: 100000, remark: '演示', requestId: randomUUID() } });
     await consume(xixi, 12800);
     const wrong = await consume(hubin, 5800);
-    await call(`/ledger/${wrong.entry.id}/reversal`, { method: 'POST', token, body: { remark: '金额录错' } });
+    await call(`/ledger/${wrong.entry.id}/reversal`, { method: 'POST', token, body: { remark: '金额录错', requestId: randomUUID() } });
     await consume(hubin, 5080);
     await consume(binjiang, 3650);
   }
@@ -213,7 +214,7 @@ async function prepare() {
     payer = await call('/members/open', { method: 'POST', token, body: { phone: PAYER_PHONE, name: PAYER_NAME, storeId: hubin.id } });
   }
   if ((await call(`/members/${payer.id}`, { token })).balanceCent < 10000) {
-    await call(`/wallets/${payer.id}/recharge`, { method: 'POST', token, body: { storeId: hubin.id, amountCent: 50000, remark: '演示' } });
+    await call(`/wallets/${payer.id}/recharge`, { method: 'POST', token, body: { storeId: hubin.id, amountCent: 50000, remark: '演示', requestId: randomUUID() } });
   }
   const payerLogin = await memberSession(PAYER_PHONE);
 
@@ -235,7 +236,7 @@ async function prepare() {
   // 签署演示：一位新会员，刚开卡充值，门店给他发了一份待签的权益单。
   const signerPhone = `139${String(Date.now()).slice(-8)}`;
   const signer = await call('/members/open', { method: 'POST', token, body: { phone: signerPhone, name: SIGNER_NAME, storeId: hubin.id } });
-  await call(`/wallets/${signer.id}/recharge`, { method: 'POST', token, body: { storeId: hubin.id, amountCent: 50000, remark: '演示' } });
+  await call(`/wallets/${signer.id}/recharge`, { method: 'POST', token, body: { storeId: hubin.id, amountCent: 50000, remark: '演示', requestId: randomUUID() } });
   const signerFlow = await call('/sign-flows', { method: 'POST', token, body: { memberId: signer.id, templateId: basic.id, storeId: hubin.id } });
 
   const setStatus = async (status) => {
@@ -253,7 +254,7 @@ async function prepare() {
     },
     /** 扫码后店员填好金额提交。 */
     staffConsumes: (code, amountCent) =>
-      call(`/wallets/${payer.id}/consume`, { method: 'POST', token, body: { storeId: hubin.id, amountCent, remark: '演示', payCode: code } }),
+      call(`/wallets/${payer.id}/consume`, { method: 'POST', token, body: { storeId: hubin.id, amountCent, remark: '演示', payCode: code, requestId: randomUUID() } }),
     newMember: await memberSession(NEW_MEMBER_PHONE),
     signer: await memberSession(signerPhone),
     signerFlowId: signerFlow.id,

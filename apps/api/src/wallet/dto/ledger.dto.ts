@@ -11,13 +11,22 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidationArguments,
 } from 'class-validator';
 import { PageQueryDto } from '../../org/dto/page-query.dto';
 
 /** 单笔金额上限：100 万元。防止把元当分、多按几个 0 之类的误录，也远离 Int 上限。 */
 export const MAX_AMOUNT_CENT = 100_000_000;
 
+/**
+ * 防重复提交的请求号。充值、扣款、冲正都必须带：同一个号提交几次都只记一笔，返回第一次的结果。
+ * 不让漏带，免得绕过页面直接调接口时连点记成两笔。
+ */
 const REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
+const requestIdMessage = (args: ValidationArguments) =>
+  args.value === undefined || args.value === null || args.value === ''
+    ? '缺少防重复提交的请求号 requestId'
+    : '请求号 requestId 要 8 到 64 位字母、数字、- 或 _';
 
 export class MoneyMoveDto {
   @ApiProperty({ description: '在哪家门店发生。必须是操作人有权限的门店' })
@@ -37,13 +46,12 @@ export class MoneyMoveDto {
   @MaxLength(200)
   remark?: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     example: 'b0c6a1d2-7f3e-4c55-9a8e-1f2d3c4b5a69',
-    description: '前端每次点「确认」生成一个。网络重试或重复点击带同一个号，只记一笔',
+    description: '必填。前端每次点「确认」生成一个。网络重试或重复点击带同一个号，只记一笔',
   })
-  @IsOptional()
-  @Matches(REQUEST_ID)
-  requestId?: string;
+  @Matches(REQUEST_ID, { message: requestIdMessage })
+  requestId!: string;
 }
 
 export class ConsumeDto extends MoneyMoveDto {
@@ -66,10 +74,9 @@ export class ReversalDto {
   @MaxLength(200)
   remark!: string;
 
-  @ApiPropertyOptional({ description: '防重复提交的请求号，同充值' })
-  @IsOptional()
-  @Matches(REQUEST_ID)
-  requestId?: string;
+  @ApiProperty({ description: '必填。防重复提交的请求号，同充值' })
+  @Matches(REQUEST_ID, { message: requestIdMessage })
+  requestId!: string;
 }
 
 export class LedgerQueryDto extends PageQueryDto {

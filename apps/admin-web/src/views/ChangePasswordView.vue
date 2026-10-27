@@ -5,7 +5,7 @@
       <h1 class="title">{{ forced ? '先改一个自己的密码' : '修改密码' }}</h1>
       <p class="hint">
         <template v-if="forced">这是第一次登录，或密码刚被重置。为了账号安全，请把初始密码换成只有你知道的密码。</template>
-        <template v-else>修改后请用新密码登录。</template>
+        <template v-else>修改后所有地方都要用新密码重新登录。</template>
       </p>
       <a-alert v-if="error" class="error" type="error" show-icon :message="error" />
       <a-form ref="formRef" layout="vertical" :model="form" @finish="submit">
@@ -78,9 +78,10 @@ async function submit(): Promise<void> {
   error.value = '';
   try {
     await changePassword(form.currentPassword, form.newPassword);
-    session.passwordChanged();
-    message.success('密码已修改');
-    await router.replace({ name: 'dashboard' });
+    // 改完以后之前的登录全部作废（服务端），这里也退出，用新密码重新登录。
+    session.logout();
+    message.success('密码已修改，请用新密码重新登录');
+    await router.replace({ name: 'login' });
   } catch (e) {
     error.value = errorMessage(e);
   } finally {

@@ -9,6 +9,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { parseExpiresSeconds } from './expires';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { resolveJwtSecret } from './jwt-secret';
 import { JwtStrategy } from './jwt.strategy';
 import { OrgResolver } from './org-resolver.service';
 import { PrincipalGuard } from './principal.guard';
@@ -29,10 +30,7 @@ import { WechatPhoneClient } from './wechat/wechat-phone.client';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const secret = config.get<string>('JWT_SECRET')?.trim();
-        if (!secret) {
-          throw new Error('JWT_SECRET is required');
-        }
+        const secret = resolveJwtSecret(config.get<string>('JWT_SECRET'), config.get<string>('NODE_ENV'));
         return {
           secret,
           signOptions: { expiresIn: parseExpiresSeconds(config.get<string>('JWT_EXPIRES_IN')) },

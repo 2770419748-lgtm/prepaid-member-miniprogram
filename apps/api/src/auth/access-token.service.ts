@@ -22,6 +22,9 @@ export class AccessTokenService {
         orgId: principal.orgId,
         principalType: principal.principalType,
         roles: principal.roles,
+        ...(principal.session
+          ? { sessionVersion: principal.session.version, loginMethod: principal.session.method }
+          : {}),
       },
       { expiresIn: this.expiresInSeconds },
     );

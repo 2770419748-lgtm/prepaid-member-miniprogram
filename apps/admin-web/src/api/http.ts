@@ -12,6 +12,10 @@ function readToken(): string | null {
 
 let token: string | null = readToken();
 let onUnauthorized: (() => void) | null = null;
+let onMustChangePassword: (() => void) | null = null;
+
+/** 服务端：还没改掉初始密码时，除改密码、看本人信息外的接口都返回这个代码。 */
+export const MUST_CHANGE_PASSWORD = 'MUST_CHANGE_PASSWORD';
 
 export function setToken(value: string | null): void {
   token = value;
@@ -35,6 +39,20 @@ export function handleUnauthorized(handler: () => void): void {
   onUnauthorized = handler;
 }
 
+/** 服务端说要先改初始密码时怎么处理（跳改密页），由路由注册。 */
+export function handleMustChangePassword(handler: () => void): void {
+  onMustChangePassword = handler;
+}
+
+/** 接口因为还没改初始密码被拒。 */
+export function isMustChangePassword(error: unknown): boolean {
+  if (!axios.isAxiosError(error) || error.response?.status !== 403) {
+    return false;
+  }
+  const data = error.response.data as { code?: unknown } | undefined;
+  return data?.code === MUST_CHANGE_PASSWORD;
+}
+
 export const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:3000',
   timeout: 15000,
@@ -53,6 +71,8 @@ http.interceptors.response.use(
     const isLogin = error.config?.url?.includes('/auth/staff/password/login');
     if (error.response?.status === 401 && token && !isLogin) {
       onUnauthorized?.();
+    } else if (isMustChangePassword(error)) {
+      onMustChangePassword?.();
     }
     return Promise.reject(error);
   },

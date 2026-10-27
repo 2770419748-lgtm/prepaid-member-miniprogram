@@ -65,6 +65,11 @@ describe('M2 wallet and ledger', () => {
     return scanPayCode(app, orgId, token, memberId, storeId);
   }
 
+  /** 没写请求号时补一个新的（每次都是新的一笔）。要测「不带请求号」就显式写 requestId: undefined。 */
+  function withRequestId<T extends { requestId?: string }>(body: T): T {
+    return 'requestId' in body ? body : { ...body, requestId: randomUUID() };
+  }
+
   /** 消费没给会员码时，先替这位店员扫一张。并发用例要先依次扫好码再同时提交。 */
   async function move(
     kind: 'recharge' | 'consume',
@@ -76,11 +81,14 @@ describe('M2 wallet and ledger', () => {
       kind === 'consume' && body.payCode === undefined
         ? { ...body, payCode: await scan(token, memberId, body.storeId) }
         : body;
-    return http().post(`/wallets/${memberId}/${kind}`).set('Authorization', `Bearer ${token}`).send(payload);
+    return http()
+      .post(`/wallets/${memberId}/${kind}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(withRequestId(payload));
   }
 
   function reverse(token: string, entryId: string, body: { remark: string; requestId?: string }) {
-    return http().post(`/ledger/${entryId}/reversal`).set('Authorization', `Bearer ${token}`).send(body);
+    return http().post(`/ledger/${entryId}/reversal`).set('Authorization', `Bearer ${token}`).send(withRequestId(body));
   }
 
   async function walletOf(memberId: string) {
@@ -383,6 +391,44 @@ describe('M2 wallet and ledger', () => {
       expect(burst.every((response) => response.status === 201)).toBe(true);
       expect(new Set(burst.map((response) => response.body.entry.id as string)).size).toBe(1);
       expect((await walletOf(card.id)).balanceCent).toBe(1700);
+      await expectChainConsistent(card.id);
+    });
+
+    it('refuses a recharge, deduction or reversal without a request number and records nothing', async () => {
+      const card = await openCard(tokens.clerkA, storeA);
+      const noId = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 1000, requestId: undefined });
+      expect(noId.status).toBe(400);
+      expect(noId.body.message).toEqual(['缺少防重复提交的请求号 requestId']);
+      const badId = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 1000, requestId: 'short' });
+      expect(badId.status).toBe(400);
+      expect(await prisma.ledgerEntry.count({ where: { memberId: card.id } })).toBe(0);
+
+      const funded = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 1000 });
+      expect(funded.status).toBe(201);
+      const spend = await move('consume', tokens.clerkA, card.id, { storeId: storeA, amountCent: 300, requestId: undefined });
+      expect(spend.status).toBe(400);
+      expect(messageOf(spend.body)).toContain('requestId');
+      const undo = await reverse(tokens.managerA, funded.body.entry.id as string, { remark: '录错', requestId: undefined });
+      expect(undo.status).toBe(400);
+      expect(messageOf(undo.body)).toContain('requestId');
+      expect((await walletOf(card.id)).balanceCent).toBe(1000);
+      expect(await prisma.ledgerEntry.count({ where: { memberId: card.id } })).toBe(1);
+    });
+
+    it('reverses only once when the same reversal is submitted twice', async () => {
+      const card = await openCard(tokens.clerkA, storeA);
+      const funded = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 1000 });
+      const requestId = randomUUID();
+      const entryId = funded.body.entry.id as string;
+      const [first, second] = await Promise.all([
+        reverse(tokens.managerA, entryId, { remark: '录错', requestId }),
+        reverse(tokens.managerA, entryId, { remark: '录错', requestId }),
+      ]);
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+      expect(second.body.entry.id).toBe(first.body.entry.id);
+      expect([first.body.replayed, second.body.replayed].sort()).toEqual([false, true]);
+      expect((await walletOf(card.id)).balanceCent).toBe(0);
       await expectChainConsistent(card.id);
     });
   });
