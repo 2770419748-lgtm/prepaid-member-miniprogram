@@ -1,27 +1,202 @@
+/* 色板和字号见 docs/design/ui-design.md v1.1。1px = 2rpx。 */
+
 page {
-  background: #f5f5f5;
-  color: #1f1f1f;
+  background: #f8fafc;
+  color: #0f172a;
   font-size: 28rpx;
+  line-height: 1.5;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+}
+
+button::after {
+  border: none;
 }
 
 .page {
-  padding: 48rpx 32rpx;
+  padding: 24rpx 32rpx 48rpx;
 }
 
-.title {
-  display: block;
-  font-size: 40rpx;
-  font-weight: 600;
+.card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 32rpx;
   margin-bottom: 24rpx;
 }
 
-.hint {
-  display: block;
-  line-height: 1.6;
-  color: #595959;
-  margin-bottom: 32rpx;
+.card-title {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.muted {
+  color: #64748b;
+}
+
+.small {
+  font-size: 24rpx;
+}
+
+.plus {
+  color: #16a34a;
+}
+
+.minus {
+  color: #dc2626;
 }
 
 .link {
   color: #1677ff;
+}
+
+.chevron {
+  display: inline-block;
+  width: 14rpx;
+  height: 14rpx;
+  border-top: 3rpx solid #94a3b8;
+  border-right: 3rpx solid #94a3b8;
+  transform: rotate(45deg);
+  flex: none;
+}
+
+.tag {
+  display: inline-block;
+  padding: 0 12rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  line-height: 36rpx;
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.btn-primary {
+  margin: 0;
+  width: 100%;
+  padding: 0;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 16rpx;
+  background: #1677ff;
+  color: #ffffff;
+  font-size: 32rpx;
+  font-weight: 500;
+}
+
+.btn-primary.button-hover {
+  background: #0958d9;
+}
+
+.btn-plain {
+  margin: 0;
+  width: 100%;
+  padding: 0;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 30rpx;
+  font-weight: 400;
+  border: 1rpx solid #e2e8f0;
+}
+
+.empty {
+  padding: 96rpx 32rpx;
+  text-align: center;
+  color: #64748b;
+  font-size: 28rpx;
+}
+
+.empty-hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #94a3b8;
+}
+
+.error-box {
+  padding: 64rpx 32rpx;
+  text-align: center;
+  color: #64748b;
+}
+
+.error-box .retry {
+  display: inline-block;
+  margin-top: 24rpx;
+  padding: 12rpx 40rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #e2e8f0;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+/* 加载中的占位块，代替整页闪白。 */
+.skeleton {
+  background: #eef2f7;
+  border-radius: 12rpx;
+}
+
+.footer-note {
+  padding: 32rpx 0 16rpx;
+  text-align: center;
+  font-size: 24rpx;
+  color: #94a3b8;
+}
+
+/* 明细行：首页「最近明细」和明细页共用。 */
+.ledger-row {
+  display: flex;
+  align-items: center;
+  padding: 28rpx 0;
+  border-bottom: 1rpx solid #e2e8f0;
+}
+
+.ledger-row:last-child {
+  border-bottom: none;
+}
+
+.lr-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.lr-title {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+}
+
+.lr-tag {
+  margin-left: 12rpx;
+  font-weight: 400;
+}
+
+.lr-sub {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #64748b;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.lr-side {
+  margin-left: 24rpx;
+  text-align: right;
+  flex: none;
+}
+
+.lr-amount {
+  font-size: 32rpx;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.lr-balance {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
 }

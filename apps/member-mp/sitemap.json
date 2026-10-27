@@ -1,4 +1,4 @@
 {
-  "desc": "储值会员小程序占位站点地图",
-  "rules": [{ "action": "allow", "page": "*" }]
+  "desc": "会员页面都要登录后才能看，不开放给微信搜索",
+  "rules": [{ "action": "disallow", "page": "*" }]
 }

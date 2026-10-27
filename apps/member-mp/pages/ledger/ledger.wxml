@@ -1,0 +1,46 @@
+<view class="filters">
+  <view wx:for="{{filters}}" wx:key="key" class="filter {{filter === item.key ? 'filter-on' : ''}}" data-key="{{item.key}}" bindtap="switchFilter">{{item.label}}</view>
+</view>
+
+<view class="page list-page">
+  <block wx:if="{{loading}}">
+    <view class="card">
+      <view class="skeleton" style="width: 120rpx; height: 28rpx;"></view>
+      <view class="skeleton" style="height: 72rpx; margin-top: 32rpx;"></view>
+      <view class="skeleton" style="height: 72rpx; margin-top: 24rpx;"></view>
+      <view class="skeleton" style="height: 72rpx; margin-top: 24rpx;"></view>
+    </view>
+  </block>
+
+  <view wx:elif="{{error}}" class="error-box">
+    <view>{{error}}</view>
+    <view class="retry" bindtap="retry">重新加载</view>
+  </view>
+
+  <view wx:elif="{{groups.length === 0}}" class="empty">
+    <text>{{filter === 'ALL' ? '还没有明细' : filter === 'RECHARGE' ? '还没有充值记录' : '还没有消费记录'}}</text>
+    <text class="empty-hint">在门店充值或消费后，记录会显示在这里</text>
+  </view>
+
+  <block wx:else>
+    <view wx:for="{{groups}}" wx:for-item="group" wx:key="key" class="day">
+      <view class="day-label">{{group.label}}</view>
+      <view class="card day-card">
+        <view wx:for="{{group.rows}}" wx:key="id" class="ledger-row" data-id="{{item.id}}" bindtap="openEntry">
+          <view class="lr-main">
+            <view class="lr-title">
+              <text>{{item.title}}</text>
+              <text wx:if="{{item.reversed}}" class="tag lr-tag">已撤销</text>
+            </view>
+            <view class="lr-sub">{{item.storeName}} · {{item.timeText}}</view>
+          </view>
+          <view class="lr-side">
+            <view class="lr-amount {{item.plus ? 'plus' : 'minus'}}">{{item.amountText}}</view>
+            <view class="lr-balance">余额 {{item.balanceText}}</view>
+          </view>
+        </view>
+      </view>
+    </view>
+    <view class="footer-note">{{loadingMore ? '正在加载…' : finished ? '没有更多了' : '上拉加载更多'}}</view>
+  </block>
+</view>

@@ -1,0 +1,16 @@
+<view class="login">
+  <view class="brand">
+    <view class="brand-mark">
+      <view class="brand-card"></view>
+    </view>
+    <view class="brand-name">储值会员</view>
+    <view class="brand-desc">查看余额、使用明细和可用门店</view>
+  </view>
+
+  <view class="actions">
+    <button class="btn-primary" open-type="getPhoneNumber" bindgetphonenumber="onPhoneNumber" loading="{{submitting}}" disabled="{{submitting}}">手机号快捷登录</button>
+    <view class="note">用本机微信绑定的手机号识别您的会员身份，请使用在门店开卡时登记的手机号。</view>
+  </view>
+
+  <view class="offline">充值、消费都在门店办理，小程序只做查询，不收款。</view>
+</view>

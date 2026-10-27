@@ -1,0 +1,44 @@
+.filters {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  padding: 20rpx 32rpx;
+  background: #f8fafc;
+}
+
+.filter {
+  margin-right: 16rpx;
+  padding: 0 28rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #64748b;
+  background: #ffffff;
+  border: 1rpx solid #e2e8f0;
+}
+
+.filter-on {
+  color: #1677ff;
+  background: rgba(22, 119, 255, 0.08);
+  border-color: rgba(22, 119, 255, 0.3);
+  font-weight: 500;
+}
+
+.list-page {
+  padding-top: 112rpx;
+}
+
+.day-label {
+  padding: 8rpx 8rpx 16rpx;
+  font-size: 24rpx;
+  color: #64748b;
+}
+
+.day-card {
+  padding-top: 0;
+  padding-bottom: 0;
+}

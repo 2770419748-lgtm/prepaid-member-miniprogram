@@ -1,11 +1,14 @@
 {
-  "description": "储值会员小程序占位。用微信开发者工具打开本目录，AppID 填测试号。",
+  "description": "储值会员小程序。用微信开发者工具打开本目录，AppID 填测试号。",
   "packOptions": {
     "ignore": [
       { "type": "file", "value": "package.json" },
       { "type": "file", "value": "tsconfig.json" },
       { "type": "file", "value": "README.md" },
-      { "type": "folder", "value": "node_modules" }
+      { "type": "folder", "value": "node_modules" },
+      { "type": "folder", "value": "tests" },
+      { "type": "folder", "value": "scripts" },
+      { "type": "folder", "value": "preview" }
     ],
     "include": []
   },

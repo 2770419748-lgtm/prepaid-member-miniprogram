@@ -1,5 +1,77 @@
 <view class="page">
-  <text class="title">{{title}}</text>
-  <text class="hint">{{hint}}</text>
-  <navigator class="link" url="/pages/mine/mine">我的</navigator>
+  <block wx:if="{{loading}}">
+    <view class="member-card">
+      <view class="skeleton" style="width: 200rpx; height: 32rpx;"></view>
+      <view class="skeleton" style="width: 120rpx; height: 28rpx; margin-top: 56rpx;"></view>
+      <view class="skeleton" style="width: 320rpx; height: 76rpx; margin-top: 16rpx;"></view>
+    </view>
+    <view class="card">
+      <view class="skeleton" style="width: 160rpx; height: 32rpx;"></view>
+      <view class="skeleton" style="height: 28rpx; margin-top: 32rpx;"></view>
+      <view class="skeleton" style="height: 28rpx; margin-top: 24rpx;"></view>
+    </view>
+  </block>
+
+  <view wx:elif="{{error}}" class="error-box">
+    <view>{{error}}</view>
+    <view class="retry" bindtap="retry">重新加载</view>
+  </view>
+
+  <block wx:else>
+    <view class="member-card">
+      <view class="mc-top">
+        <text class="mc-greeting">{{greeting}}</text>
+        <text class="mc-phone">{{phoneText}}</text>
+      </view>
+      <view class="mc-label">可用余额</view>
+      <view class="mc-amount">
+        <text class="mc-balance">{{balanceText}}</text>
+        <text class="mc-unit">元</text>
+      </view>
+      <view wx:if="{{disabled}}" class="mc-notice">会员卡已停用，如有疑问请联系门店。</view>
+      <view wx:elif="{{!hasCard}}" class="mc-notice">还没开卡。到任一门店报这个手机号就能开卡，开卡后余额会显示在这里。</view>
+      <view wx:else class="mc-foot">余额更新于 {{updatedText}}</view>
+    </view>
+
+    <view class="card">
+      <view class="card-title">储值说明</view>
+      <view class="rule" wx:for="{{rules}}" wx:key="title">
+        <view class="rule-dot"></view>
+        <view class="rule-text">
+          <text class="rule-title">{{item.title}}</text>
+          <text class="rule-detail">{{item.detail}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="card entry" bindtap="openStores">
+      <image class="entry-icon" src="/images/icon-store.png"></image>
+      <view class="entry-text">可用门店 · {{storeCount}}家</view>
+      <view class="chevron"></view>
+    </view>
+
+    <view class="card">
+      <view class="recent-head">
+        <text class="card-title">最近明细</text>
+        <view class="recent-all" bindtap="openLedger">
+          <text>全部</text>
+          <view class="chevron recent-chevron"></view>
+        </view>
+      </view>
+      <view wx:if="{{recent.length === 0}}" class="recent-empty">还没有明细。在门店充值或消费后，会显示在这里。</view>
+      <view wx:for="{{recent}}" wx:key="id" class="ledger-row" data-id="{{item.id}}" bindtap="openEntry">
+        <view class="lr-main">
+          <view class="lr-title">
+            <text>{{item.title}}</text>
+            <text wx:if="{{item.reversed}}" class="tag lr-tag">已撤销</text>
+          </view>
+          <view class="lr-sub">{{item.storeName}} · {{item.whenText}}</view>
+        </view>
+        <view class="lr-side">
+          <view class="lr-amount {{item.plus ? 'plus' : 'minus'}}">{{item.amountText}}</view>
+          <view class="lr-balance">余额 {{item.balanceText}}</view>
+        </view>
+      </view>
+    </view>
+  </block>
 </view>
