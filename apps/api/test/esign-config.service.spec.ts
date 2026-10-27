@@ -40,4 +40,27 @@ describe('EsignConfigService', () => {
     const service = createService();
     expect(service.apiHost).toBe('https://smlopenapi.esign.cn');
   });
+
+  it('targets the sandbox gateway by default', () => {
+    expect(createService().resolveTarget()).toEqual({ env: 'SANDBOX', baseUrl: 'https://smlopenapi.esign.cn' });
+  });
+
+  it('refuses the production gateway while the switch is off', () => {
+    const service = createService({ ESIGN_API_HOST: 'https://openapi.esign.cn' });
+    expect(() => service.resolveTarget()).toThrow(/production signing is refused/);
+  });
+
+  it('marks the production gateway as PRODUCTION once the switch is on', () => {
+    const service = createService({ ESIGN_API_HOST: 'https://openapi.esign.cn', ESIGN_PRODUCTION_ENABLED: 'true' });
+    expect(service.resolveTarget()).toEqual({ env: 'PRODUCTION', baseUrl: 'https://openapi.esign.cn' });
+  });
+
+  it('refuses unknown hosts, plain http, and a local fake sandbox in production', () => {
+    expect(() => createService({ ESIGN_API_HOST: 'https://esign.example.com' }).resolveTarget()).toThrow();
+    expect(() => createService({ ESIGN_API_HOST: 'http://smlopenapi.esign.cn' }).resolveTarget()).toThrow(/https/);
+    expect(createService({ ESIGN_API_HOST: 'http://127.0.0.1:9999' }).resolveTarget().env).toBe('SANDBOX');
+    expect(() =>
+      createService({ ESIGN_API_HOST: 'http://127.0.0.1:9999', NODE_ENV: 'production' }).resolveTarget(),
+    ).toThrow();
+  });
 });

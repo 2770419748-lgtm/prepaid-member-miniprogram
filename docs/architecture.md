@@ -14,22 +14,18 @@
 
 ## 后端模块
 
-已接入配置、数据库、健康检查、电子签开关、M1 的账号门店员工，以及 M2 储值账本（见 [PROGRESS.md](./PROGRESS.md)）：
+已接入配置、数据库、健康检查、电子签开关、M1 的账号门店员工、M2 储值账本，以及 M4 电子签沙箱（见 [PROGRESS.md](./PROGRESS.md)）：
 
 - `ConfigModule`：读取环境变量
 - `PrismaModule`：PostgreSQL
 - `HealthModule`：`GET /health`
-- `EsignConfigModule`：`esign.production.enabled` 读取与沙箱校验
+- `EsignConfigModule`：`esign.production.enabled` 读取、按网关地址判断沙箱 / 正式并拦住未开启的正式调用
+- `EsignModule`：权益方案、权益单模板、e签宝沙箱签署、回调与刷新、合同归档
+- `StorageModule`：对象存储（S3 / MinIO，开发时可落本机目录），存合同 PDF
 - `AuthModule`：小程序微信登录、网页后台密码登录、JWT、角色鉴权
 - `OrgModule`：组织、门店、员工
 - `MembersModule`：会员资料、可使用门店、开卡与查会员
 - `WalletModule`：线下充值、消费扣款、冲正、流水查询。余额只经 `WalletService` 改动
-
-尚未实现的模块只标边界：
-
-| 模块 | 标记 | 后续内容 |
-| --- | --- | --- |
-| `EsignModule` | TODO(M4) | 模板与签署流程；真实调用不在本里程碑 |
 
 角色：`SUPER_ADMIN`、`STORE_MANAGER`、`STAFF`。店长只能管理普通店员。
 

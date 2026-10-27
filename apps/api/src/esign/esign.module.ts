@@ -1,10 +1,38 @@
 import { Module } from '@nestjs/common';
+import { EsignConfigModule } from '../esign-config/esign-config.module';
+import { BenefitPlansController } from './benefit-plans.controller';
+import { BenefitPlansService } from './benefit-plans.service';
+import { EsignClient } from './client/esign.client';
+import { ContractTemplatesController } from './contract-templates.controller';
+import { ContractTemplatesService } from './contract-templates.service';
+import { EsignWebhookController } from './esign-webhook.controller';
+import { MemberSignFlowsController } from './member-sign-flows.controller';
+import { MemberSignFlowsService } from './member-sign-flows.service';
+import { SignFlowSyncService } from './sign-flow-sync.service';
+import { SignFlowsController } from './sign-flows.controller';
+import { SignFlowsService } from './sign-flows.service';
 
 /**
- * 电子签业务边界。
- * TODO(M4): 模板、签署流程与回写。调用前必须走 EsignConfigService.assertSandboxUnlessEnabled。
- * ESIGN_PRODUCTION_ENABLED 默认 false。未打开时不得使用正式密钥或对外正式签署。
- * 本里程碑不接通 e签宝真实 API。
+ * 电子签：权益方案、权益单模板、发起签署、回调与状态同步、合同归档。
+ * 每次调用 e签宝都经 EsignClient 核对环境；ESIGN_PRODUCTION_ENABLED 默认 false，只打沙箱。
  */
-@Module({})
+@Module({
+  imports: [EsignConfigModule],
+  controllers: [
+    BenefitPlansController,
+    ContractTemplatesController,
+    SignFlowsController,
+    MemberSignFlowsController,
+    EsignWebhookController,
+  ],
+  providers: [
+    EsignClient,
+    BenefitPlansService,
+    ContractTemplatesService,
+    SignFlowsService,
+    SignFlowSyncService,
+    MemberSignFlowsService,
+  ],
+  exports: [EsignClient],
+})
 export class EsignModule {}
