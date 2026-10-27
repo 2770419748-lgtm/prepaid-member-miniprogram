@@ -14,7 +14,7 @@
 
 ## 后端模块
 
-已接入配置、数据库、健康检查、电子签开关，以及 M1 的账号、门店和员工（待合入，见 [PROGRESS.md](./PROGRESS.md)）：
+已接入配置、数据库、健康检查、电子签开关、M1 的账号门店员工，以及 M2 储值账本（见 [PROGRESS.md](./PROGRESS.md)）：
 
 - `ConfigModule`：读取环境变量
 - `PrismaModule`：PostgreSQL
@@ -22,13 +22,13 @@
 - `EsignConfigModule`：`esign.production.enabled` 读取与沙箱校验
 - `AuthModule`：小程序微信登录、网页后台密码登录、JWT、角色鉴权
 - `OrgModule`：组织、门店、员工
-- `MembersModule`：会员资料与可使用门店
+- `MembersModule`：会员资料、可使用门店、开卡与查会员
+- `WalletModule`：线下充值、消费扣款、冲正、流水查询。余额只经 `WalletService` 改动
 
 尚未实现的模块只标边界：
 
 | 模块 | 标记 | 后续内容 |
 | --- | --- | --- |
-| `WalletModule` | TODO(M2) | 线下充值 / 消费 / 冲正。M1 合入前不要开工 |
 | `EsignModule` | TODO(M4) | 模板与签署流程；真实调用不在本里程碑 |
 
 角色：`SUPER_ADMIN`、`STORE_MANAGER`、`STAFF`。店长只能管理普通店员。
@@ -39,7 +39,8 @@
 - `Wallet` 挂在会员上，余额全公司通用，不按门店拆分。
 - 任何余额变更必须写 `LedgerEntry`，扣款前校验余额。
 - 更新余额使用 `Wallet.version` 乐观锁：`where version = 当前值`，成功后 `version + 1`。
-- `LedgerEntry` 禁止硬删。关联删除策略为 Restrict；可选操作人删除时 SetNull。
+- `LedgerEntry` 只追加：数据库触发器拒绝修改、删除和清空，纠错另记一笔 `REVERSAL`。余额不为负、前后余额与类型对得上，由数据库 CHECK 约束兜底。
+- 规则与接口见 [backend/m2-ledger.md](./backend/m2-ledger.md)。
 
 ## 明确不做
 

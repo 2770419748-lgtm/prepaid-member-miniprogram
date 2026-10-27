@@ -12,9 +12,15 @@ export class MembersController {
   constructor(private readonly members: MembersService) {}
 
   @Get('me')
-  @ApiOperation({ summary: '查看我的会员资料。不含余额，开卡以后再补' })
+  @ApiOperation({ summary: '查看我的会员资料' })
   me(@CurrentPrincipal() principal: AccessPrincipal) {
     return this.members.me(principal);
+  }
+
+  @Get('me/wallet')
+  @ApiOperation({ summary: '我的余额（全公司门店通用，单位分）。明细用 GET /ledger' })
+  wallet(@CurrentPrincipal() principal: AccessPrincipal) {
+    return this.members.wallet(principal);
   }
 
   @Get('stores')

@@ -1,11 +1,16 @@
 import { Module } from '@nestjs/common';
+import { LedgerController } from './ledger.controller';
+import { LedgerService } from './ledger.service';
+import { WalletController } from './wallet.controller';
+import { WalletService } from './wallet.service';
 
 /**
- * 账务边界。
- * TODO(M2): 线下充值、消费、冲正。
- * 任何余额变更必须写 LedgerEntry；扣款前校验余额；事务 + Wallet.version 乐观锁。
- * 余额挂在会员，全公司通用，不按门店拆余额。
- * 禁止引入微信支付 SDK 与支付回调。
+ * 账务：线下充值、消费扣款、冲正、流水查询。只记账，不收款，不接微信支付。
+ * 余额挂在会员，全公司通用，不按门店拆余额。所有余额变更都走 WalletService。
  */
-@Module({})
+@Module({
+  controllers: [WalletController, LedgerController],
+  providers: [WalletService, LedgerService],
+  exports: [WalletService, LedgerService],
+})
 export class WalletModule {}

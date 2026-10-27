@@ -10,6 +10,10 @@ export const AuditAction = {
   StaffPasswordChange: 'STAFF_PASSWORD_CHANGE',
   StaffPasswordReset: 'STAFF_PASSWORD_RESET',
   MemberIdentityCreate: 'MEMBER_IDENTITY_CREATE',
+  MemberCardOpen: 'MEMBER_CARD_OPEN',
+  WalletRecharge: 'WALLET_RECHARGE',
+  WalletConsume: 'WALLET_CONSUME',
+  WalletReversal: 'WALLET_REVERSAL',
 } as const;
 
 export interface AuditWriteInput {

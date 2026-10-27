@@ -1,177 +1,117 @@
-# M2 · 账务 — 后端实现说明
+# M2 · 储值账本 — 后端说明
 
-> **协作：** 实现方为**后端开发（本助手）**，用 Cursor **云端写码（Cloud Agent）** 改仓；**不交给 Claude Code**。每阶段开 PR，链接交 **开发部 → 总经理 → 请坤总确认** 后再合入；**禁止**自行 merge / 部署 / 改生产。公开内容不得出现具体项目名；称呼**坤总**。  
+> **状态：** 已实现（`apps/api` 的 `WalletModule` 与 `MembersModule`）。  
 > **日期：** 2026-10-27（Asia/Shanghai）  
-> **仓库：** https://github.com/2770419748-lgtm/prepaid-member-miniprogram（等 M0/M1 经坤总确认合入后在 `apps/api` 扩展）  
-> **落点：** `apps/api` · 建议模块 `WalletModule` / `MemberModule`  
-> **预估：** 约 10 人天 · **依赖 M1**  
-> **硬约束对齐：** `docs/tech/tech-final.md` · `docs/tasks/m0-kickoff.md`（定稿第 6 节账务原则）
+> **协作：** 2026-10-27 起坤总授权 Claude 端到端推进开发，测试与 CI 通过后自行合并。不部署、不接微信支付、不打开电子签正式开关。  
+> **硬约束：** 见 `docs/tech/tech-final.md`。公开文案只用「储值会员」。
 
 ---
 
-## 1. 目标与非目标
+## 1. 做了什么
 
-### 目标
-
-1. **开卡**：店员录入手机号等，创建/激活 `Member`，并确保一人一 `Wallet`  
-2. **公司通用余额**：`Wallet` 挂会员，不按门店拆余额  
-3. **记账**：充值 `RECHARGE`、消费 `CONSUME`；预留冲正 `REVERSAL` 占位（可最小实现或仅枚举+禁止入口）  
-4. 任何余额变更：**事务内**写 `LedgerEntry`；扣款前校验余额；`Wallet.version` **乐观锁**防超卖  
-5. **禁止微信支付**；只接受后台 / 店员录入的记账请求  
-6. 会员/店员可查余额与流水（权限按矩阵）
-
-### 非目标
-
-- 赠送金、有效期、跨店复杂冲正规则（开放项 O3，非本里程碑必做）  
-- e签宝（→ M4）  
-- 完整审计导出 / 财务报表（→ P2 做操作日志与当日对账）  
-- 微信支付、支付回调、退款进微信  
-- 自行 merge / 部署 / 改生产（须坤总确认）
-
----
-
-## 2. 前置依赖
-
-等 M0 落地后在现有 schema 上扩展；若冲突以能支撑下列实体与开关为准。
-
-- [ ] M0：Prisma 含 `Member` / `Wallet` / `LedgerEntry`；金额字段为整数分  
-- [ ] M1：店员 JWT + 角色守卫 + 门店范围可用（M1 PR 已经坤总确认合入）  
-- [ ] env：`DATABASE_URL`、`JWT_SECRET`；无支付相关 env
-
----
-
-## 3. 数据模型要点
-
-### Member（开卡写入）
-
-| 字段 | 说明 |
+| 能力 | 说明 |
 | --- | --- |
-| phone | 店员录入；`@@unique([orgId, phone])` |
-| wxOpenId / wxUnionId | 会员登录后回写（可空） |
-| openStoreId | **开卡门店**；记操作门店 |
-| status | 如 ACTIVE / DISABLED（可调） |
+| 开卡 | 店员登记手机号（可带称呼），同一事务里建会员和余额为 0 的钱包。会员先在小程序登录过也可以，补开钱包即可 |
+| 线下充值 | 只记账，不收款。钱在门店线下收 |
+| 消费扣款 | 余额不足拒绝；同一张卡被同时扣款也不会扣成负数 |
+| 冲正 | 记错了账，补记一笔反方向的把原流水整笔抵掉 |
+| 流水查询 | 店员按门店范围查；会员只看自己的 |
+| 余额 | 挂在会员钱包上，全公司门店通用 |
 
-### Wallet
+## 2. 产品规则
 
-| 字段 | 说明 |
-| --- | --- |
-| memberId | **unique**；一人一钱包 |
-| balanceCent | Int，默认 0；**整数分** |
-| version | Int，默认 0；**乐观锁** |
-| updatedAt | |
+坤总 2026-10-27 拍板：
 
-### LedgerEntry（不可物理删）
+1. **储值终身有效**，不过期，用完为止。
+2. **不做赠送金**，余额只有一个池子。
+3. **冲正只能由超级管理员或原门店店长操作，一笔流水只能冲一次。**
 
-| 字段 | 说明 |
-| --- | --- |
-| orgId / memberId / walletId | 关联 |
-| storeId | **操作门店**（必填） |
-| operatorStaffId | 操作店员（必填，系统任务可空——本版店员录入必填） |
-| type | **`RECHARGE` \| `CONSUME` \| `REVERSAL`** |
-| amountCent | Int；建议**正整数**，方向由 type 决定（可调：或带符号，二选一并写清） |
-| balanceBefore / balanceAfter | Int 分 |
-| remark | string? |
-| createdAt | 只增 |
-| | **禁止** `DELETE` API / Prisma 硬删；纠错走 `REVERSAL` |
+实现时定下的默认（可改，改了同步本节）：
 
-Schema 注释写明：余额变更必须写流水；事务 + version。
+4. 冲正是整笔冲回，不做部分冲正。冲正流水记在原流水的门店名下，备注必填。冲正流水本身不能再冲。没有时间限制。
+5. 充值已经被花掉、余额不够冲回时，拒绝冲正（不会把余额冲成负数）。
+6. 单笔金额 1 分到 100 万元。上限用来挡误录，例如把元当分多打几个 0。
+7. 已停用的门店不能开卡、不能记账；已停用的会员不能记账。冲正不受这两条限制（纠错优先）。
+8. 会员端明细不显示操作店员和店内备注。
 
----
+## 3. 权限
 
-## 4. 权限矩阵（本模块）
-
-| 角色 | 开卡 | 充值/扣款 | 查流水/余额 |
-| --- | --- | --- | --- |
-| `SUPER_ADMIN` | 任意店（请求仍带 storeId） | 任意店 | 全公司 |
-| `STORE_MANAGER` | 本店 | 本店 | 本店操作视角；余额仍是会员总余额 |
-| `STAFF` | 本店 | 本店 | 本店相关查询 |
-| 会员 | 否 | 否 | **仅自己**的余额与明细 |
-
----
-
-## 5. API 清单
-
-金额单位：**分（cent）**。请求/响应字段名建议 `amountCent` / `balanceCent`。
-
-| 方法 | 路径 | 鉴权 | 请求要点 | 响应要点 |
+| 角色 | 开卡 / 充值 / 扣款 | 冲正 | 查流水 | 查会员 |
 | --- | --- | --- | --- | --- |
-| POST | `/members/open` | 店员 `STAFF+` | `phone`, `name?`, `storeId`（须在权限内）, `remark?` | member + wallet（balanceCent=0）；已存在 ACTIVE 则 409 或返回已有（约定一种） |
-| GET | `/members` | 店员 | 查询：phone/keyword、分页；非超管限本店开卡或本店有流水（可调，写清） | 列表 |
-| GET | `/members/:id` | 店员有权 / 或会员本人 | — | 资料 + balanceCent |
-| GET | `/members/me/wallet` | 会员 | — | balanceCent, version（version 可对前端省略） |
-| POST | `/wallets/:memberId/recharge` | 店员 | `storeId`, `amountCent` (>0), `remark?` | 新余额 + ledgerId；乐观锁冲突 → 409 可重试 |
-| POST | `/wallets/:memberId/consume` | 店员 | 同上 | 余额不足 → 400；成功写 `CONSUME` |
-| POST | `/wallets/:memberId/reversal` | 超管或店长（可调） | `storeId`, `amountCent`, `relatedLedgerId?`, `remark` | **占位**：可先 501 或最小实现（反向加回/扣回 + type=REVERSAL）；须写流水 |
-| GET | `/ledger` | 店员按范围；会员仅自己 | 筛选：memberId, storeId, type, 时间, 分页 | 条目列表（无删改） |
-| GET | `/ledger/:id` | 有权 | — | 详情 |
+| 超级管理员 | 任意门店 | 任意流水 | 全公司 | 全公司 |
+| 店长 | 本店 | 本店发生的流水 | 本店发生的 | 见下 |
+| 店员 | 本店 | 不能 | 本店发生的 | 见下 |
+| 会员 | 不能 | 不能 | 只看自己 | 只看自己 |
 
-**禁止：**
+- 记账时 `storeId` 必须是操作人有权限的门店，否则 403。
+- 余额全公司通用，会员可以去任一门店消费。所以**任何门店的店员都能用完整手机号查到会员、看到总余额并给他记账**；模糊查找（手机号片段或称呼）只返回本店开卡或在本店有过流水的会员。
+- 店员和店长查流水只看到在自己门店发生的那些，余额仍显示全公司总余额。
 
-- 任何 `/pay` / 微信支付回调路由  
-- 客户端直传 `balanceCent` 覆盖钱包  
-- 物理删除流水
+## 4. 接口
 
----
+金额单位一律是**分**（整数）。100 元传 `10000`。
 
-## 6. 业务规则与硬约束
+| 方法 | 路径 | 谁能用 | 请求 | 返回 |
+| --- | --- | --- | --- | --- |
+| POST | `/members/open` | 店员及以上 | `phone`, `name?`, `storeId` | 会员卡（`balanceCent=0`）。已开过卡 409 |
+| GET | `/members` | 店员及以上 | `phone?`（完整号精确查）, `keyword?`, `page`, `pageSize` | 分页会员卡 |
+| GET | `/members/:id` | 店员及以上 | — | 会员卡，含总余额 |
+| GET | `/members/me/wallet` | 会员 | — | `{ hasCard, balanceCent, openedAt, updatedAt }` |
+| POST | `/wallets/:memberId/recharge` | 店员及以上 | `storeId`, `amountCent`, `remark?`, `requestId?` | `{ entry, balanceCent, replayed }` |
+| POST | `/wallets/:memberId/consume` | 店员及以上 | 同上 | 同上。余额不足 400 |
+| POST | `/ledger/:id/reversal` | 超管或原门店店长 | `remark`, `requestId?` | 同上。已冲过 409 |
+| GET | `/ledger` | 店员按范围；会员只看自己 | `memberId?`, `storeId?`, `type?`, `from?`, `to?`, `page`, `pageSize` | 分页流水 |
+| GET | `/ledger/:id` | 同上 | — | 一条流水 |
 
-1. **开卡**：店员录入手机号；写 `openStoreId`；同时创建 `Wallet(balanceCent=0, version=0)`（同事务）。  
-2. **余额公司通用**：只按 `memberId` 持有；`storeId` 仅表示操作发生店。  
-3. **充值 / 消费**：  
-   ```
-   BEGIN
-     read Wallet where id=… 
-     if CONSUME and balanceCent < amountCent → fail
-     newBalance = ±
-     UPDATE Wallet SET balanceCent=newBalance, version=version+1 WHERE id=… AND version=oldVersion
-     if rows=0 → conflict retry/fail
-     INSERT LedgerEntry(...)
-   COMMIT
-   ```  
-4. `amountCent` 必须为正整数；零/负拒绝。  
-5. 操作员、门店从 JWT + body 校验：`storeId` 必须在操作者角色范围内。  
-6. **无微信支付**；不接受支付渠道字段作为入账依据。  
-7. 流水只追加；冲正另开一条 `REVERSAL`，不改历史行。
+会员卡（店员视角）字段：`id`, `phone`, `name`, `status`, `hasCard`, `openStoreId`, `openStoreName`, `balanceCent`, `openedAt`, `wechatBound`, `createdAt`。
 
----
+流水（店员视角）字段：`id`, `memberId`, `memberPhone`, `memberName`, `storeId`, `storeName`, `operatorStaffId`, `operatorName`, `type`, `amountCent`（绝对值）, `changeCent`（对余额的实际影响，加为正、减为负）, `balanceBefore`, `balanceAfter`, `remark`, `reversalOfId`（冲正指向的原流水）, `reversedById`（被哪笔冲正）, `createdAt`。
 
-## 7. 云端开 PR 验收清单
+流水（会员视角）只有：`id`, `type`, `amountCent`, `changeCent`, `balanceAfter`, `storeName`, `reversalOfId`, `reversed`, `createdAt`。
 
-- [ ] 开卡后 Member + Wallet 同事务存在；重复开卡行为符合约定  
-- [ ] 充值后 balanceCent 与流水 balanceAfter 一致，type=`RECHARGE`  
-- [ ] 消费成功/余额不足分别正确；type=`CONSUME`  
-- [ ] 并发两笔扣至透支：乐观锁下至多一笔成功，余额不为负  
-- [ ] 流水无 DELETE 接口；DB 层无业务硬删  
-- [ ] 店员跨店记账 403；会员只能看自己  
-- [ ] 代码库无微信支付 SDK / 回调  
-- [ ] 金额均为整数分字段名与 M0 一致  
-- [ ] 单测覆盖：乐观锁冲突、余额不足、事务写流水  
-- [ ] 已开 PR（建议 `feat/m2-wallet-ledger`），**未自行 merge**；PR 链接已交开发部请坤总确认
+`from` 含、`to` 不含，ISO 时间，例如 `2026-10-01T00:00:00+08:00`。
 
----
+**防重复提交：** 前端每次点「确认」生成一个 `requestId`（8–64 位字母、数字、`-`、`_`，UUID 即可），网络重试或连点时带同一个号。同一组织内同一个号只会记一笔：重复提交返回第一次的结果并带 `replayed: true`；同一个号换了金额或会员则 409。
 
-## 8. 测试建议
+**没有的东西：** 没有修改或删除流水的接口；没有任何支付、支付回调路由；不接受客户端传余额。
 
-- 单测：WalletService 用 mock Prisma 测余额不足与 version 冲突  
-- 集成：并行 `Promise.all` 两次 consume 同一钱包  
-- 用例表：开卡 → 充 10000 分 → 扣 3000 → 查流水 2 条 → 余额 7000  
-- 权限：STAFF 改其他 storeId 应失败
+## 5. 余额怎么保证不出错
 
----
+所有余额变动都走 `WalletService` 的同一个入口，一笔一个事务：
 
-## 9. 后端直接实现步骤
+```
+BEGIN
+  读钱包（余额、version）
+  消费 / 冲回充值：余额不够 → 400，回滚
+  UPDATE wallets SET balance_cent = 新余额, version = version + 1
+    WHERE id = … AND version = 读到的 version
+  更新 0 行（别人先改了）→ 整笔回滚，稍等后重读重试，最多 8 次，仍冲突返回 409
+  INSERT 流水（前后余额、门店、操作人）
+  INSERT 操作记录
+COMMIT
+```
 
-1. 核对 M0 `Wallet`/`LedgerEntry` 字段与枚举；补迁移如需  
-2. 实现 `WalletService.adjust`（唯一余额变更入口）  
-3. 开卡 API（事务：Member + Wallet）  
-4. recharge / consume API + DTO 校验  
-5. ledger 查询 API + 会员 me 接口  
-6. reversal 占位（501 或最小实现）  
-7. 并发单测 + 权限测试  
-8. 自检 → 用 Cloud Agent 开 PR → **PR 链接交开发部，等坤总确认后再合入**（禁止自行 merge / 部署）
+数据库层另有兜底（M2 迁移，Prisma 不描述这些，见 `prisma/migrations/20261027200000_m2_wallet_ledger`）：
 
----
+- `wallets.balance_cent >= 0`。
+- 流水金额为正；前后余额不为负；`RECHARGE` 必须是加、`CONSUME` 必须是减、`REVERSAL` 必须指向原流水且金额对得上。
+- `ledger_entries` 触发器拒绝 `UPDATE`、`DELETE` 和 `TRUNCATE`。连带后果：有流水的员工、会员、门店都不能被硬删（本来也没有硬删接口，停用即可）。
+- `reversal_of_id` 唯一：同一条流水并发冲正也只会成功一笔。
 
-## 10. 合入须坤总确认
+操作记录：`MEMBER_CARD_OPEN`、`WALLET_RECHARGE`、`WALLET_CONSUME`、`WALLET_REVERSAL`，与业务写入同一事务。
 
-开 PR（如 `feat/m2-wallet-ledger`），附验收勾选与并发测试说明；**勿自行合 main / 部署**。将 PR 链接交开发部，由开发部转总经理请**坤总确认**后再合入。
+## 6. 测试
+
+- `test/wallet.service.spec.ts`：模拟数据库，覆盖一事务写流水、余额不足不写、版本冲突重试、重试用尽 409、越权门店。
+- `test/m2-wallet-ledger.integration.spec.ts`（`RUN_DB_TESTS=1`，CI 用临时 PostgreSQL 16）：验收用例（开卡 → 充 100 元 → 扣 30 元 → 两条流水 → 余额 70 元）、重复开卡、并发开卡、跨店记账 403、余额不足、非法金额、跨店消费、防重复提交（含并发）、5 笔同时透支只成功 1 笔、11 笔同时加减账不丢分、冲正权限与只冲一次、并发冲正、会员只看自己、店员只看本店、数据库拒绝删改与负余额。
+- 测试数据不清理（流水删不掉），每次运行用新组织，互不影响。
+
+## 7. 演示
+
+本地服务以 `WECHAT_PHONE_MOCK=true` 启动后：
+
+```bash
+ACCEPTANCE_HTML=/tmp/m2-acceptance.html pnpm --filter api exec tsx scripts/m2-acceptance-demo.ts
+```
+
+脚本按真实接口走一遍开卡、充值、跨店消费、余额不足、同时扣款、误录与冲正、重复提交、会员查明细，生成一页白话验收报告。

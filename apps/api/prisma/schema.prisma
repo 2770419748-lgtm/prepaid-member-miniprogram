@@ -1,11 +1,12 @@
-// 储值会员 · M0 数据模型
+// 储值会员 · 数据模型
 //
-// 账务原则（业务 API 留给后续里程碑）：
+// 账务原则（M2 起由 WalletService.adjust 统一执行）：
 // 1. 金额一律为整数分（cent），禁止用浮点元。
 // 2. 余额挂在会员 Wallet 上，全公司通用，不按门店拆余额。
 // 3. 任何余额变更必须写 LedgerEntry；扣款前校验余额；同一事务内用 Wallet.version 乐观锁。
-// 4. LedgerEntry 禁止硬删（不提供删除入口；关联使用 Restrict）。
-// 5. 时间字段使用 timestamptz。
+// 4. LedgerEntry 只追加：数据库触发器拒绝 UPDATE / DELETE / TRUNCATE，纠错只能另记 REVERSAL。
+// 5. 余额不能为负、流水前后余额必须对得上，由迁移里的 CHECK 约束兜底（Prisma 不描述 CHECK，见迁移 SQL）。
+// 6. 时间字段使用 timestamptz。
 
 generator client {
   provider = "prisma-client-js"
@@ -166,6 +167,8 @@ model Member {
   id          String       @id @default(cuid())
   orgId       String       @map("org_id")
   phone       String
+  /// 开卡时店员登记的称呼，可空。
+  name        String?
   wxOpenId    String?      @map("wx_open_id")
   wxUnionId   String?      @map("wx_union_id")
   openStoreId String?      @map("open_store_id")
@@ -184,13 +187,15 @@ model Member {
   @@map("members")
 }
 
-/// 会员钱包。余额全公司通用（挂在会员，不按门店拆分）。
-/// balanceCent 单位为分。更新余额必须匹配 version 并加一（乐观锁）。
+/// 会员钱包。余额全公司通用（挂在会员，不按门店拆分）。有钱包即视为已开卡。
+/// balanceCent 单位为分，数据库约束不允许为负。更新余额必须匹配 version 并加一（乐观锁）。
 model Wallet {
   id          String   @id @default(cuid())
   memberId    String   @unique @map("member_id")
   balanceCent Int      @default(0) @map("balance_cent")
   version     Int      @default(0)
+  /// 开卡时间。
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   member  Member        @relation(fields: [memberId], references: [id], onDelete: Restrict)
@@ -199,8 +204,9 @@ model Wallet {
   @@map("wallets")
 }
 
-/// 账本流水。禁止硬删。金额单位为分。
-/// RECHARGE / CONSUME / REVERSAL 的方向由 type 表达，amountCent 记绝对值。
+/// 账本流水。只追加，数据库触发器拒绝修改和删除。金额单位为分。
+/// amountCent 记绝对值（正整数）。RECHARGE 加、CONSUME 减；REVERSAL 与被冲的原流水方向相反，
+/// 实际变动看 balanceAfter - balanceBefore。
 model LedgerEntry {
   id              String     @id @default(cuid())
   orgId           String     @map("org_id")
@@ -213,16 +219,24 @@ model LedgerEntry {
   balanceBefore   Int        @map("balance_before")
   balanceAfter    Int        @map("balance_after")
   remark          String?
+  /// REVERSAL 指向被冲的原流水。唯一：一笔流水最多冲一次。
+  reversalOfId    String?    @unique @map("reversal_of_id")
+  /// 客户端生成的请求号。同一组织内唯一，重复提交返回第一次的结果，不会记两笔。
+  requestId       String?    @map("request_id")
   createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  org      Org    @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  member   Member @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  wallet   Wallet @relation(fields: [walletId], references: [id], onDelete: Restrict)
-  store    Store  @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  operator Staff? @relation("LedgerOperator", fields: [operatorStaffId], references: [id], onDelete: SetNull)
+  org        Org          @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  member     Member       @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  wallet     Wallet       @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  store      Store        @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  operator   Staff?       @relation("LedgerOperator", fields: [operatorStaffId], references: [id], onDelete: SetNull)
+  reversalOf LedgerEntry? @relation("LedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy LedgerEntry? @relation("LedgerReversal")
 
+  @@unique([orgId, requestId])
   @@index([orgId, createdAt])
   @@index([memberId, createdAt])
+  @@index([storeId, createdAt])
   @@index([walletId])
   @@map("ledger_entries")
 }
@@ -253,8 +267,8 @@ model ContractTemplate {
   createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  org         Org           @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  benefitPlan BenefitPlan?  @relation(fields: [benefitPlanId], references: [id], onDelete: SetNull)
+  org         Org          @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  benefitPlan BenefitPlan? @relation(fields: [benefitPlanId], references: [id], onDelete: SetNull)
   signFlows   SignFlow[]
 
   @@index([orgId])
