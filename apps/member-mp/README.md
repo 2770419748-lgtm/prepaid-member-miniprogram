@@ -1,6 +1,6 @@
 # 会员小程序
 
-微信原生 + TypeScript。会员用微信手机号登录，查看余额、使用明细、可用门店和会员权益，在线签署门店发来的权益单。充值和消费只在门店线下记账，这里**没有任何支付能力**，也没有任何员工入口或员工信息。
+微信原生 + TypeScript。会员用微信手机号登录，查看余额、使用明细、可用门店和会员权益，在线签署门店发来的权益单，到店消费时出示会员码。充值和消费只在门店线下记账，这里**没有任何支付能力**，也没有任何员工入口或员工信息。
 
 ## 页面
 
@@ -14,6 +14,7 @@
 | 我的权益单 | `pages/sign-list/sign-list` | 自己的全部权益单（不含发起中的），状态、测试签署标签、发起或签署日期 |
 | 权益单 | `pages/sign/sign?id=` | 权益内容和规则全文可滚，底部固定「我已阅读」+「去签署」；签完回来自动核对，成功页可回首页或查看合同（PDF）；拒签、过期、被撤销用白话说明 |
 | 签署页 | `pages/sign-webview/sign-webview` | 只放一个 `web-view` 打开电子签平台的签署页，只接受 https 链接 |
+| 会员码 | `pages/paycode/paycode` | 首页余额卡上的「会员码」进入。二维码（18 位数字，一次性，60 秒有效，每 30 秒自动换，可手动刷新）和可用余额；门店扫到后显示「某某店已扫码」并停止换码；扣款后显示金额、门店、时间、剩余余额，可查看这笔明细。出示时屏幕常亮调亮，截屏录屏时隐藏画面，截屏后马上换码 |
 | 我的 | `pages/mine/mine`（tab） | 称呼和打码手机号、明细、会员权益、我的权益单、门店、储值说明、退出登录 |
 | 登录 | `pages/login/login` | `getPhoneNumber` 手机号快捷登录 |
 
@@ -28,7 +29,9 @@
 - `GET /ledger`、`GET /ledger/:id`（只返回自己的，不含操作店员和备注）
 - 权益和签署（[docs/backend/m4-esign-sandbox.md](../../docs/backend/m4-esign-sandbox.md) 4.4、[docs/esign-frontend.md](../../docs/esign-frontend.md)）：`GET /members/me/benefits`、`GET /members/me/sign-flows`（首页用 `status=PENDING` 判断要不要引导）、`GET /members/me/sign-flows/:id`、`POST .../:id/sign-url`（每次打开签署页前现取，不缓存）、`POST .../:id/refresh`（从签署页回来时调）、`GET .../:id/pdf`（`wx.downloadFile` 带登录头，再 `wx.openDocument`）
 
-接口返回 `sandbox=true` 时界面标「测试签署」。
+- 会员码（[docs/backend/pay-code.md](../../docs/backend/pay-code.md)）：`POST /members/me/pay-code` 取新码，`GET /members/me/pay-code/:id` 每 2 秒查一次有没有被扫、扣了多少
+
+接口返回 `sandbox=true` 时界面标「测试签署」。二维码在本机画（`utils/qrcode.ts`，只编数字），不依赖外部服务。
 
 金额全是整数分，只在显示时转成元（`utils/format.ts`，整数运算）。
 
@@ -43,7 +46,7 @@
 ## 测试和截图
 
 ```bash
-pnpm --filter member-mp test        # 金额、北京时间、分组、距离排序、登录凭证、权益和签署的显示规则；静态检查没有支付和员工信息
+pnpm --filter member-mp test        # 金额、北京时间、分组、距离排序、登录凭证、权益和签署的显示规则、会员码二维码（用 jsQR 反解核对）和刷新规则；静态检查没有支付和员工信息
 pnpm --filter member-mp typecheck
 
 # 截图：先起本机假电子签平台和本机接口，再按场景准备演示数据并截图
@@ -54,6 +57,8 @@ node tools/mp-preview/shoot.mjs apps/member-mp/preview/scenario.mjs --out /tmp/m
 ```
 
 假电子签平台复用接口测试里的 `apps/api/test/support/fake-esign.ts`。截图脚本通过它的控制口把演示会员的权益单标成「签好了」，相当于会员在签署页签完。
+
+会员码那几张图：脚本从页面上的二维码认出码（和店员手机扫到的一样），再用本机接口扫码、扣款，页面自己轮询到「已扫码」「消费成功」。每跑一次会扣演示会员周女士一笔，余额不够 100 元时自动补充值。
 
 tabBar 和页面图标由 `scripts/make-icons.mjs` 生成。
 

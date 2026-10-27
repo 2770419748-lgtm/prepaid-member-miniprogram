@@ -13,7 +13,7 @@
 | --- | --- |
 | 开卡 | 店员登记手机号（可带称呼），同一事务里建会员和余额为 0 的钱包。会员先在小程序登录过也可以，补开钱包即可 |
 | 线下充值 | 只记账，不收款。钱在门店线下收 |
-| 消费扣款 | 余额不足拒绝；同一张卡被同时扣款也不会扣成负数 |
+| 消费扣款 | 必须先扫顾客的会员码（见 [pay-code.md](./pay-code.md)）；余额不足拒绝；同一张卡被同时扣款也不会扣成负数 |
 | 冲正 | 记错了账，补记一笔反方向的把原流水整笔抵掉 |
 | 流水查询 | 店员按门店范围查；会员只看自己的 |
 | 余额 | 挂在会员钱包上，全公司门店通用 |
@@ -33,6 +33,10 @@
 6. 单笔金额 1 分到 100 万元。上限用来挡误录，例如把元当分多打几个 0。
 7. 已停用的门店不能开卡、不能记账；已停用的会员不能记账。冲正不受这两条限制（纠错优先）。
 8. 会员端明细不显示操作店员和店内备注。
+
+坤总 2026-10-27 追加：
+
+9. **消费必须先用手机扫顾客的会员码，扫到才能填金额。** 码一次性、60 秒内有效，扣款和用码在同一事务里。充值、冲正不变。规则和接口见 [pay-code.md](./pay-code.md)。
 
 ## 3. 权限
 
@@ -58,7 +62,7 @@
 | GET | `/members/:id` | 店员及以上 | — | 会员卡，含总余额 |
 | GET | `/members/me/wallet` | 会员 | — | `{ hasCard, balanceCent, openedAt, updatedAt }` |
 | POST | `/wallets/:memberId/recharge` | 店员及以上 | `storeId`, `amountCent`, `remark?`, `requestId?` | `{ entry, balanceCent, replayed }` |
-| POST | `/wallets/:memberId/consume` | 店员及以上 | 同上 | 同上。余额不足 400 |
+| POST | `/wallets/:memberId/consume` | 店员及以上 | 同上，另加必填 `payCode`（刚扫到的会员码） | 同上。余额不足 400；码的问题见 [pay-code.md](./pay-code.md) |
 | POST | `/ledger/:id/reversal` | 超管或原门店店长 | `remark`, `requestId?` | 同上。已冲过 409 |
 | GET | `/ledger` | 店员按范围；会员只看自己 | `memberId?`, `storeId?`, `type?`, `from?`, `to?`, `page`, `pageSize` | 分页流水 |
 | GET | `/ledger/:id` | 同上 | — | 一条流水 |
@@ -87,6 +91,7 @@ BEGIN
     WHERE id = … AND version = 读到的 version
   更新 0 行（别人先改了）→ 整笔回滚，稍等后重读重试，最多 8 次，仍冲突返回 409
   INSERT 流水（前后余额、门店、操作人）
+  消费：把会员码标成已用并指向这笔流水，码已失效 → 409，回滚
   INSERT 操作记录
 COMMIT
 ```
@@ -114,4 +119,4 @@ COMMIT
 ACCEPTANCE_HTML=/tmp/m2-acceptance.html pnpm --filter api exec tsx scripts/m2-acceptance-demo.ts
 ```
 
-脚本按真实接口走一遍开卡、充值、跨店消费、余额不足、同时扣款、误录与冲正、重复提交、会员查明细，生成一页白话验收报告。
+脚本按真实接口走一遍开卡、充值、不扫会员码扣不了款、跨店消费、余额不足、同时扣款、误录与冲正、重复提交、会员查明细，生成一页白话验收报告。脚本里每笔消费都先由会员出示会员码、店员扫码。
