@@ -5,7 +5,8 @@
 > **仓库：** https://github.com/2770419748-lgtm/prepaid-member-miniprogram（空仓；等 M0 经坤总确认合入后在 `apps/api` 扩展）  
 > **落点：** `apps/api`（NestJS + Prisma + PostgreSQL）  
 > **预估：** 约 6 人天 · **依赖 M0**  
-> **硬约束对齐：** `docs/tech/tech-final.md` · `docs/tasks/m0-kickoff.md`（定稿第 3.1 / 6–8 节）
+> **硬约束对齐：** `docs/tech/tech-final.md` · `docs/tasks/m0-kickoff.md`（定稿第 3.1 / 6–8 节）  
+> **实现状态：** 已在合入 main 的 M0 上落地。没有新增数据表。合入须技术部审阅且 CI 通过后，由总经理评估。
 
 ---
 
@@ -217,3 +218,62 @@ M0 应已具备：
 ## 10. 合入须坤总确认
 
 实现与自测通过后：列出变更文件与验收勾选结果，开 PR（如 `feat/m1-auth-stores`），**不要 force-push / 自行合 main / 部署**。将 PR 链接交开发部，由开发部转总经理请**坤总确认**后再合入。
+
+---
+
+## 11. 实现口径（已落地）
+
+接口没有 `/api/v1` 前缀，和现有的 `GET /health` 放在一起。说明页在 `GET /docs`。
+
+### 登录
+
+会员和员工都用微信手机号登录，两套测试号配置分开（`WECHAT_MEMBER_*` 与 `WECHAT_STAFF_*`）。
+
+- 员工必须事先录入且为在职，否则拒绝。
+- 会员第一次登录会登记手机号和微信标识，不建余额、不开卡。还没有开卡门店时，结果里 `needsCard` 为真。
+- 只有一家在营公司时可以不填公司；有多家时必须指定。
+- 本地可以用假手机号演示，开关是 `WECHAT_PHONE_MOCK`，默认关闭。`NODE_ENV=production` 时即使写成 true 也不生效。
+
+超级管理员只要在任意一家门店拥有该角色，就可以管全公司。店和店之间没有上下级；店长的「下属」指本店员工。
+
+### 权限
+
+```mermaid
+flowchart TB
+  super[超级管理员]
+  manager[店长]
+  clerk[店员]
+  member[会员]
+  allStores[全部门店]
+  ownStore[自己的门店]
+  selfOnly[只看自己的资料]
+  denied[越权操作被拒绝]
+
+  super -->|建门店、建员工、分配角色、查看| allStores
+  manager -->|查看和管理| ownStore
+  manager -->|看其他门店或建门店| denied
+  clerk -->|只查看| ownStore
+  clerk -->|建店、管员工| denied
+  member -->|登录后| selfOnly
+  member -->|进入门店或员工功能| denied
+```
+
+高级角色包含低级角色能做的事：超级管理员 > 店长 > 店员。门店范围仍然隔离，只有超级管理员不受门店限制。
+
+店长可以改自己店的名称和地址，不能改营业状态，不能新建门店，只能在本店新建普通店员，不能把人设成超级管理员。店员只能看自己的店。会员只能看自己的资料，资料里没有余额。
+
+### 会留下记录的操作
+
+创建门店、修改门店、创建员工、修改员工、重设门店角色、会员第一次登记。不提供查询接口，查询留给后续审计。记录里不写密钥。
+
+### 怎么自己再跑一遍
+
+数据库迁移后启动服务（演示时把 `WECHAT_PHONE_MOCK` 设为 true，正式环境不要设）：
+
+```bash
+pnpm --filter api prisma:migrate
+pnpm --filter api start:dev
+pnpm --filter api exec tsx scripts/m1-acceptance-demo.ts
+```
+
+自动测试：`pnpm --filter api test` 跑单元测试。设置 `RUN_DB_TESTS=1` 且数据库已迁移时，会再跑登录和越权的集成测试。CI 会起临时数据库并跑这两部分。

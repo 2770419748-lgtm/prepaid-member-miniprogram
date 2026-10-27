@@ -9,10 +9,27 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: prepaid
+          POSTGRES_PASSWORD: prepaid
+          POSTGRES_DB: prepaid_member
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prepaid -d prepaid_member"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      # 占位连接串，仅供 prisma validate 解析 schema。本工作流不打印该值，也不连接生产库。
+      # 只连接本工作流里的临时数据库，不打印该值，也不连接生产库。
       DATABASE_URL: postgresql://prepaid:prepaid@localhost:5432/prepaid_member?schema=public
       ESIGN_PRODUCTION_ENABLED: "false"
+      JWT_SECRET: ci-only-jwt-secret
+      WECHAT_PHONE_MOCK: "false"
+      RUN_DB_TESTS: "1"
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -34,6 +51,9 @@ jobs:
 
       - name: prisma generate
         run: pnpm --filter api exec prisma generate
+
+      - name: prisma migrate
+        run: pnpm --filter api exec prisma migrate deploy
 
       - name: lint
         run: pnpm -r lint

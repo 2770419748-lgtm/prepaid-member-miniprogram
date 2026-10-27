@@ -31,7 +31,7 @@ enum StaffStatus {
   DISABLED
 }
 
-/// 角色预留。鉴权实现属后续里程碑。
+/// 店员角色。登录后的权限判断按此枚举：超级管理员、店长、店员。
 enum StaffRole {
   SUPER_ADMIN
   STORE_MANAGER
