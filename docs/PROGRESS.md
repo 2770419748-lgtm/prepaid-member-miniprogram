@@ -13,7 +13,7 @@
 | M2 储值账本 | 已完成 | 开卡、线下充值、消费扣款、冲正、流水查询。见 [backend/m2-ledger.md](./backend/m2-ledger.md) |
 | M3 会员小程序 | 已完成 | 登录、首页余额和权益摘要、使用明细、可用门店、会员权益、权益单签署（沙箱标「测试签署」）、我的。见 [apps/member-mp/README.md](../apps/member-mp/README.md) |
 | M4 电子签沙箱 | 已完成 | 权益方案、模板、发起签署（会员签 + 企业章）、回调与刷新、合同归档。只连沙箱，正式开关保持关闭。见 [backend/m4-esign-sandbox.md](./backend/m4-esign-sandbox.md) |
-| 商家网页后台 | 已完成 | 登录改密、开卡、充值、流水与冲正、门店员工、概览、对账、操作记录、权益单。不做消费扣款。见 [frontend/admin-web.md](./frontend/admin-web.md) |
+| 商家网页后台 | 已完成 | 登录改密、开卡、充值、流水与冲正、门店员工、概览、对账、操作记录、权益单。消费扣款只在员工小程序扫会员码后做，后台不提供。见 [frontend/admin-web.md](./frontend/admin-web.md) |
 | P2 审计与对账 | 已完成 | 操作记录查询、当日对账、余额日结与核对。见 [backend/p2-audit.md](./backend/p2-audit.md) |
 | M5 员工小程序 | 已完成 | 店员查余额、开卡、充值和消费记账、本店流水、店长冲正。见 [apps/staff-mp/README.md](../apps/staff-mp/README.md) |
 | 扫码消费 | 已完成 | 消费必须先用手机扫顾客的会员码。会员码一次性、每 30 秒换新。见 [backend/pay-code.md](./backend/pay-code.md) |

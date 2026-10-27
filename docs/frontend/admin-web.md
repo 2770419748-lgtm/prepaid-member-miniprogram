@@ -55,6 +55,8 @@ pnpm --filter admin-web test     # vitest：金额换算、角色与菜单、错
 pnpm --filter admin-web build
 ```
 
+截图：按 [apps/admin-web/preview/README.md](../../apps/admin-web/preview/README.md) 起本机接口和假电子签平台，造演示数据后自动走一遍 34 个场景。
+
 ## 4. 已知限制
 
 - 后端登录失败不返回剩余次数，页面只能统一提示「连续输错 5 次锁定 15 分钟」。
