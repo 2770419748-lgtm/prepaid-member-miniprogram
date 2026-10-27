@@ -2,8 +2,15 @@ import { ConfigService } from '@nestjs/config';
 import { EsignConfigService } from '../src/esign-config/esign-config.service';
 
 describe('EsignConfigService', () => {
+  /**
+   * Nest ConfigService.get 先读 process.env，再读构造参数。
+   * CI 会把 ESIGN_PRODUCTION_ENABLED=false 写进环境，因此这里用只返回注入值的替身，避免被进程环境盖掉。
+   */
   function createService(env: Record<string, string | boolean> = {}): EsignConfigService {
-    return new EsignConfigService(new ConfigService(env));
+    const config = {
+      get: (key: string) => (Object.prototype.hasOwnProperty.call(env, key) ? env[key] : undefined),
+    } as unknown as ConfigService;
+    return new EsignConfigService(config);
   }
 
   it('defaults esign.production.enabled to false', () => {
