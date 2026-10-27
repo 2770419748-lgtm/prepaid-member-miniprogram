@@ -18,6 +18,6 @@
 
 ### 2026-10-27
 
-- **M0**：Cloud Agent 进行中。工程基础在分支 `cursor/m0-bootstrap-508e` 上落地，**待开 PR**。
+- **M0**：Cloud Agent 进行中。工程基础在分支 `cursor/m0-bootstrap-508e` 上落地。开 PR 前状态为**待开 PR**；现已打开 [PR #1](https://github.com/2770419748-lgtm/prepaid-member-miniprogram/pull/1)。
 - **合入须坤总确认**。确认前不 merge、不部署。
 - M1 及之后未开始。
