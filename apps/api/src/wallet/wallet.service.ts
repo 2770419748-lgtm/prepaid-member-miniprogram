@@ -245,6 +245,7 @@ export class WalletService {
     await this.audit.write(tx, {
       orgId: movement.orgId,
       actorStaffId: movement.operatorStaffId,
+      storeId: movement.storeId,
       action: auditActionOf[movement.type],
       targetType: 'LedgerEntry',
       targetId: entry.id,

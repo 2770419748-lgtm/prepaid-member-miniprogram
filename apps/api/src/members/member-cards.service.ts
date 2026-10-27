@@ -146,6 +146,7 @@ export class MemberCardsService {
       await this.audit.write(tx, {
         orgId: actor.orgId,
         actorStaffId: actor.sub,
+        storeId,
         action: AuditAction.MemberCardOpen,
         targetType: 'Member',
         targetId: member.id,

@@ -47,6 +47,9 @@ function payloadOf(token: string): { principalType?: string; roles?: { storeId: 
   };
 }
 
+/**
+ * 操作记录和流水在数据库层只能追加，所以这里不清理测试数据；每次运行用一个新的组织，互不影响。
+ */
 describe('M1 auth and store boundaries', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -71,20 +74,6 @@ describe('M1 auth and store boundaries', () => {
     outsider: phone(),
     member: phone(),
   };
-
-  async function cleanup(): Promise<void> {
-    if (!orgId) {
-      return;
-    }
-    await prisma.auditLog.deleteMany({ where: { orgId } });
-    await prisma.staffStoreRole.deleteMany({ where: { staff: { orgId } } });
-    await prisma.staff.deleteMany({ where: { orgId } });
-    await prisma.ledgerEntry.deleteMany({ where: { orgId } });
-    await prisma.wallet.deleteMany({ where: { member: { orgId } } });
-    await prisma.member.deleteMany({ where: { orgId } });
-    await prisma.store.deleteMany({ where: { orgId } });
-    await prisma.org.deleteMany({ where: { id: orgId } });
-  }
 
   beforeAll(async () => {
     process.env.WECHAT_MEMBER_APPID = 'test-member-app';
@@ -156,9 +145,6 @@ describe('M1 auth and store boundaries', () => {
   });
 
   afterAll(async () => {
-    if (prisma && orgId) {
-      await cleanup();
-    }
     if (app) {
       await app.close();
     }

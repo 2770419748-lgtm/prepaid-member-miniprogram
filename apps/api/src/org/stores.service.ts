@@ -110,6 +110,7 @@ export class StoresService {
       await this.audit.write(tx, {
         orgId: actor.orgId,
         actorStaffId: actor.sub,
+        storeId: store.id,
         action: AuditAction.StoreCreate,
         targetType: 'Store',
         targetId: store.id,
@@ -172,6 +173,7 @@ export class StoresService {
       await this.audit.write(tx, {
         orgId: actor.orgId,
         actorStaffId: actor.sub,
+        storeId: store.id,
         action: AuditAction.StoreUpdate,
         targetType: 'Store',
         targetId: store.id,
