@@ -1,175 +1,190 @@
-# M4 · e签宝沙箱 — 后端实现说明
+# M4 · 电子签沙箱 — 后端说明
 
-> **协作：** 实现方为**后端开发（本助手）**，用 Cursor **云端写码（Cloud Agent）** 改仓；**不交给 Claude Code**。每阶段开 PR，链接交 **开发部 → 总经理 → 请坤总确认** 后再合入；**禁止**自行 merge / 部署 / 改生产。公开内容不得出现具体项目名；称呼**坤总**。  
+> **状态：** 已实现（`apps/api` 的 `EsignModule`、`EsignConfigModule`、`StorageModule`）。只连 e签宝 **沙箱**。  
 > **日期：** 2026-10-27（Asia/Shanghai）  
-> **仓库：** https://github.com/2770419748-lgtm/prepaid-member-miniprogram  
-> **落点：** `apps/api` · `EsignModule`（M0 已有配置骨架）  
-> **预估：** 约 10 人天 · **依赖 M2**；**企业章正式能力等 M6**  
-> **硬约束对齐：** `docs/tech/tech-final.md` · `docs/tasks/m0-kickoff.md`（定稿第 7 节 · M0 `ESIGN_PRODUCTION_ENABLED` · `docs/esign-switch.md`）
+> **协作：** 2026-10-27 起坤总授权 Claude 端到端推进开发，测试与 CI 通过后自行合并。不部署、不接微信支付、不打开电子签正式开关。  
+> **硬约束：** `ESIGN_PRODUCTION_ENABLED` 保持 `false`；密钥不进仓；合同 PDF 不进 Git。企业章正式能力属 M6。  
+> **前端配合：** [../esign-frontend.md](../esign-frontend.md)　**开关与切换：** [../esign-switch.md](../esign-switch.md)
 
 ---
 
-## 1. 目标与非目标
+## 1. 做了什么
 
-### 目标
-
-1. 沙箱联调 e签宝：模板绑定、选会员发起、签署状态同步、PDF 归档对象存储  
-2. 支持签署方模型：**会员个人签 + 商家企业章**（沙箱按 e签宝文档**模拟**；正式企业章能力 **M6**）  
-3. `SignFlow.env`：`SANDBOX` | `PRODUCTION`；**仅当** `ESIGN_PRODUCTION_ENABLED=true` 才允许走正式密钥 / `PRODUCTION`  
-4. 默认关闭正式签署；**入职前不可开**  
-5. 为小程序提供签署 URL / 状态查询；**H5 内嵌 + 刷脸公证签中间页由前端配合**（后端提供 URL、回调、配置说明）
-
-### 非目标
-
-- 打开正式签署、配置生产企业章（→ M6）  
-- 实现小程序 UI / 公证签中间页前端（前端任务；本说明只定义后端契约与回调）  
-- 腾讯电子签并行对接  
-- 微信支付  
-- 自行 merge / 部署 / 改生产（须坤总确认）
-
----
-
-## 2. 前置依赖
-
-等 M0 落地后在现有 schema 上扩展；若冲突以能支撑下列实体与开关为准。
-
-- [ ] M0：`EsignConfigModule`、`ESIGN_PRODUCTION_ENABLED=false`、flag 单测、S3/MinIO env 占位  
-- [ ] M0 实体：`BenefitPlan`、`ContractTemplate`、`SignFlow`  
-- [ ] M1：店员鉴权（已合入）  
-- [ ] M2：Member 可查询（发起签署需会员；已合入）  
-- [ ] e签宝开放平台**沙箱**应用凭据（坤总本地 `.env`，不进仓）
-
----
-
-## 3. 数据模型要点
-
-### BenefitPlan
-
-| 字段 | 说明 |
+| 能力 | 说明 |
 | --- | --- |
-| orgId, title, contentJson?, status | 权益文案/配置（可调） |
+| 权益方案 | 超管维护标题、简介、权益条目（1–20 条）、适用规则。会员首页取前 3 条 |
+| 权益单模板 | 把 e签宝「文件模板」绑到本系统，可关联权益方案。绑定时到 e签宝核对模板是否存在 |
+| 发起签署 | 店员选会员和模板发起。会员个人签（第 1 步），签完由平台自动盖商家企业章（第 2 步） |
+| 签署链接 | 发起时返回一次；会员端每次打开签署页前重新取 |
+| 状态同步 | e签宝回调（验签）或主动刷新，都以回头查询 e签宝的结果为准 |
+| 合同归档 | 签完后下载 PDF 存对象存储，库里只记 `pdfObjectKey`。会员和门店可下载 |
+| 撤销 | 超管或发起门店的店长可撤销待签署的权益单，e签宝同步撤销 |
 
-### ContractTemplate
+## 2. 规则
 
-| 字段 | 说明 |
-| --- | --- |
-| orgId | |
-| benefitPlanId | 可选关联 |
-| **esignTemplateId** | e签宝模板 ID |
-| name, status | |
+1. **只连沙箱。** 调用环境由 `ESIGN_API_HOST` 决定：沙箱网关 → `SANDBOX`；正式网关 → `PRODUCTION`，且必须 `ESIGN_PRODUCTION_ENABLED=true`，否则在发请求前拒绝（503），库里不留记录。其他地址一律拒绝。本机地址只给测试和本地演示的假沙箱，`NODE_ENV=production` 时不认。每次调用 e签宝都重新核对一次。
+2. **`SignFlow.env` 等于真实调用环境。** 沙箱开关打开前不可能写出 `PRODUCTION`。
+3. **同一会员同一模板最多一份未签完的**（发起中 / 待签署）。数据库部分唯一索引兜底，避免两位店员同时点发起、多算一份钱。签完、拒签、过期、撤销之后可以再发。
+4. **防重复提交：** 前端可带 `requestId`，重复提交返回第一次的结果。
+5. **会员实名由 e签宝核验。** 只把手机号作为签署人账号传给 e签宝，不把开卡登记的称呼当姓名传（称呼不是实名）。
+6. **企业章：** 沙箱里不传企业签署方信息，由 e签宝按「平台方自动盖章」用应用所属企业（沙箱模拟企业）的默认章。正式企业章属 M6。
+7. **回调验签失败返回 401，不动库。** 验签通过也不直接采信回调里的状态，而是回头查询 e签宝再写库。时间戳与本机相差超过 10 分钟视为重放。
+8. **状态只往前走：** 已签署、已拒签、已过期、已撤销之后不再变化。
+9. **会员端看不到员工信息**，也看不到其他会员的权益单（404）。店长、店员只看本店发起的，超管看全部。
+10. 权益方案、模板不提供删除，用 `ARCHIVED` 下架。下架的方案不再出现在会员的权益列表，除非他签过或待签。
 
-### SignFlow
+## 3. 权限
 
-| 字段 | 说明 |
-| --- | --- |
-| orgId, memberId, templateId | |
-| **esignFlowId** | 第三方流程 ID |
-| **status** | 如 DRAFT/PENDING/SIGNED/FAILED/CANCELLED（可调，与 e签宝状态映射表写清） |
-| **signUrl** | 会员签署 H5 链接 |
-| **pdfObjectKey** / pdf 引用 | 归档对象存储 key（M0 字段名 `pdfObjectKey`；对外 API 可暴露 `pdfUrl` 签名链） |
-| **env** | **`SANDBOX` \| `PRODUCTION`** |
-| createdAt / updatedAt | |
+| 角色 | 权益方案 / 模板 | 发起签署 | 查看 / 刷新 / 下载合同 | 撤销 |
+| --- | --- | --- | --- | --- |
+| 超级管理员 | 新建、修改 | 任意门店 | 全部 | 任意 |
+| 店长 | 只读 | 本店 | 本店发起的 | 本店发起的 |
+| 店员 | 只读 | 本店 | 本店发起的 | 不能 |
+| 会员 | 只看在用的和自己签过的 | 不能 | 只看自己的 | 不能 |
 
----
+发起时 `storeId` 必须是操作人有权限的门店（403）。会员不按开卡门店限制：余额全公司通用，任何门店都能给本公司会员发起，操作记录会写明门店和发起人。
 
-## 4. 权限矩阵（本模块）
+## 4. 接口
 
-| 角色 | 能力 |
-| --- | --- |
-| `SUPER_ADMIN` | 模板 CRUD、任意会员发起、查全部流程 |
-| `STORE_MANAGER` / `STAFF` | 对本店相关会员发起签署、查本范围流程（范围规则可调：按开卡门店或全店员可见本公司会员——**建议本版：店员可对本 org 会员发起，操作记 audit**） |
-| 会员 | 仅自己的 SignFlow 列表 / 详情 / 取 signUrl |
+所有列表都分页：`page`、`pageSize`（默认 20，最大 100），返回 `{ items, total, page, pageSize }`。
 
----
+### 4.1 权益方案（店员登录）
 
-## 5. API 清单
-
-| 方法 | 路径 | 鉴权 | 请求/响应要点 |
+| 方法 | 路径 | 角色 | 说明 |
 | --- | --- | --- | --- |
-| POST | `/benefit-plans` | 超管 | 创建权益方案 |
-| GET | `/benefit-plans` | 店员 | 列表 |
-| POST | `/contract-templates` | 超管 | `esignTemplateId`, `name`, `benefitPlanId?` |
-| GET | `/contract-templates` | 店员 | 列表 |
-| POST | `/sign-flows` | 店员 | `memberId`, `templateId` → 调 e签宝沙箱创建流程；写 `SignFlow(env=SANDBOX\|PRODUCTION按开关)`；返回 `signUrl` |
-| GET | `/sign-flows` | 店员范围 / 会员自己 | 筛选 status、memberId |
-| GET | `/sign-flows/:id` | 有权 | 含 status、signUrl、pdf 可用标识 |
-| POST | `/sign-flows/:id/refresh` | 店员或系统 | 主动轮询 e签宝状态并回写 |
-| POST | `/webhooks/esign` | 签名校验（e签宝回调） | 验签 → 更新状态 → 若完成则下载 PDF → 上传对象存储 → 写 pdfObjectKey |
-| GET | `/members/me/sign-flows` | 会员 | 自己的列表 |
+| POST | `/benefit-plans` | 超管 | `{ title, summary?, items: [{ title, detail? }], rules?, status?: DRAFT \| ACTIVE }`，默认 `ACTIVE` |
+| GET | `/benefit-plans` | 店员 | `status?` |
+| GET | `/benefit-plans/:id` | 店员 | |
+| PATCH | `/benefit-plans/:id` | 超管 | 任意字段；`status` 可为 `DRAFT` / `ACTIVE` / `ARCHIVED`；`summary`、`rules` 传空串清空 |
 
-**开关硬逻辑（服务内）：**
+返回：`{ id, title, summary, items, rules, status, templateCount, createdAt, updatedAt }`。
+
+### 4.2 权益单模板（店员登录）
+
+| 方法 | 路径 | 角色 | 说明 |
+| --- | --- | --- | --- |
+| POST | `/contract-templates` | 超管 | `{ esignTemplateId, name, benefitPlanId?, status?, memberSignKeyword?, sealKeyword? }`。e签宝里没有这个模板 → 400；沙箱没配凭据 → 503 |
+| GET | `/contract-templates` | 店员 | `status?`、`benefitPlanId?` |
+| GET | `/contract-templates/:id` | 店员 | |
+| PATCH | `/contract-templates/:id` | 超管 | 同上字段；`benefitPlanId: null` 取消关联；换 `esignTemplateId` 会重新核对 |
+
+返回：`{ id, name, esignTemplateId, status, benefitPlan: { id, title } | null, memberSignKeyword, sealKeyword, createdAt, updatedAt }`。
+
+### 4.3 签署（店员登录）
+
+| 方法 | 路径 | 角色 | 说明 |
+| --- | --- | --- | --- |
+| POST | `/sign-flows` | 店员 | `{ memberId, templateId, storeId, requestId? }`。模板须启用。已有未签完的同类 → 409；模板里找不到签名 / 盖章关键字 → 400；e签宝报错 → 502（带 e签宝原话）；开关关闭却配了正式网关 → 503 |
+| GET | `/sign-flows` | 店员 | `status?`、`memberId?`、`templateId?`、`storeId?` |
+| GET | `/sign-flows/:id` | 店员 | 范围外 404 |
+| POST | `/sign-flows/:id/refresh` | 店员 | 查询 e签宝并回写；签完则归档 PDF。归档失败时仍返回状态，`hasPdf=false`，下次刷新重试 |
+| POST | `/sign-flows/:id/cancel` | 超管 / 发起门店店长 | `{ reason }`。只能撤销待签署的，否则 409 |
+| GET | `/sign-flows/:id/pdf` | 店员 | `application/pdf`。还没归档 404 |
+
+返回：
 
 ```text
-if env==PRODUCTION || useProdCredentials:
-  assert ESIGN_PRODUCTION_ENABLED === true
-else:
-  只使用沙箱 host / 沙箱密钥（ESIGN_API_HOST 默认 smlopenapi）
+{ id, title, status, env,
+  member: { id, phone, name }, template: { id, name }, benefitPlan: { id, title } | null,
+  store: { id, name } | null, initiator: { id, name } | null,
+  signUrl,      // 只在 PENDING 时有值
+  hasPdf, signedAt, syncedAt, createdAt, updatedAt }
 ```
 
-启动时已有日志打印开关；发起签署前再次 `assertSandboxUnlessEnabled()`。
+### 4.4 会员（会员登录）
 
----
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/members/me/benefits` | 在用的权益方案 + 自己签过或待签的方案。每项 `{ id, title, summary, items, rules, signFlow: { id, status, updatedAt } \| null }`。已签的排最前，其次待签 |
+| GET | `/members/me/sign-flows` | 自己的权益单，`status?`。不含发起中的 |
+| GET | `/members/me/sign-flows/:id` | 详情，带权益内容。别人的 404 |
+| POST | `/members/me/sign-flows/:id/sign-url` | `{ signUrl, sandbox }`，每次重新向 e签宝取。不是待签署 → 409 |
+| POST | `/members/me/sign-flows/:id/refresh` | 从签署页回来时调用，同步状态 |
+| GET | `/members/me/sign-flows/:id/pdf` | 自己签好的合同 PDF |
 
-## 6. 业务流程
+会员看到的权益单：`{ id, title, status, env, sandbox, benefitPlan: { id, title, summary, items, rules } | null, hasPdf, signedAt, createdAt, updatedAt }`。没有员工、门店、签署链接字段。
 
-```
-后台绑模板（ContractTemplate.esignTemplateId）
-  → 选会员发起 POST /sign-flows
-  → 后端调 e签宝（沙箱）创建流程，存 esignFlowId、signUrl、env
-  → 会员小程序打开 signUrl（H5 内嵌）；刷脸跳转公证签中间页（前端）
-  → e签宝回调 或 后端轮询 refresh
-  → 签署完成：拉 PDF → 对象存储 → 更新 status + pdfObjectKey
-```
+### 4.5 e签宝回调
 
-企业章：沙箱按文档配置模拟章；**正式企业章与生产密钥切换属 M6**，本里程碑不得把 `ESIGN_PRODUCTION_ENABLED` 设为 true 提交进仓。
+`POST /webhooks/esign`，不需要登录，靠签名校验：
 
----
+- 请求头 `X-Tsign-Open-SIGNATURE`、`X-Tsign-Open-TIMESTAMP`、`X-Tsign-Open-App-Id`。
+- 签名 = HMAC-SHA256（应用 Secret，时间戳 + 按参数名排序拼接的查询参数值 + 原始请求体），小写十六进制。
+- 验签失败 401；不认识的流程直接应答成功；处理出错返回 5xx，让 e签宝重试。
+- 成功应答 `{ "code": "200", "msg": "success" }`。
+- 回调地址由 `ESIGN_NOTIFY_URL` 传给 e签宝。本地没有公网地址收不到回调，靠刷新接口同步。
 
-## 7. 业务规则与硬约束
+## 5. 状态对照
 
-1. **默认正式关**；入职前不可开；PR / `.env.example` 保持 `false`。  
-2. `SignFlow.env` 与真实调用环境一致；禁止 `env=SANDBOX` 却打正式 host。  
-3. 回调验签失败 → 401/403，不更新库。  
-4. PDF 不进 Git；只存对象存储 key。  
-5. 公开文档无具体项目名；密钥不进仓。  
-6. 前端配合点写进 `docs/` 短文：业务域名、webview、刷脸中间页回跳参数（可引用 e签宝公开文档链接）。
+| 本系统 | 含义 | e签宝 `signFlowStatus` |
+| --- | --- | --- |
+| `DRAFT` | 发起中（店员刚点、e签宝还没建好的瞬间） | 0 |
+| `PENDING` | 待签署 | 1 |
+| `SIGNED` | 已签署（会员已签、商家章已盖） | 2 |
+| `CANCELED` | 已撤销 | 3 |
+| `EXPIRED` | 已过期 | 5 |
+| `REJECTED` | 已拒签 | 7 |
 
----
+其他值不认识时保持原状态并记日志。
 
-## 8. 云端开 PR 验收清单
+## 6. 发起时后端做了什么
 
-- [ ] `ESIGN_PRODUCTION_ENABLED=false` 时发起流程 `env=SANDBOX`，且走沙箱 host  
-- [ ] 开关 false 时尝试强制生产凭证 / PRODUCTION → 被拒绝（单测覆盖）  
-- [ ] 模板绑定 + 发起 + 回调（或 refresh）状态回写成功  
-- [ ] 签署完成 PDF 进入对象存储，`pdfObjectKey` 有值  
-- [ ] 会员只能看自己的 sign flows  
-- [ ] 无正式企业章生产开通步骤被做成默认路径  
-- [ ] `.env.example` 仍为 false；无真实 ESIGN secret 进仓  
-- [ ] 已开 PR（建议 `feat/m4-esign-sandbox`），**未自行 merge**；PR 链接已交开发部请坤总确认
+1. 核对环境和凭据；在库里占位一条 `DRAFT`（同时挡住重复发起）。
+2. 查 e签宝模板的填写控件，只填模板里有的：
 
----
+   | 控件 key | 填什么 |
+   | --- | --- |
+   | `contractNo` | 本系统流程号 |
+   | `memberPhone` | 会员手机号 |
+   | `memberName` | 开卡登记的称呼（可能为空，不是实名） |
+   | `benefitTitle` | 关联的权益方案名称 |
+   | `orgName` | 商家名称 |
+   | `storeName` | 发起门店 |
+   | `signDate` | 发起日期 `YYYY-MM-DD`（模板里用单行文本） |
 
-## 9. 测试建议
+3. 用模板生成待签文件（`/v3/files/create-by-doc-template`），等文件就绪。
+4. 在文件里检索两个关键字（默认「会员签字」「商家盖章」，可按模板改）：会员签名落在「会员签字」右侧 80pt，企业章盖在「商家盖章」上。找不到就报 400，不发起。
+5. 发起流程（`/v3/sign-flow/create-by-file`）：会员第 1 步手动签，平台第 2 步自动盖章，签完自动结束。
+6. 取会员签署链接；把 `DRAFT` 改成 `PENDING`，同一事务写操作记录 `SIGN_FLOW_CREATE`（payload：`memberId`、`templateId`、`env`，没有链接和密钥）。
+7. 中途失败：删掉占位；如果 e签宝那边已建好而本地没记上，自动撤销那边的流程。
 
-- 单测：`EsignConfigService.assertSandboxUnlessEnabled`  
-- Mock e签宝 HTTP：创建流程、回调 payload、下载 PDF  
-- 契约：webhook 验签错误包  
-- 手工：沙箱账号端到端（坤总本地凭据）
+**模板作者须知：** 合同正文里写上「会员签字」「商家盖章」两处文字（或模板里自定义的关键字），每处只在签名区出现一次最稳妥；同一关键字出现多次时取最后一处。
 
----
+## 7. 操作记录
 
-## 10. 后端直接实现步骤
+| action | 何时 |
+| --- | --- |
+| `BENEFIT_PLAN_CREATE` / `BENEFIT_PLAN_UPDATE` | 新建 / 修改权益方案 |
+| `CONTRACT_TEMPLATE_CREATE` / `CONTRACT_TEMPLATE_UPDATE` | 绑定 / 修改模板 |
+| `SIGN_FLOW_CREATE` | 发起成功，记发起门店 |
+| `SIGN_FLOW_CANCEL` | 撤销，带原因 |
+| `SIGN_FLOW_STATUS_CHANGE` | 回调或刷新后状态变化，系统写入，没有操作人，payload 带 `from`、`to`、`source` |
 
-1. 读 M0 `EsignConfigModule` / `docs/esign-switch.md`；补全客户端（沙箱）  
-2. BenefitPlan + ContractTemplate CRUD  
-3. 创建 SignFlow（调沙箱 API）+ 权限  
-4. Webhook + refresh + 状态机映射  
-5. PDF 下载与 S3/MinIO 上传  
-6. 会员查询 API；文档：前端 H5/刷脸配合说明  
-7. 开关单测强化 → 自检 → 用 Cloud Agent 开 PR → **PR 链接交开发部，等坤总确认后再合入**（禁止自行 merge / 部署）
+## 8. 配置
 
----
+| 变量 | 说明 |
+| --- | --- |
+| `ESIGN_APP_ID` / `ESIGN_APP_SECRET` | e签宝沙箱应用凭据，只放本机 `.env` |
+| `ESIGN_API_HOST` | 默认 `https://smlopenapi.esign.cn`（沙箱） |
+| `ESIGN_PRODUCTION_ENABLED` | 保持 `false` |
+| `ESIGN_NOTIFY_URL` | 回调地址（公网可访问的 `…/webhooks/esign`）。不配就只靠刷新 |
+| `ESIGN_REDIRECT_URL` | 会员签完后签署页跳回的地址。不配则停在 e签宝完成页 |
+| `S3_ENDPOINT` / `S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_REGION` | 合同 PDF 对象存储（MinIO / S3 兼容）。`S3_FORCE_PATH_STYLE` 默认 true |
+| `STORAGE_LOCAL_DIR` | 没配 S3 时的本机目录，默认 `apps/api/.storage/`（已在 `.gitignore`）。只用于开发 |
 
-## 11. 合入须坤总确认
+迁移：`20261027220000_m4_esign_sandbox`。模板加签名 / 盖章关键字；签署加发起门店、发起人、标题、e签宝文件号、请求号、签署完成时间、最近核对时间；e签宝流程号唯一；部分唯一索引「同一会员同一模板只有一份未签完」；CHECK「离开发起中就必须有 e签宝流程号」。
 
-开 PR（如 `feat/m4-esign-sandbox`）；确认开关默认 false、无生产密钥；将 PR 链接交开发部，由开发部转总经理请**坤总确认**后再合入。企业章正式能力明确留待 **M6**。禁止自行 merge / 部署 / 改生产。
+## 9. 测试与验收
+
+- `test/m4-esign-sandbox.integration.spec.ts`：20 项端到端，对着本机假 e签宝沙箱（`test/support/fake-esign.ts`，按 e签宝规则独立校验每个请求的签名）跑：模板核对、发起参数（会员先签、平台自动盖章、只传手机号）、重复发起、请求号重放、门店范围、会员只看自己、回调验签（错签名、错密钥、过期时间戳、无签名）、回调后签署完成并归档、重复回调不重复记录、刷新重试归档、撤销权限、开关关闭时正式网关被拒且不留记录。
+- 单测：请求签名原文与算法、回调签名、状态映射、网关与开关护栏、客户端拒绝时不发请求、对象存储路径不越界。
+- 验收演示：`scripts/m4-acceptance-demo.ts`，对着运行中的本地服务走 12 步并生成一页 HTML（脚本内说明了启动方式）。
+
+### 用真实 e签宝沙箱联调（坤总本机）
+
+1. 在 e签宝开放平台沙箱建应用，拿到 App ID / Secret，写进本机 `.env`（不要提交）。
+2. 在沙箱控制台做一份文件模板：正文写「会员签字」「商家盖章」，需要自动填写的地方加单行文本控件，key 用第 6 节表里的名字。
+3. 后台超管绑定模板 ID，给自己的手机号发起，用返回的链接在手机浏览器里签。
+4. 本地收不到回调，签完后点刷新（或会员端回到小程序时自动刷新），状态变成已签署、合同可以下载。
+
+**说明：** 开发环境连不上 e签宝，本次没有对着真实沙箱跑过，接口字段按 e签宝开放平台 v3 公开文档实现。第一次真实联调时如有字段出入，以 e签宝返回的报错为准修正（客户端在 `src/esign/client/esign.client.ts` 一处）。

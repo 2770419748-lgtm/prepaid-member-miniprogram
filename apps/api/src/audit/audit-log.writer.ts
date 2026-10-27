@@ -14,8 +14,15 @@ export const AuditAction = {
   WalletRecharge: 'WALLET_RECHARGE',
   WalletConsume: 'WALLET_CONSUME',
   WalletReversal: 'WALLET_REVERSAL',
-  /** M4 发起签署成功时写。 */
+  BenefitPlanCreate: 'BENEFIT_PLAN_CREATE',
+  BenefitPlanUpdate: 'BENEFIT_PLAN_UPDATE',
+  ContractTemplateCreate: 'CONTRACT_TEMPLATE_CREATE',
+  ContractTemplateUpdate: 'CONTRACT_TEMPLATE_UPDATE',
+  /** 发起签署成功时写，与 e签宝流程登记在同一事务。 */
   SignFlowCreate: 'SIGN_FLOW_CREATE',
+  SignFlowCancel: 'SIGN_FLOW_CANCEL',
+  /** e签宝回调或主动核对后状态变化（签完、拒签、过期、撤销）。系统写入，没有操作人。 */
+  SignFlowStatusChange: 'SIGN_FLOW_STATUS_CHANGE',
 } as const;
 
 export type AuditActionCode = (typeof AuditAction)[keyof typeof AuditAction];
@@ -34,7 +41,13 @@ export const AuditActionLabel: Record<AuditActionCode, string> = {
   WALLET_RECHARGE: '充值',
   WALLET_CONSUME: '消费扣款',
   WALLET_REVERSAL: '冲正',
+  BENEFIT_PLAN_CREATE: '新建权益方案',
+  BENEFIT_PLAN_UPDATE: '修改权益方案',
+  CONTRACT_TEMPLATE_CREATE: '新建合同模板',
+  CONTRACT_TEMPLATE_UPDATE: '修改合同模板',
   SIGN_FLOW_CREATE: '发起签署',
+  SIGN_FLOW_CANCEL: '取消签署',
+  SIGN_FLOW_STATUS_CHANGE: '签署状态变化',
 };
 
 export interface AuditWriteInput {

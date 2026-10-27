@@ -119,6 +119,7 @@ model Store {
   openedMembers Member[]         @relation("MemberOpenStore")
   ledgerEntries LedgerEntry[]
   auditLogs     AuditLog[]
+  signFlows     SignFlow[]
 
   @@index([orgId])
   @@map("stores")
@@ -140,10 +141,11 @@ model Staff {
   createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  org        Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  storeRoles StaffStoreRole[]
-  ledgerOps  LedgerEntry[]    @relation("LedgerOperator")
-  auditLogs  AuditLog[]
+  org                Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  storeRoles         StaffStoreRole[]
+  ledgerOps          LedgerEntry[]    @relation("LedgerOperator")
+  auditLogs          AuditLog[]
+  initiatedSignFlows SignFlow[]       @relation("SignFlowInitiator")
 
   @@unique([orgId, phone])
   @@index([orgId])
@@ -258,15 +260,20 @@ model BenefitPlan {
   @@map("benefit_plans")
 }
 
+/// 权益单模板：绑定 e签宝文件模板。发起时按关键字找签名和盖章的位置。
 model ContractTemplate {
-  id              String                 @id @default(cuid())
-  orgId           String                 @map("org_id")
-  benefitPlanId   String?                @map("benefit_plan_id")
-  esignTemplateId String                 @map("esign_template_id")
-  name            String
-  status          ContractTemplateStatus @default(DRAFT)
-  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                String                 @id @default(cuid())
+  orgId             String                 @map("org_id")
+  benefitPlanId     String?                @map("benefit_plan_id")
+  esignTemplateId   String                 @map("esign_template_id")
+  name              String
+  status            ContractTemplateStatus @default(DRAFT)
+  /// 合同正文里会员签名位置的关键字。签名落在关键字右侧。
+  memberSignKeyword String                 @default("会员签字") @map("member_sign_keyword")
+  /// 合同正文里商家盖章位置的关键字。企业章盖在关键字上。
+  sealKeyword       String                 @default("商家盖章") @map("seal_keyword")
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   org         Org          @relation(fields: [orgId], references: [id], onDelete: Restrict)
   benefitPlan BenefitPlan? @relation(fields: [benefitPlanId], references: [id], onDelete: SetNull)
@@ -276,25 +283,44 @@ model ContractTemplate {
   @@map("contract_templates")
 }
 
+/// 一份权益单的签署。会员个人签 + 商家企业章（沙箱为平台自动盖章）。
+/// env 记录实际调用的 e签宝环境，由网关地址决定；正式环境只有总开关打开后才允许。
+/// 同一会员同一模板最多一份未完成（DRAFT / PENDING），由迁移里的部分唯一索引保证。
 model SignFlow {
-  id           String         @id @default(cuid())
-  orgId        String         @map("org_id")
-  memberId     String         @map("member_id")
-  templateId   String         @map("template_id")
-  esignFlowId  String?        @map("esign_flow_id")
-  status       SignFlowStatus @default(DRAFT)
-  signUrl      String?        @map("sign_url")
-  pdfObjectKey String?        @map("pdf_object_key")
-  env          SignEnv        @default(SANDBOX)
-  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               String         @id @default(cuid())
+  orgId            String         @map("org_id")
+  memberId         String         @map("member_id")
+  templateId       String         @map("template_id")
+  /// 发起门店。店长、店员只看本店发起的。
+  storeId          String?        @map("store_id")
+  initiatorStaffId String?        @map("initiator_staff_id")
+  /// 发起时的合同标题（模板名快照）。
+  title            String         @default("")
+  esignFlowId      String?        @unique @map("esign_flow_id")
+  esignFileId      String?        @map("esign_file_id")
+  status           SignFlowStatus @default(DRAFT)
+  /// 最近一次取到的签署链接，只在 PENDING 时有效。会员端每次打开前重新取。
+  signUrl          String?        @map("sign_url")
+  pdfObjectKey     String?        @map("pdf_object_key")
+  env              SignEnv        @default(SANDBOX)
+  /// 客户端生成的请求号，同一组织内唯一，重复提交返回第一次的结果。
+  requestId        String?        @map("request_id")
+  signedAt         DateTime?      @map("signed_at") @db.Timestamptz(6)
+  /// 最近一次和 e签宝核对状态的时间。
+  syncedAt         DateTime?      @map("synced_at") @db.Timestamptz(6)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  org      Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  member   Member           @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  template ContractTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  org       Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  member    Member           @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  template  ContractTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  store     Store?           @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  initiator Staff?           @relation("SignFlowInitiator", fields: [initiatorStaffId], references: [id], onDelete: SetNull)
 
-  @@index([orgId])
-  @@index([memberId])
+  @@unique([orgId, requestId])
+  @@index([orgId, createdAt])
+  @@index([memberId, createdAt])
+  @@index([storeId, createdAt])
   @@map("sign_flows")
 }
 

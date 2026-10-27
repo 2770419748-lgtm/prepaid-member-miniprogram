@@ -9,7 +9,8 @@ import { configureApp } from './configure-app';
 import { EsignConfigService } from './esign-config/esign-config.service';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { cors: true });
+  // rawBody：e签宝回调要用原始请求体验签。
+  const app = await NestFactory.create(AppModule, { cors: true, rawBody: true });
   configureApp(app);
 
   const swagger = new DocumentBuilder()
@@ -21,6 +22,7 @@ async function bootstrap(): Promise<void> {
     .addTag('门店')
     .addTag('员工')
     .addTag('会员')
+    .addTag('权益单')
     .addTag('健康检查')
     .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swagger), {
@@ -35,6 +37,11 @@ async function bootstrap(): Promise<void> {
   const esign = app.get(EsignConfigService);
   const wechat = app.get(WechatAppConfig);
   Logger.log(`esign.production.enabled=${esign.productionEnabled}`, 'Bootstrap');
+  try {
+    Logger.log(`esign.target=${esign.resolveTarget().env}`, 'Bootstrap');
+  } catch (error) {
+    Logger.warn(`电子签网关配置被拒绝：${error instanceof Error ? error.message : 'unknown'}`, 'Bootstrap');
+  }
   Logger.log(`wechat.phoneMock=${wechat.mockEnabled}`, 'Bootstrap');
   if (wechat.mockEnabled) {
     Logger.warn('微信假手机号已打开，只用于开发演示。NODE_ENV=production 时会强制关闭。', 'Bootstrap');
