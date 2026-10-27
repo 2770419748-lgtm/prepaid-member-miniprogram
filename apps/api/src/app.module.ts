@@ -11,8 +11,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { WalletModule } from './wallet/wallet.module';
 
 /**
- * AuthModule / OrgModule / MembersModule：账号、门店、员工与会员登录。
- * WalletModule TODO(M2)：线下充值、消费、冲正。禁止微信支付。
+ * AuthModule / OrgModule / MembersModule：账号、门店、员工、会员登录与开卡。
+ * WalletModule：线下充值、消费扣款、冲正与流水查询。只记账，禁止微信支付。
  * EsignModule TODO(M4)：正式签署开关默认关闭。
  */
 @Module({
