@@ -27,6 +27,15 @@
 
 接口说明见 [backend/m1-auth-stores.md](./backend/m1-auth-stores.md)。
 
+## 设计规范
+
+产品设计规范为 v1.1，以仓库里的这两份为准：
+
+- [UI/UX 设计规范 v1.1](./design/ui-design.md)
+- [设计侧交接说明](./design/DESIGN-HANDOFF.md)
+
+设计主色 `#1677FF`。产品设计对登录壳的观感意见（主按钮用信任蓝、去掉调试入口、概览卡片等高并带上品牌、去掉「占位」）在接入真实登录时一并改。
+
 ## 已知限制
 
 - `mustChangePassword` 只在登录和 `GET /auth/me` 里返回。服务端没有因此拦住其他接口，网页后台要根据这个标志强制进入改密码页。小程序登录不走密码。
@@ -40,7 +49,7 @@
 
 ## 给 Claude 的接手要点
 
-1. 先看 PR #3 和本文件。M1 代码在 `apps/api`，文档在 `docs/backend/`。不要从 main 重做一遍。
+1. 先看 PR #3 和本文件。M1 代码在 `apps/api`，文档在 `docs/backend/`。设计以 [docs/design/ui-design.md](./design/ui-design.md)（v1.1）和 [docs/design/DESIGN-HANDOFF.md](./design/DESIGN-HANDOFF.md) 为准。不要从 main 重做一遍。
 2. 不要合并、不要部署、不要打开 `ESIGN_PRODUCTION_ENABLED`，不要引入微信支付。
 3. 坤总要求做完 M1 后把项目交给 Claude，**不要启动 M2 / M4**。等 M1 经技术部审阅、CI 通过、总经理评估合入后，再按 `docs/backend/README.md` 的顺序开工。
 4. 和仓库文档或现有 Prisma 模型冲突时，以仓库文档和现有 schema 为准。不要拆掉已有的十一类实体。
