@@ -1,0 +1,41 @@
+<view class="page">
+  <text wx:if="{{error}}" class="notice notice-danger">{{error}}</text>
+
+  <block wx:if="{{view}}">
+    <view class="card hero">
+      <text class="muted">{{view.title}}</text>
+      <view class="hero-amount {{view.tone}}">{{view.change}}<text class="hero-unit">元</text></view>
+      <text wx:if="{{view.reversed}}" class="tag tag-gray">已冲正</text>
+      <text wx:if="{{view.isReversal}}" class="tag tag-warning">冲正记录</text>
+    </view>
+
+    <view class="card">
+      <view class="kv"><text class="kv-key">会员</text><text class="kv-value">{{view.member}}</text></view>
+      <view class="kv"><text class="kv-key">门店</text><text class="kv-value">{{view.storeName}}</text></view>
+      <view class="kv"><text class="kv-key">经办人</text><text class="kv-value">{{view.operator}}</text></view>
+      <view class="kv"><text class="kv-key">时间</text><text class="kv-value">{{view.time}}</text></view>
+      <view class="kv"><text class="kv-key">记账前余额</text><text class="kv-value">{{view.before}} 元</text></view>
+      <view class="kv"><text class="kv-key">记账后余额</text><text class="kv-value">{{view.after}} 元</text></view>
+      <view class="kv"><text class="kv-key">备注</text><text class="kv-value">{{view.remark}}</text></view>
+    </view>
+
+    <view wx:if="{{view.reversedById}}" class="list jump">
+      <view class="row" hover-class="is-pressed" data-id="{{view.reversedById}}" bindtap="onOpen">
+        <text class="row-main row-title">这笔已被冲正，查看冲正记录</text>
+        <text class="row-arrow">›</text>
+      </view>
+    </view>
+    <view wx:if="{{view.reversalOfId}}" class="list jump">
+      <view class="row" hover-class="is-pressed" data-id="{{view.reversalOfId}}" bindtap="onOpen">
+        <text class="row-main row-title">查看被冲正的原记录</text>
+        <text class="row-arrow">›</text>
+      </view>
+    </view>
+
+    <block wx:if="{{canReverse}}">
+      <text class="hint reverse-hint">记错了账时使用：补记一笔金额相同、方向相反的流水，把这笔整笔抵掉。原记录保留，不能删除；每笔只能冲正一次。</text>
+      <view class="btn btn-danger {{submitting ? 'is-disabled' : ''}}" hover-class="is-pressed" bindtap="onReverse">{{submitting ? '正在冲正…' : '冲正这笔'}}</view>
+    </block>
+    <text wx:elif="{{askManager}}" class="hint reverse-hint">记错了账？请联系店长冲正。</text>
+  </block>
+</view>

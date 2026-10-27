@@ -1,0 +1,22 @@
+.member-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.member-phone {
+  font-size: 36rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+}
+
+.member-name {
+  font-size: 30rpx;
+  margin: 0 16rpx;
+}
+
+.balance-block {
+  margin-top: 32rpx;
+  padding-top: 24rpx;
+  border-top: 2rpx solid var(--line);
+}

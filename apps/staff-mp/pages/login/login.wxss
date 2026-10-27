@@ -1,0 +1,69 @@
+.login {
+  min-height: 100vh;
+  padding: 0 48rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 160rpx;
+}
+
+.brand-mark {
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: 32rpx;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-mark-text {
+  color: #ffffff;
+  font-size: 64rpx;
+  font-weight: 600;
+}
+
+.brand-title {
+  margin-top: 32rpx;
+  font-size: 40rpx;
+  font-weight: 600;
+}
+
+.brand-sub {
+  margin-top: 12rpx;
+  color: var(--text-2);
+  font-size: 26rpx;
+}
+
+.login-actions {
+  margin-top: 160rpx;
+}
+
+/* 微信 button 自带宽度、内边距和边框，这里压掉，与其他按钮一致。 */
+.btn-wechat {
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 96rpx;
+  font-size: 32rpx !important;
+  font-weight: 500 !important;
+  border-radius: 16rpx;
+  background: var(--primary) !important;
+  color: #ffffff !important;
+}
+
+.btn-wechat::after {
+  border: none;
+}
+
+.login-hint {
+  margin-top: 24rpx;
+  text-align: center;
+}

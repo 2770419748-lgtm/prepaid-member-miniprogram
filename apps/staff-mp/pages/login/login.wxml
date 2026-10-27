@@ -1,0 +1,17 @@
+<view class="login">
+  <view class="brand">
+    <view class="brand-mark"><text class="brand-mark-text">储</text></view>
+    <text class="brand-title">商家工作台</text>
+    <text class="brand-sub">储值会员 · 门店开卡、记账、查余额</text>
+  </view>
+
+  <view class="login-actions">
+    <text wx:if="{{error}}" class="notice notice-danger">{{error}}</text>
+    <button
+      class="btn btn-primary btn-wechat {{submitting ? 'is-disabled' : ''}}"
+      open-type="getPhoneNumber"
+      bindgetphonenumber="onGetPhoneNumber"
+    >{{submitting ? '正在登录…' : '微信手机号登录'}}</button>
+    <text class="hint login-hint">仅限已开通的店员账号。没有账号请联系店长或管理员开通。</text>
+  </view>
+</view>

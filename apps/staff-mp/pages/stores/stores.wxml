@@ -1,0 +1,21 @@
+<view class="page">
+  <text class="hint intro">记账、开卡都记在当前门店名下。会员余额全公司通用，换店不影响余额。</text>
+  <view class="list">
+    <view
+      wx:for="{{stores}}"
+      wx:key="id"
+      class="row {{item.disabled ? 'is-off' : ''}}"
+      hover-class="{{item.disabled ? 'none' : 'is-pressed'}}"
+      data-id="{{item.id}}"
+      data-disabled="{{item.disabled}}"
+      bindtap="onPick"
+    >
+      <view class="row-main">
+        <text class="row-title">{{item.name}}</text>
+        <text class="row-sub">{{item.sub}}</text>
+      </view>
+      <text wx:if="{{item.current}}" class="tag tag-primary">当前</text>
+      <text wx:elif="{{item.disabled}}" class="tag tag-gray">已停用</text>
+    </view>
+  </view>
+</view>

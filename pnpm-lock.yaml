@@ -147,6 +147,9 @@ importers:
 
   apps/staff-mp:
     devDependencies:
+      '@types/node':
+        specifier: ^22.20.5
+        version: 22.20.5
       miniprogram-api-typings:
         specifier: ^4.0.8
         version: 4.1.3

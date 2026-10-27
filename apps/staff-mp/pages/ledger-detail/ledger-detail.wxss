@@ -1,0 +1,27 @@
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48rpx 32rpx;
+}
+
+.hero-amount {
+  font-size: 72rpx;
+  font-weight: 600;
+  margin: 8rpx 0 16rpx;
+}
+
+.hero-unit {
+  font-size: 28rpx;
+  margin-left: 8rpx;
+  color: var(--text-2);
+  font-weight: 400;
+}
+
+.reverse-hint {
+  margin: 32rpx 8rpx 24rpx;
+}
+
+.jump {
+  margin-bottom: 24rpx;
+}
