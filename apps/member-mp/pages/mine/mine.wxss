@@ -1,1 +1,62 @@
-/* 页面样式沿用 app.wxss */
+.profile {
+  display: flex;
+  align-items: center;
+  padding: 40rpx 32rpx;
+}
+
+.avatar {
+  width: 104rpx;
+  height: 104rpx;
+  border-radius: 50%;
+  background: rgba(22, 119, 255, 0.1);
+  color: #1677ff;
+  font-size: 40rpx;
+  font-weight: 600;
+  text-align: center;
+  line-height: 104rpx;
+  flex: none;
+}
+
+.profile-text {
+  margin-left: 28rpx;
+}
+
+.profile-name {
+  font-size: 34rpx;
+  font-weight: 600;
+}
+
+.profile-phone {
+  margin-top: 6rpx;
+  font-size: 26rpx;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 32rpx 0;
+  border-bottom: 1rpx solid #e2e8f0;
+}
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-icon {
+  width: 40rpx;
+  height: 40rpx;
+  flex: none;
+}
+
+.menu-text {
+  flex: 1;
+  margin-left: 20rpx;
+  font-size: 30rpx;
+}

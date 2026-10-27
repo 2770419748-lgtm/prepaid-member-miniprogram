@@ -1,0 +1,48 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="card head">
+    <view class="skeleton" style="width: 120rpx; height: 32rpx; margin: 0 auto;"></view>
+    <view class="skeleton" style="width: 280rpx; height: 72rpx; margin: 24rpx auto 0;"></view>
+  </view>
+
+  <view wx:elif="{{error}}" class="error-box">
+    <view>{{error}}</view>
+    <view class="retry" bindtap="retry">重新加载</view>
+  </view>
+
+  <block wx:else>
+    <view class="card head">
+      <view class="head-title">
+        <text>{{detail.title}}</text>
+        <text wx:if="{{detail.reversed}}" class="tag head-tag">已撤销</text>
+      </view>
+      <view class="head-amount {{detail.plus ? 'plus' : 'minus'}}">{{detail.amountText}}</view>
+      <view class="head-unit">元</view>
+    </view>
+
+    <view wx:if="{{detail.note}}" class="notice">
+      <text>{{detail.note}}</text>
+      <text wx:if="{{detail.reversalOfId}}" class="notice-link" bindtap="openOriginal">查看原记录</text>
+    </view>
+
+    <view class="card rows">
+      <view class="row">
+        <text class="row-label">门店</text>
+        <text class="row-value">{{detail.storeName}}</text>
+      </view>
+      <view class="row">
+        <text class="row-label">时间</text>
+        <text class="row-value">{{detail.timeText}}</text>
+      </view>
+      <view class="row">
+        <text class="row-label">这笔之后余额</text>
+        <text class="row-value">{{detail.balanceText}} 元</text>
+      </view>
+      <view class="row" bindtap="copyId">
+        <text class="row-label">记录编号</text>
+        <text class="row-value row-id">{{detail.id}}</text>
+      </view>
+    </view>
+
+    <view class="footer-note">如对这笔记录有疑问，请联系办理的门店</view>
+  </block>
+</view>

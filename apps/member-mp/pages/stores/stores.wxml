@@ -1,0 +1,37 @@
+<view class="page">
+  <block wx:if="{{loading}}">
+    <view class="card" wx:for="{{3}}" wx:key="*this">
+      <view class="skeleton" style="width: 240rpx; height: 32rpx;"></view>
+      <view class="skeleton" style="width: 420rpx; height: 26rpx; margin-top: 20rpx;"></view>
+      <view class="skeleton" style="width: 300rpx; height: 26rpx; margin-top: 12rpx;"></view>
+    </view>
+  </block>
+
+  <view wx:elif="{{error}}" class="error-box">
+    <view>{{error}}</view>
+    <view class="retry" bindtap="retry">重新加载</view>
+  </view>
+
+  <view wx:elif="{{cards.length === 0}}" class="stores-empty">暂无可用门店，请联系商家</view>
+
+  <block wx:else>
+    <view wx:if="{{locationState !== 'granted'}}" class="locate-bar" bindtap="enableLocation">
+      <text class="locate-text">{{locationState === 'denied' ? '定位已关闭，打开后可查看门店离您多远' : '开启定位，查看门店离您多远'}}</text>
+      <text class="locate-action">{{locationState === 'denied' ? '去设置' : '开启'}}</text>
+    </view>
+
+    <view wx:for="{{cards}}" wx:key="id" class="card store">
+      <view class="store-info">
+        <view class="store-name">{{item.name}}</view>
+        <view wx:if="{{item.address}}" class="store-line">{{item.address}}</view>
+        <view wx:if="{{item.hours}}" class="store-line">营业时间 {{item.hours}}</view>
+        <view wx:if="{{item.distanceText}}" class="store-distance">距您 {{item.distanceText}}</view>
+      </view>
+      <view class="store-actions">
+        <view class="store-btn store-nav {{item.canNavigate ? '' : 'store-btn-off'}}" data-id="{{item.id}}" bindtap="navigate">导航</view>
+        <view class="store-btn store-call {{item.canCall ? '' : 'store-btn-off'}}" data-id="{{item.id}}" bindtap="call">电话</view>
+      </view>
+    </view>
+    <view class="footer-note">余额在以上门店都能使用</view>
+  </block>
+</view>

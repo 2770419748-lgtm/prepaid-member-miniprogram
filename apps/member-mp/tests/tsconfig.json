@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "miniprogram-api-typings"],
+    "lib": ["ES2020"],
+    "esModuleInterop": true
+  },
+  "include": ["./**/*.ts", "../utils/**/*.ts"],
+  "exclude": []
+}

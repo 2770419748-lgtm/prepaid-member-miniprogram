@@ -16,6 +16,8 @@
 //       location: { latitude, longitude } | 'deny',  // wx.getLocation 返回的位置
 //       phoneDeny: false,                // 手机号授权按钮是否模拟“拒绝”
 //       fullPage: false,                 // 截整页（按内容高度）
+//       before: async () => {},          // 可选：打开页面前在 Node 里做的准备（比如调接口改数据）
+//       after: async () => {},           // 可选：截完以后恢复
 //       steps: [{ tap: '.btn' }, { wait: 300 }, { scroll: 400 }, { fill: ['.input', '文字'] },
 //               { pullDown: true }, { expectText: '余额' }, { shot: '02-弹窗', caption: '...' }],
 //     }],
@@ -99,6 +101,7 @@ async function runStep(page, step) {
 
 for (const shot of scenario.shots) {
   console.log(`· ${shot.name}`);
+  if (shot.before) await shot.before();
   const context = await browser.newContext({
     viewport: { width: 375, height: 812 },
     deviceScaleFactor: 2,
@@ -139,6 +142,7 @@ for (const shot of scenario.shots) {
     await page.locator('#phone').screenshot({ path: join(outDir, `${shot.name}-失败.png`) }).catch(() => {});
   } finally {
     await context.close();
+    if (shot.after) await shot.after();
   }
 }
 
