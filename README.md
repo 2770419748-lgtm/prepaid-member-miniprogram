@@ -61,6 +61,9 @@ pnpm --filter api test
 
 ## 文档
 
-- [前端](docs/frontend/README.md)：储值会员小程序的会员端（M3）与商家网页后台任务说明
+- [技术方案](docs/tech/)
+- [后端任务说明](docs/backend/)
+- [界面设计](docs/design/ui-design.md)
+- [前端任务说明](docs/frontend/)：会员端与商家网页后台
 - [进度](docs/PROGRESS.md)
 
