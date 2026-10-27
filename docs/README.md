@@ -19,6 +19,10 @@
   - [M4 电子签沙箱](./backend/m4-esign-sandbox.md)
   - [P2 审计与对账](./backend/p2-audit.md)
 
+## 需求
+
+- [会员端可用门店](./requirements/member-stores.md)（坤总 2026-10-28 确认）
+
 ## 进度
 
 - [进度日志](./PROGRESS.md)
