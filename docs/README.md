@@ -7,7 +7,7 @@
 - [技术方案定稿](./tech/tech-final.md)
 - [架构与模块边界](./architecture.md)
 - [电子签开关](./esign-switch.md)
-- [UI/UX 设计规范 v1](./design/ui-design.md)（主色 `#1677FF`，由产品设计维护）
+- [UI/UX 设计规范 v1.1](./design/ui-design.md)（主色 `#1677FF`，由产品设计维护）· [设计侧交接说明](./design/DESIGN-HANDOFF.md)
 
 ## 任务说明
 
