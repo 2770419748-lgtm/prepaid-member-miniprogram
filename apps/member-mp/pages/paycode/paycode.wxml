@@ -43,12 +43,13 @@
 
     <block wx:else>
       <view class="qr-box">
-        <canvas type="2d" id="qr" class="qr"></canvas>
-        <view wx:if="{{view === 'scanned'}}" class="qr-mask">
+        <!-- 画布在微信里会盖住叠在它上面的东西，所以扫过以后不叠遮罩，直接换成提示块（码也就看不到了）。 -->
+        <view wx:if="{{view === 'scanned'}}" class="qr qr-scanned">
           <view class="scan-dot"></view>
           <text class="mask-title">{{storeName ? storeName + '已扫码' : '门店已扫码'}}</text>
           <text class="mask-sub">正在确认消费金额，请稍候</text>
         </view>
+        <canvas wx:else type="2d" id="qr" class="qr"></canvas>
       </view>
       <view class="cc-balance">
         <text class="muted">可用余额</text>

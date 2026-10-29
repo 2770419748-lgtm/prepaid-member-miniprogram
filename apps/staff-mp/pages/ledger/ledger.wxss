@@ -6,8 +6,17 @@
 }
 
 .head-store {
+  flex: 1;
+  min-width: 0;
+  margin-right: 24rpx;
   font-size: 36rpx;
   font-weight: 600;
+  word-break: break-all;
+}
+
+.head .muted {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .chips {

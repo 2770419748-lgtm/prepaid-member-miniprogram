@@ -21,7 +21,7 @@
         :loading="loading"
         :pagination="pagination"
         row-key="id"
-        :scroll="{ x: 980 }"
+        :scroll="{ x: 1120 }"
         @change="onTableChange"
       >
         <template #emptyText><a-empty description="还没有门店" /></template>
@@ -36,10 +36,10 @@
             </a-tag>
           </template>
           <template v-else-if="column.key === 'address'">
-            <span :class="{ muted: !record.address }">{{ record.address || '未填写' }}</span>
+            <span :class="{ muted: !record.address }" :title="record.address || undefined">{{ record.address || '未填写' }}</span>
           </template>
           <template v-else-if="column.key === 'phone'">
-            <span :class="{ muted: !record.phone }">{{ record.phone || '未填写' }}</span>
+            <span class="nowrap" :class="{ muted: !record.phone }">{{ record.phone || '未填写' }}</span>
           </template>
           <template v-else-if="column.key === 'hours'">
             <span :class="{ muted: !record.businessHours }">{{ record.businessHours || '未填写' }}</span>
@@ -151,13 +151,14 @@ const form = reactive({
 });
 
 const columns: ColumnsType<StoreView> = [
-  { title: '门店', key: 'name', width: 160 },
+  { title: '门店', key: 'name', width: 150 },
   { title: '状态', key: 'status', width: 90 },
+  // 地址不给固定宽度，吃掉剩下的空间；表格最小宽度里给它留了约 200px。
   { title: '地址', key: 'address', ellipsis: true },
   { title: '电话', key: 'phone', width: 140 },
-  { title: '营业时间', key: 'hours', width: 180 },
-  { title: '坐标', key: 'location', width: 210 },
-  { title: '操作', key: 'actions', width: 180, fixed: 'right' },
+  { title: '营业时间', key: 'hours', width: 170 },
+  { title: '坐标', key: 'location', width: 200 },
+  { title: '操作', key: 'actions', width: 170, fixed: 'right' },
 ];
 
 const pagination = computed<TablePaginationConfig>(() => ({

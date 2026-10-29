@@ -1,5 +1,7 @@
+/* 名字太长时整段换到手机号下一行，不挤成窄条。 */
 .member-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   margin-bottom: 8rpx;
 }
@@ -8,11 +10,21 @@
   font-size: 36rpx;
   font-weight: 600;
   letter-spacing: 1rpx;
+  margin-right: 16rpx;
 }
 
 .member-name {
   font-size: 30rpx;
-  margin: 0 16rpx;
+  margin-right: 16rpx;
+  word-break: break-all;
+}
+
+.open-info {
+  display: block;
+}
+
+.nowrap {
+  white-space: nowrap;
 }
 
 .balance-block {

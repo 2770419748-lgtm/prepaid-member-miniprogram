@@ -1,5 +1,6 @@
 <view class="page">
-  <view class="steps">
+  <!-- 弹出会员小程序码时，背后的页面先收起来，不从弹窗上下透出来。 -->
+  <view wx:if="{{!showCode}}" class="steps">
     <view wx:for="{{steps}}" wx:key="key" class="step step-{{item.state}}">
       <view class="step-dot"><text>{{item.state === 'done' ? '✓' : item.index}}</text></view>
       <text class="step-label">{{item.label}}</text>
@@ -49,14 +50,16 @@
 
   <!-- 第二步：会员权益，第一项是会员权益金额 -->
   <block wx:elif="{{step === 'benefit'}}">
-    <view class="card member-card">
-      <view class="member-line">
-        <text class="member-label">{{member.label}}</text>
-        <text wx:if="{{member.hasCard}}" class="tag tag-gray">老会员</text>
-        <text wx:else class="tag tag-primary">新顾客</text>
+    <view class="card">
+      <view class="member-top">
+        <view class="member-line">
+          <text class="member-label">{{member.label}}</text>
+          <text wx:if="{{member.hasCard}}" class="tag tag-gray">老会员</text>
+          <text wx:else class="tag tag-primary">新顾客</text>
+        </view>
+        <text wx:if="{{!uncertain && !submitting}}" class="link change" bindtap="onChangeMember">换一位</text>
       </view>
       <text class="muted">{{member.hasCard ? '当前余额 ' + member.balance + ' 元' : '生成合同时开卡，余额从 0 开始'}}</text>
-      <text wx:if="{{!uncertain && !submitting}}" class="link change" bindtap="onChangeMember">换一位</text>
     </view>
 
     <view class="card">
@@ -186,7 +189,7 @@
   </block>
 
   <!-- 第四步：到账 -->
-  <block wx:else>
+  <view wx:else hidden="{{showCode}}">
     <view class="done">
       <view class="done-icon"><text>✓</text></view>
       <text class="done-title">合同已签，已充值到账</text>
@@ -201,23 +204,26 @@
     <view class="btn btn-primary" hover-class="is-pressed" bindtap="onShowCode">给顾客看会员小程序码</view>
     <view class="btn btn-quiet" hover-class="is-pressed" bindtap="onViewMember">查看会员</view>
     <view class="btn btn-quiet" hover-class="is-pressed" bindtap="onHome">办理下一位</view>
-  </block>
+  </view>
 
   <!-- 签完后弹出：顾客扫码登录会员小程序 -->
-  <view wx:if="{{showCode}}" class="code-mask" catchtap="onCloseCode">
+  <!-- 二维码画布在微信里会盖住叠在它上面的东西，所以「演示码」等说明都放在码的下方，不叠在码上。 -->
+  <view wx:if="{{showCode}}" class="code-mask" catchtap="onCloseCode" catchtouchmove="noop">
     <view class="code-sheet" catchtap="noop">
       <text class="code-title">请顾客扫码登录会员小程序</text>
-      <text class="hint center">用 {{codePhone}} 这个手机号登录，就能看到余额和权益</text>
+      <text class="code-sub">用这个手机号登录，就能看到余额和权益</text>
+      <text wx:if="{{codePhone}}" class="code-phone">{{codePhone}}</text>
       <view class="code-box">
         <image wx:if="{{codeImage}}" class="code-image" src="{{codeImage}}" mode="aspectFit"></image>
-        <block wx:elif="{{codeDemo}}">
-          <canvas type="2d" id="app-qr" class="qr"></canvas>
-          <text class="tag tag-warning demo-tag">演示码</text>
-        </block>
+        <canvas wx:elif="{{codeDemo}}" type="2d" id="app-qr" class="qr"></canvas>
         <view wx:elif="{{codeLoading}}" class="qr qr-wait"><text class="muted">正在取小程序码…</text></view>
         <view wx:else class="qr qr-wait"><text class="muted code-fallback">请顾客在微信里搜索「储值会员」小程序，用这个手机号登录</text></view>
       </view>
-      <text wx:if="{{codeMessage}}" class="hint center">{{codeMessage}}</text>
+      <view wx:if="{{codeDemo}}" class="code-note">
+        <text class="tag tag-warning code-note-tag">演示码</text>
+        <text>{{codeMessage || '本机演示环境没有配置会员小程序，扫了打不开'}}</text>
+      </view>
+      <text wx:elif="{{codeMessage}}" class="code-note">{{codeMessage}}</text>
       <view class="btn btn-primary" hover-class="is-pressed" bindtap="onCloseCode">顾客已扫码</view>
     </view>
   </view>

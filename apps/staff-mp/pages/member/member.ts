@@ -16,6 +16,7 @@ interface MemberHeader {
   disabled: boolean;
   hasCard: boolean;
   openInfo: string;
+  openTail: string;
   balance: string;
 }
 
@@ -29,15 +30,15 @@ interface OpenOrder {
 }
 
 function header(member: MemberCard): MemberHeader {
-  const openInfo = member.hasCard
-    ? `${member.openStoreName ?? '门店'}开卡 · ${member.openedAt ? dayKey(member.openedAt) : ''}`
-    : '还没开卡';
+  const openInfo = member.hasCard ? member.openStoreName ?? '门店' : '还没开卡';
   return {
     phone: maskPhone(member.phone),
     name: member.name,
     disabled: member.status === 'DISABLED',
     hasCard: member.hasCard,
     openInfo,
+    // 「开卡 · 日期」单独放，店名再长也不让日期从中间折断。
+    openTail: member.hasCard ? `开卡${member.openedAt ? ` · ${dayKey(member.openedAt)}` : ''}` : '',
     balance: formatCent(member.balanceCent ?? 0),
   };
 }

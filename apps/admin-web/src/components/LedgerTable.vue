@@ -6,7 +6,7 @@
     :pagination="pagination"
     row-key="id"
     size="middle"
-    :scroll="{ x: 960 }"
+    :scroll="{ x: showMember ? 1110 : 980 }"
     @change="onChange"
   >
     <template #emptyText>
@@ -86,12 +86,12 @@ function canReverseEntry(entry: LedgerEntry): boolean {
 
 const columns = computed<ColumnsType<LedgerEntry>>(() => [
   { title: '时间', key: 'createdAt', width: 160 },
-  ...(props.showMember ? [{ title: '会员', key: 'member', width: 140 }] : []),
+  ...(props.showMember ? [{ title: '会员', key: 'member', width: 130 }] : []),
   { title: '类型', key: 'type', width: 130 },
-  { title: '金额（元）', key: 'change', align: 'right' as const, width: 120 },
+  { title: '金额（元）', key: 'change', align: 'right' as const, width: 110 },
   { title: '变动后余额（元）', key: 'balanceAfter', align: 'right' as const, width: 140 },
-  { title: '门店', dataIndex: 'storeName', key: 'storeName', width: 120 },
-  { title: '操作人', dataIndex: 'operatorName', key: 'operatorName', width: 100 },
+  { title: '门店', dataIndex: 'storeName', key: 'storeName', width: 110 },
+  { title: '操作人', dataIndex: 'operatorName', key: 'operatorName', width: 90 },
   { title: '备注', key: 'remark', ellipsis: true },
   { title: '操作', key: 'actions', width: 120, fixed: 'right' as const },
 ]);

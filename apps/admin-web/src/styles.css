@@ -51,3 +51,9 @@ body {
 .pm-toolbar .pm-spacer {
   flex: 1;
 }
+
+/* 「查询」「重置」这类成对的按钮：窄屏换行时一起换，不让一个单独掉到下一行。 */
+.pm-toolbar-actions {
+  display: inline-flex;
+  gap: 12px;
+}

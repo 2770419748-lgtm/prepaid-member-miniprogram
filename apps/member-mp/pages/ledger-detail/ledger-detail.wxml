@@ -15,8 +15,10 @@
         <text>{{detail.title}}</text>
         <text wx:if="{{detail.reversed}}" class="tag head-tag">已撤销</text>
       </view>
-      <view class="head-amount {{detail.plus ? 'plus' : 'minus'}}">{{detail.amountText}}</view>
-      <view class="head-unit">元</view>
+      <view class="head-amount-line">
+        <text class="head-amount {{detail.plus ? 'plus' : 'minus'}}">{{detail.amountText}}</text>
+        <text class="head-unit">元</text>
+      </view>
     </view>
 
     <view wx:if="{{detail.note}}" class="notice">
