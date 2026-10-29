@@ -44,15 +44,15 @@
 
     <view wx:if="{{result}}" class="result">
       <text class="result-text">{{result.text}}</text>
-      <view class="btn btn-plain" hover-class="is-pressed" bindtap="onOpenForResult">为这个手机号开卡</view>
+      <view class="btn btn-plain" hover-class="is-pressed" bindtap="onOpenForResult">为这个手机号开单</view>
     </view>
   </view>
 
-  <view class="entry-card" hover-class="is-pressed" bindtap="onOpenCard">
+  <view wx:if="{{!noStore}}" class="entry-card" hover-class="is-pressed" bindtap="onOrder">
     <view class="entry-icon"><text>＋</text></view>
     <view class="row-main">
-      <text class="row-title">新会员开卡</text>
-      <text class="row-sub">登记手机号，开一张余额为 0 的会员卡</text>
+      <text class="row-title">开单</text>
+      <text class="row-sub">输入顾客手机号，填会员权益金额，顾客签完合同自动充值</text>
     </view>
     <text class="row-arrow">›</text>
   </view>

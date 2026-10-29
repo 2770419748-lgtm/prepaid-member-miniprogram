@@ -24,3 +24,11 @@ export const TEMPLATE_STATUS: Record<TemplateStatus, { label: string; color: str
 export const SIGN_STATUS_OPTIONS = (Object.keys(SIGN_STATUS) as SignFlowStatus[])
   .filter((s) => s !== 'DRAFT')
   .map((value) => ({ value, label: SIGN_STATUS[value].label }));
+
+/** 开单带的会员权益金额：签完才充值到余额。 */
+export function rechargeText(flow: { status: SignFlowStatus; rechargeEntryId: string | null }): string {
+  if (flow.status === 'SIGNED') {
+    return flow.rechargeEntryId ? '已充值到账' : '签完正在充值';
+  }
+  return flow.status === 'PENDING' || flow.status === 'DRAFT' ? '签完后充值' : '未签成，没有充值';
+}

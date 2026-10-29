@@ -34,7 +34,8 @@ interface Movement {
   orgId: string;
   memberId: string;
   storeId: string;
-  operatorStaffId: string;
+  /** 签完权益单自动充值时是发起开单的店员；那位员工的账号没了时为空。 */
+  operatorStaffId: string | null;
   type: LedgerType;
   /** 对余额的方向：1 加，-1 减。 */
   direction: 1 | -1;
@@ -44,6 +45,23 @@ interface Movement {
   requestId: string;
   /** 消费扣款用的会员码，和流水同一事务标成已用。 */
   payCodeId: string | null;
+  /** 签完权益单后自动充值时，是哪一份权益单。写进操作记录。 */
+  signFlowId: string | null;
+}
+
+/** 签完一份带会员权益金额的权益单后要充的那笔。 */
+export interface SignedContractCredit {
+  orgId: string;
+  memberId: string;
+  storeId: string;
+  operatorStaffId: string | null;
+  signFlowId: string;
+  amountCent: number;
+}
+
+/** 权益单自动充值的请求号：由流程号派生，回调和刷新同时到、重复到都只记一笔。 */
+export function signFlowRequestId(signFlowId: string): string {
+  return `sign-flow-${signFlowId}`;
 }
 
 /** 乐观锁没抢到：别人先改了这只钱包。 */
@@ -104,6 +122,39 @@ export class WalletService {
   }
 
   /**
+   * 会员签完带「会员权益金额」的权益单后，把这笔钱充进余额。由签署状态同步调用，不经店员再点一次。
+   * 记在发起开单的门店和店员名下，和店员手动充值一样是一笔 RECHARGE，可以冲正。
+   * 合同已经签了、钱已经在店里收了，所以不因门店或会员后来被停用而拒绝。
+   */
+  async creditSignedContract(credit: SignedContractCredit): Promise<MoveResult> {
+    const requestId = signFlowRequestId(credit.signFlowId);
+    const sameRequest = {
+      memberId: credit.memberId,
+      type: LedgerType.RECHARGE,
+      amountCent: credit.amountCent,
+      storeId: credit.storeId,
+    };
+    const replay = await this.replay(credit.orgId, requestId, sameRequest);
+    if (replay) {
+      return replay;
+    }
+    return this.apply({
+      orgId: credit.orgId,
+      memberId: credit.memberId,
+      storeId: credit.storeId,
+      operatorStaffId: credit.operatorStaffId,
+      type: LedgerType.RECHARGE,
+      direction: 1,
+      amountCent: credit.amountCent,
+      remark: '权益单签署后充值',
+      reversalOfId: null,
+      requestId,
+      payCodeId: null,
+      signFlowId: credit.signFlowId,
+    });
+  }
+
+  /**
    * 整笔冲回一条充值或消费。冲正记在原流水的门店名下。
    * 只有超级管理员或原门店店长能做；一条流水只能冲一次；冲正流水不能再冲。
    */
@@ -147,6 +198,7 @@ export class WalletService {
       reversalOfId: original.id,
       requestId: dto.requestId,
       payCodeId: null,
+      signFlowId: null,
     });
   }
 
@@ -209,6 +261,7 @@ export class WalletService {
       reversalOfId: null,
       requestId: dto.requestId,
       payCodeId,
+      signFlowId: null,
     });
   }
 
@@ -277,8 +330,9 @@ export class WalletService {
       include: ledgerInclude,
     });
     // 放在写流水之后：同一请求号并发提交时先撞流水的唯一约束，走重放，而不是报码已用过。
+    // 带码的只有店员扫码扣款，一定有操作人。
     if (movement.payCodeId) {
-      await this.payCodes.markUsed(tx, movement.payCodeId, movement.operatorStaffId, movement.storeId, entry.id);
+      await this.payCodes.markUsed(tx, movement.payCodeId, movement.operatorStaffId!, movement.storeId, entry.id);
     }
     await this.audit.write(tx, {
       orgId: movement.orgId,
@@ -295,6 +349,7 @@ export class WalletService {
         balanceAfter,
         ...(movement.reversalOfId ? { reversalOfId: movement.reversalOfId } : {}),
         ...(movement.payCodeId ? { payCodeId: movement.payCodeId } : {}),
+        ...(movement.signFlowId ? { signFlowId: movement.signFlowId } : {}),
       },
     });
     return { entry: toStaffLedgerView(entry), balanceCent: balanceAfter, replayed: false };

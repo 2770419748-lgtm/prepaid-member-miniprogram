@@ -48,6 +48,9 @@
           <template v-else-if="column.key === 'title'">
             <div>{{ record.title || record.template.name }}</div>
             <div class="muted">{{ record.benefitPlan?.title ?? record.template.name }}</div>
+            <div v-if="record.rechargeAmountCent != null" class="muted pm-num">
+              会员权益金额 {{ formatCent(record.rechargeAmountCent) }} 元 · {{ rechargeText(record) }}
+            </div>
           </template>
           <template v-else-if="column.key === 'status'">
             <a-tag :color="SIGN_STATUS[record.status as SignFlowStatus].color" class="tag">
@@ -171,7 +174,8 @@ import MemberLookup from '../../components/MemberLookup.vue';
 import SignQr from '../../components/SignQr.vue';
 import { useSessionStore } from '../../stores/session';
 import { formatDateTime } from '../../utils/datetime';
-import { SIGN_STATUS, SIGN_STATUS_OPTIONS } from '../../utils/esign';
+import { rechargeText, SIGN_STATUS, SIGN_STATUS_OPTIONS } from '../../utils/esign';
+import { formatCent } from '../../utils/money';
 import { maskPhone } from '../../utils/phone';
 import { newRequestId } from '../../utils/request-id';
 

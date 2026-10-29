@@ -25,3 +25,12 @@
   margin-top: 16rpx;
   text-align: right;
 }
+
+.entry-row {
+  display: flex;
+  align-items: center;
+  background: var(--card);
+  border-radius: 24rpx;
+  padding: 28rpx 32rpx;
+  margin-top: 24rpx;
+}

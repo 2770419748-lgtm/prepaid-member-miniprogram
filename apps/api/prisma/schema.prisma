@@ -184,8 +184,8 @@ model Member {
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  org       Org           @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  openStore Store?        @relation("MemberOpenStore", fields: [openStoreId], references: [id], onDelete: SetNull)
+  org       Org             @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  openStore Store?          @relation("MemberOpenStore", fields: [openStoreId], references: [id], onDelete: SetNull)
   wallet    Wallet?
   ledger    LedgerEntry[]
   signFlows SignFlow[]
@@ -234,14 +234,16 @@ model LedgerEntry {
   requestId       String?    @map("request_id")
   createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  org        Org          @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  member     Member       @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  wallet     Wallet       @relation(fields: [walletId], references: [id], onDelete: Restrict)
-  store      Store        @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  operator   Staff?       @relation("LedgerOperator", fields: [operatorStaffId], references: [id], onDelete: SetNull)
-  reversalOf LedgerEntry? @relation("LedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
-  reversedBy LedgerEntry? @relation("LedgerReversal")
+  org        Org            @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  member     Member         @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  wallet     Wallet         @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  store      Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  operator   Staff?         @relation("LedgerOperator", fields: [operatorStaffId], references: [id], onDelete: SetNull)
+  reversalOf LedgerEntry?   @relation("LedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy LedgerEntry?   @relation("LedgerReversal")
   payCode    MemberPayCode?
+  /// 签完权益单后自动记的那笔充值，指回那份权益单。
+  signFlow   SignFlow?
 
   @@unique([orgId, requestId])
   @@index([orgId, createdAt])
@@ -335,35 +337,40 @@ model ContractTemplate {
 /// env 记录实际调用的 e签宝环境，由网关地址决定；正式环境只有总开关打开后才允许。
 /// 同一会员同一模板最多一份未完成（DRAFT / PENDING），由迁移里的部分唯一索引保证。
 model SignFlow {
-  id               String         @id @default(cuid())
-  orgId            String         @map("org_id")
-  memberId         String         @map("member_id")
-  templateId       String         @map("template_id")
+  id                 String         @id @default(cuid())
+  orgId              String         @map("org_id")
+  memberId           String         @map("member_id")
+  templateId         String         @map("template_id")
   /// 发起门店。店长、店员只看本店发起的。
-  storeId          String?        @map("store_id")
-  initiatorStaffId String?        @map("initiator_staff_id")
+  storeId            String?        @map("store_id")
+  initiatorStaffId   String?        @map("initiator_staff_id")
   /// 发起时的合同标题（模板名快照）。
-  title            String         @default("")
-  esignFlowId      String?        @unique @map("esign_flow_id")
-  esignFileId      String?        @map("esign_file_id")
-  status           SignFlowStatus @default(DRAFT)
+  title              String         @default("")
+  esignFlowId        String?        @unique @map("esign_flow_id")
+  esignFileId        String?        @map("esign_file_id")
+  status             SignFlowStatus @default(DRAFT)
   /// 最近一次取到的签署链接，只在 PENDING 时有效。会员端每次打开前重新取。
-  signUrl          String?        @map("sign_url")
-  pdfObjectKey     String?        @map("pdf_object_key")
-  env              SignEnv        @default(SANDBOX)
+  signUrl            String?        @map("sign_url")
+  pdfObjectKey       String?        @map("pdf_object_key")
+  env                SignEnv        @default(SANDBOX)
   /// 客户端生成的请求号，同一组织内唯一，重复提交返回第一次的结果。
-  requestId        String?        @map("request_id")
-  signedAt         DateTime?      @map("signed_at") @db.Timestamptz(6)
+  requestId          String?        @map("request_id")
+  signedAt           DateTime?      @map("signed_at") @db.Timestamptz(6)
   /// 最近一次和 e签宝核对状态的时间。
-  syncedAt         DateTime?      @map("synced_at") @db.Timestamptz(6)
-  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  syncedAt           DateTime?      @map("synced_at") @db.Timestamptz(6)
+  /// 会员权益金额（分）。店员开单时填，会员签完后由 WalletService 充值到余额。不带金额的权益单为空。
+  rechargeAmountCent Int?           @map("recharge_amount_cent")
+  /// 签完后记的那笔充值。为空且有金额时，下次回调或刷新会补记（请求号由流程号派生，不会记两笔）。
+  rechargeEntryId    String?        @unique @map("recharge_entry_id")
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  org       Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  member    Member           @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  template  ContractTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  store     Store?           @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  initiator Staff?           @relation("SignFlowInitiator", fields: [initiatorStaffId], references: [id], onDelete: SetNull)
+  org           Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  member        Member           @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  template      ContractTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  store         Store?           @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  initiator     Staff?           @relation("SignFlowInitiator", fields: [initiatorStaffId], references: [id], onDelete: SetNull)
+  rechargeEntry LedgerEntry?     @relation(fields: [rechargeEntryId], references: [id], onDelete: Restrict)
 
   @@unique([orgId, requestId])
   @@index([orgId, createdAt])

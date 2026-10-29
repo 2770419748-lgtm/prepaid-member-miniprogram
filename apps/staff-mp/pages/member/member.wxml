@@ -20,8 +20,8 @@
 
     <text wx:if="{{member.disabled}}" class="notice notice-warning">该会员已停用，不能记账。需要恢复请联系管理员。</text>
     <block wx:elif="{{!member.hasCard}}">
-      <text class="notice notice-warning">该会员还没开卡，开卡后才能充值和消费。</text>
-      <view class="btn btn-primary" hover-class="is-pressed" bindtap="onOpenCard">为他开卡</view>
+      <text class="notice notice-warning">该会员还没开卡。开单时会一起开卡，签完合同充值到账。</text>
+      <view class="btn btn-primary" hover-class="is-pressed" bindtap="onOpenCard">为他开单</view>
     </block>
     <text wx:elif="{{noStore}}" class="notice notice-warning">你所在的门店都已停用，暂时不能记账。</text>
     <block wx:else>
@@ -30,6 +30,26 @@
         <view class="btn btn-primary" hover-class="is-pressed" bindtap="onConsume">扫码消费</view>
       </view>
       <text class="hint consume-hint">消费要先扫顾客小程序里的会员码</text>
+      <view class="entry-row" hover-class="is-pressed" bindtap="onOrder">
+        <view class="row-main">
+          <text class="row-title">办理权益单</text>
+          <text class="row-sub">填会员权益金额，顾客签完合同自动充值</text>
+        </view>
+        <text class="row-arrow">›</text>
+      </view>
+    </block>
+
+    <block wx:if="{{openOrders.length}}">
+      <view class="section-title"><text>待签署的权益单</text></view>
+      <view class="list">
+        <view wx:for="{{openOrders}}" wx:key="id" class="row" hover-class="is-pressed" data-id="{{item.id}}" bindtap="onOpenOrder">
+          <view class="row-main">
+            <text class="row-title">{{item.title}} <text class="tag tag-warning">待签署</text></text>
+            <text wx:if="{{item.amount}}" class="row-sub">{{item.amount}} · 签完才到账</text>
+          </view>
+          <text class="link">接着签 ›</text>
+        </view>
+      </view>
     </block>
 
     <view class="section-title">

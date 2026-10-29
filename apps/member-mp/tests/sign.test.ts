@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { MemberBenefit, SignFlowView, SignStatus } from '../utils/api';
 import {
+  amountNote,
   guidedMark,
   homeBenefit,
   isSignUrl,
@@ -36,6 +37,8 @@ function flow(overrides: Partial<SignFlowView> = {}): SignFlowView {
     env: 'SANDBOX',
     sandbox: true,
     benefitPlan: { id: 'plan-1', title: '储值会员权益', summary: null, items: [{ title: '全部门店通用', detail: null }], rules: '不可提现' },
+    rechargeAmountCent: null,
+    recharged: false,
     hasPdf: false,
     signedAt: null,
     // 北京时间 2026-10-27 18:30
@@ -161,4 +164,16 @@ test('签署页面只打开 https 链接', () => {
   assert.equal(isSignUrl('http://example.com/'), false);
   assert.equal(isSignUrl('javascript:alert(1)'), false);
   assert.equal(isSignUrl(''), false);
+});
+
+test('会员权益金额：签之前说签署后充值，签完说已充值，没签成说没有充值', () => {
+  assert.equal(toSignDetail(flow()).amountText, '');
+  const pending = toSignDetail(flow({ rechargeAmountCent: 100000 }));
+  assert.equal(pending.amountText, '1,000.00');
+  assert.equal(pending.amountNote, '签署完成后充值到你的余额');
+  assert.equal(amountNote({ status: 'SIGNED', recharged: true }), '已充值到你的余额');
+  assert.equal(amountNote({ status: 'SIGNED', recharged: false }), '签署完成，正在充值到你的余额');
+  for (const status of ['REJECTED', 'EXPIRED', 'CANCELED'] as SignStatus[]) {
+    assert.match(amountNote({ status, recharged: false }), /没有充值/);
+  }
 });

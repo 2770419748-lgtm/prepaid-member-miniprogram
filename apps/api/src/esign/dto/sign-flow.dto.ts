@@ -1,7 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SignFlowStatus } from '@prisma/client';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { PageQueryDto } from '../../org/dto/page-query.dto';
+import { MAX_AMOUNT_CENT } from '../../wallet/dto/ledger.dto';
 
 const REQUEST_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
@@ -25,6 +26,18 @@ export class CreateSignFlowDto {
   @IsOptional()
   @Matches(REQUEST_ID)
   requestId?: string;
+
+  @ApiPropertyOptional({
+    example: 100000,
+    description:
+      '会员权益金额，单位分。店员开单时填，写进合同；会员签完后自动充值到余额（签完才到账）。' +
+      '会员必须已开卡。不填就是不带金额的权益单',
+  })
+  @IsOptional()
+  @IsInt({ message: '会员权益金额要是整数分' })
+  @Min(1, { message: '会员权益金额要大于 0' })
+  @Max(MAX_AMOUNT_CENT, { message: '会员权益金额单笔不能超过 100 万元' })
+  rechargeAmountCent?: number;
 }
 
 export class CancelSignFlowDto {

@@ -21,6 +21,7 @@
     <image class="success-icon" src="/images/icon-success.png"></image>
     <view class="success-title">签署完成</view>
     <view class="success-text">「{{detail.title}}」已签署，会员权益已生效。</view>
+    <view wx:if="{{detail.amountText}}" class="success-text">会员权益金额 {{detail.amountText}} 元，{{detail.amountNote}}。</view>
     <view wx:if="{{detail.sandbox}}" class="success-test"><text class="tag tag-test">测试签署</text></view>
     <view class="success-actions">
       <button class="btn-primary" bindtap="goHome">回到首页</button>
@@ -40,6 +41,12 @@
 
     <view wx:if="{{detail.sandbox && detail.canSign}}" class="notice notice-test">当前是测试环境的签署，只用来试用签署流程。</view>
     <view wx:if="{{detail.note}}" class="notice {{detail.tone === 'ok' ? 'notice-ok' : ''}}">{{detail.note}}</view>
+
+    <view wx:if="{{detail.amountText}}" class="card amount-card">
+      <view class="amount-label">会员权益金额</view>
+      <view class="amount-value">¥{{detail.amountText}}</view>
+      <view class="amount-note">{{detail.amountNote}}</view>
+    </view>
 
     <view wx:if="{{detail.hasPlan}}" class="card">
       <view class="card-title">{{detail.planTitle}}</view>

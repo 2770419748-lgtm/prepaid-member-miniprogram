@@ -1,16 +1,24 @@
 import { request } from './http';
 import type {
+  BenefitPlan,
+  ContractTemplate,
   LedgerEntry,
   LedgerType,
+  MemberAppCode,
   MemberCard,
   MoveResult,
   MyStoresResult,
   PageResult,
   ScannedPayCode,
+  SignFlow,
+  SignFlowStatus,
   StaffLoginResult,
 } from './types';
 
-/** 员工小程序用到的接口。说明见 docs/backend/m1-auth-stores.md 与 m2-ledger.md。 */
+/**
+ * 员工小程序用到的接口。说明见 docs/backend/m1-auth-stores.md、m2-ledger.md，
+ * 开单（权益单签署、签完充值）见 m4-esign-sandbox.md。
+ */
 
 export function loginWithWechatPhone(input: { code: string; phoneCode: string; mockPhone?: string }) {
   return request<StaffLoginResult>('POST', '/auth/staff/wx-phone', { body: input, auth: false });
@@ -73,4 +81,60 @@ export function fetchLedgerEntry(id: string) {
 
 export function reverseEntry(id: string, body: { remark: string; requestId: string }) {
   return request<MoveResult>('POST', `/ledger/${encodeURIComponent(id)}/reversal`, { body });
+}
+
+/** 开单可选的权益单模板：只要启用的。 */
+export async function fetchActiveTemplates(): Promise<ContractTemplate[]> {
+  const page = await request<PageResult<ContractTemplate>>('GET', '/contract-templates', {
+    query: { status: 'ACTIVE', pageSize: 50 },
+  });
+  return page.items;
+}
+
+export function fetchBenefitPlan(id: string) {
+  return request<BenefitPlan>('GET', `/benefit-plans/${encodeURIComponent(id)}`);
+}
+
+export interface NewSignFlow {
+  memberId: string;
+  templateId: string;
+  storeId: string;
+  /** 会员权益金额（分），写进合同，顾客签完后充值到余额。 */
+  rechargeAmountCent: number;
+  requestId: string;
+}
+
+/** 生成合同、发给电子签平台。签完才充值，这一步不动余额。 */
+export function createSignFlow(body: NewSignFlow) {
+  return request<SignFlow>('POST', '/sign-flows', { body });
+}
+
+/** 到电子签平台核对一次签没签；签好了服务端顺手把金额充进余额。 */
+export function refreshSignFlow(id: string) {
+  return request<SignFlow>('POST', `/sign-flows/${encodeURIComponent(id)}/refresh`);
+}
+
+/** 重新取顾客的签署链接（画成二维码）。 */
+export function renewSignUrl(id: string) {
+  return request<SignFlow>('POST', `/sign-flows/${encodeURIComponent(id)}/sign-url`);
+}
+
+/** 撤销待签署的合同。只有超级管理员和发起门店的店长可以。 */
+export function cancelSignFlow(id: string, reason: string) {
+  return request<SignFlow>('POST', `/sign-flows/${encodeURIComponent(id)}/cancel`, { body: { reason } });
+}
+
+/** 在你的门店发起的权益单。 */
+export async function fetchSignFlows(query: {
+  memberId?: string;
+  templateId?: string;
+  status?: SignFlowStatus;
+  pageSize?: number;
+}): Promise<SignFlow[]> {
+  const page = await request<PageResult<SignFlow>>('GET', '/sign-flows', { query: { ...query } });
+  return page.items;
+}
+
+export function fetchMemberAppCode() {
+  return request<MemberAppCode>('GET', '/member-app/code');
 }

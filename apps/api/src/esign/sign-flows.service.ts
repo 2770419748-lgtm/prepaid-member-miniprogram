@@ -11,6 +11,7 @@ import { Prisma, SignFlowStatus } from '@prisma/client';
 import { AuditAction, AuditLogWriter } from '../audit/audit-log.writer';
 import { AccessPrincipal } from '../auth/access-principal';
 import { assertStoreAccess, isSuperAdmin } from '../auth/staff-access';
+import { formatYuan, yuanInWords } from '../common/money-words';
 import { PageResult } from '../common/page';
 import { EsignConfigService } from '../esign-config/esign-config.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -42,6 +43,8 @@ export const TEMPLATE_FIELDS = {
   orgName: '商家名称',
   storeName: '发起门店',
   signDate: '发起日期，YYYY-MM-DD',
+  benefitAmount: '会员权益金额（元，如 1,000.00），开单时填写，签完充值到余额',
+  benefitAmountWords: '会员权益金额大写（如 壹仟元整）',
 } as const;
 
 function shanghaiDate(date: Date): string {
@@ -82,7 +85,7 @@ export class SignFlowsService {
     }
     const [store, member, template] = await Promise.all([
       this.prisma.store.findUnique({ where: { id: dto.storeId }, include: { org: { select: { name: true } } } }),
-      this.prisma.member.findUnique({ where: { id: dto.memberId } }),
+      this.prisma.member.findUnique({ where: { id: dto.memberId }, include: { wallet: { select: { id: true } } } }),
       this.prisma.contractTemplate.findUnique({
         where: { id: dto.templateId },
         include: { benefitPlan: { select: { title: true } } },
@@ -100,6 +103,10 @@ export class SignFlowsService {
     if (member.status !== 'ACTIVE') {
       throw new BadRequestException('会员已停用，不能发起签署');
     }
+    const amount = dto.rechargeAmountCent ?? null;
+    if (amount !== null && !member.wallet) {
+      throw new BadRequestException('会员还没开卡，开卡后才能签带会员权益金额的权益单');
+    }
     if (!template || template.orgId !== actor.orgId) {
       throw new NotFoundException('权益单模板不存在');
     }
@@ -109,7 +116,7 @@ export class SignFlowsService {
     // 先核对环境：开关关闭却配了正式网关时，这里直接拒绝，库里不留任何记录。
     const target = this.esign.target();
 
-    const draft = await this.reserve(actor, dto, template.name, target.env);
+    const draft = await this.reserve(actor, dto, template.name, target.env, amount);
     if ('replay' in draft) {
       return draft.replay;
     }
@@ -124,6 +131,8 @@ export class SignFlowsService {
         orgName: store.org.name,
         storeName: store.name,
         signDate: shanghaiDate(new Date()),
+        benefitAmount: amount === null ? '' : formatYuan(amount),
+        benefitAmountWords: amount === null ? '' : yuanInWords(amount),
       };
       launched = await this.launch({
         esignTemplateId: template.esignTemplateId,
@@ -160,7 +169,12 @@ export class SignFlowsService {
           action: AuditAction.SignFlowCreate,
           targetType: 'SignFlow',
           targetId: draft.id,
-          payload: { memberId: member.id, templateId: template.id, env: launched.env },
+          payload: {
+            memberId: member.id,
+            templateId: template.id,
+            env: launched.env,
+            ...(amount !== null ? { rechargeAmountCent: amount } : {}),
+          },
         });
       });
     } catch (error) {
@@ -215,6 +229,20 @@ export class SignFlowsService {
   async refresh(actor: AccessPrincipal, id: string): Promise<SignFlowView> {
     const flow = await this.requireVisible(actor, id);
     await this.sync.sync(flow.id, 'refresh', 'keep');
+    return this.view(flow.id);
+  }
+
+  /** 重新取会员签署链接，开单页把它画成二维码给顾客扫。链接没取到或放久了时用。 */
+  async signUrl(actor: AccessPrincipal, id: string): Promise<SignFlowView> {
+    const flow = await this.requireVisible(actor, id);
+    if (flow.status !== SignFlowStatus.PENDING || !flow.esignFlowId) {
+      throw new ConflictException('这份权益单当前不能签署');
+    }
+    const signUrl = await this.esign.getSignUrl(flow.esignFlowId, flow.member.phone, this.esignConfig.redirectUrl);
+    await this.prisma.signFlow.updateMany({
+      where: { id: flow.id, status: SignFlowStatus.PENDING },
+      data: { signUrl },
+    });
     return this.view(flow.id);
   }
 
@@ -296,7 +324,11 @@ export class SignFlowsService {
     if (!existing) {
       return null;
     }
-    if (existing.memberId !== dto.memberId || existing.templateId !== dto.templateId) {
+    if (
+      existing.memberId !== dto.memberId ||
+      existing.templateId !== dto.templateId ||
+      existing.rechargeAmountCent !== (dto.rechargeAmountCent ?? null)
+    ) {
       throw new ConflictException('请求号已被另一次发起使用');
     }
     if (existing.status === SignFlowStatus.DRAFT) {
@@ -314,6 +346,7 @@ export class SignFlowsService {
     dto: CreateSignFlowDto,
     title: string,
     env: 'SANDBOX' | 'PRODUCTION',
+    rechargeAmountCent: number | null,
   ): Promise<{ id: string } | { replay: SignFlowView }> {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
@@ -328,6 +361,7 @@ export class SignFlowsService {
             status: SignFlowStatus.DRAFT,
             env,
             requestId: dto.requestId ?? null,
+            rechargeAmountCent,
           },
           select: { id: true },
         });
@@ -375,6 +409,12 @@ export class SignFlowsService {
   }) {
     const docTemplate = await this.esign.getDocTemplate(input.esignTemplateId);
     const keys = new Set(docTemplate.components.map((component) => component.key));
+    // 签完就按这个金额充值，合同里必须写明，不然顾客签的合同上看不到钱数。
+    if (input.values.benefitAmount && !keys.has('benefitAmount')) {
+      throw new BadRequestException(
+        '合同模板里没有「会员权益金额」填写项（benefitAmount），请超级管理员在电子签模板里加上后再开单',
+      );
+    }
     const fill = Object.fromEntries(
       Object.entries(input.values).filter(([key, value]) => keys.has(key) && value !== ''),
     );
