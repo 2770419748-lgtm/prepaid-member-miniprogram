@@ -2,6 +2,7 @@ import { fetchMyStores, findMemberByPhone } from '../../utils/api';
 import { messageOf } from '../../utils/errors';
 import { ROLE_LABELS } from '../../utils/labels';
 import { memberLabel } from '../../utils/ledger';
+import { orderUrl } from '../../utils/order';
 import { consumeEntryUrl } from '../../utils/paycode';
 import { isMainlandMobile, maskPhone, normalizePhone } from '../../utils/phone';
 import { scanMemberCode } from '../../utils/scan';
@@ -14,7 +15,7 @@ import {
   Session,
 } from '../../utils/session';
 
-/** 查不到卡时的提示，下面跟一个「为这个手机号开卡」。 */
+/** 查不到卡时的提示，下面跟一个「为这个手机号开单」。 */
 interface SearchResult {
   phone: string;
   text: string;
@@ -115,12 +116,13 @@ Page({
   onOpenForResult() {
     const result = this.data.result;
     if (result) {
-      wx.navigateTo({ url: `/pages/open/open?phone=${result.phone}` });
+      wx.navigateTo({ url: orderUrl({ phone: result.phone }) });
     }
   },
 
-  onOpenCard() {
-    wx.navigateTo({ url: '/pages/open/open' });
+  /** 开单：输手机号、填会员权益金额、顾客签合同，签完自动充值。 */
+  onOrder() {
+    wx.navigateTo({ url: orderUrl() });
   },
 
   onSwitchStore() {

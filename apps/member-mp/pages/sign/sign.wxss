@@ -127,3 +127,23 @@
 .success-pdf {
   margin-top: 24rpx;
 }
+
+/* 会员权益金额：签署后充值到余额，放在权益内容最前面。 */
+.amount-label {
+  font-size: 26rpx;
+  color: #64748b;
+}
+
+.amount-value {
+  margin-top: 8rpx;
+  font-size: 56rpx;
+  font-weight: 600;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.amount-note {
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #1677ff;
+}

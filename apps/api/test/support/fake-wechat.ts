@@ -13,6 +13,15 @@ export class FakeWechat {
     return Promise.resolve(found);
   }
 
+  /** 会员小程序码要用的接口调用凭证。 */
+  readonly accessToken = async (): Promise<string> => 'fake-access-token';
+
+  forgetAccessToken(): void {}
+
+  base(): string {
+    return 'https://api.weixin.example.invalid';
+  }
+
   bind(code: string, phone: string): void {
     this.byCode.set(code, {
       phone,

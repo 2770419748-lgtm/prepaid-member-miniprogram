@@ -121,6 +121,10 @@ export interface SignFlowView {
   /** 测试环境签署，界面标「测试签署」。 */
   sandbox: boolean;
   benefitPlan: ({ id: string; title: string } & BenefitContent) | null;
+  /** 会员权益金额（分），签署后充值到余额。没有金额的权益单为空。 */
+  rechargeAmountCent: number | null;
+  /** 这笔钱已经充进余额。 */
+  recharged: boolean;
   hasPdf: boolean;
   signedAt: string | null;
   createdAt: string;

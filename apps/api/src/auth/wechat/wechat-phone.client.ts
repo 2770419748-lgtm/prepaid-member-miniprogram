@@ -96,7 +96,11 @@ export class WechatPhoneClient {
     return url;
   }
 
-  private async accessToken(appId: string, secret: string): Promise<string> {
+  /**
+   * 小程序的接口调用凭证。会员小程序码（MemberAppCodeService）也从这里取：
+   * 微信每次新发凭证都会让旧的在几分钟后失效，两处各自去换会互相顶掉，所以只在这一处换、这一处缓存。
+   */
+  async accessToken(appId: string, secret: string): Promise<string> {
     const cached = this.tokens.get(appId);
     const now = Date.now();
     if (cached && cached.expiresAt > now) {
@@ -117,7 +121,12 @@ export class WechatPhoneClient {
     return token;
   }
 
-  private base(): string {
+  /** 微信说凭证无效或过期时调用，下次重新换。 */
+  forgetAccessToken(appId: string): void {
+    this.tokens.delete(appId);
+  }
+
+  base(): string {
     const configured = this.config.get<string>('WECHAT_API_BASE')?.trim();
     return configured || 'https://api.weixin.qq.com';
   }

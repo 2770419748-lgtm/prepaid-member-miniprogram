@@ -1,5 +1,5 @@
 import type { BenefitItem, MemberBenefit, SignFlowView, SignStatus } from './api';
-import { dateText, dateTime, dayKey } from './format';
+import { dateText, dateTime, dayKey, formatYuan } from './format';
 
 /** 会员权益和权益单签署页面共用的显示规则。只管怎么显示，不发请求。 */
 
@@ -156,6 +156,21 @@ export interface SignDetail {
   timeLabel: string;
   timeText: string;
   note: string;
+  /** 会员权益金额「1,000.00」，没有金额时为空。 */
+  amountText: string;
+  /** 这笔钱到没到余额。 */
+  amountNote: string;
+}
+
+/** 签署后才充值：签之前说「签署后充值」，签完说「已充值」，没签成说「没有充值」。 */
+export function amountNote(flow: Pick<SignFlowView, 'status' | 'recharged'>): string {
+  if (flow.status === 'SIGNED') {
+    return flow.recharged ? '已充值到你的余额' : '签署完成，正在充值到你的余额';
+  }
+  if (flow.status === 'PENDING' || flow.status === 'DRAFT') {
+    return '签署完成后充值到你的余额';
+  }
+  return '这份权益单没有签署，金额没有充值';
 }
 
 export function toSignDetail(flow: SignFlowView): SignDetail {
@@ -181,6 +196,8 @@ export function toSignDetail(flow: SignFlowView): SignDetail {
     timeLabel: flow.signedAt ? '签署时间' : '发起时间',
     timeText: dateTime(flow.signedAt ?? flow.createdAt),
     note,
+    amountText: flow.rechargeAmountCent != null ? formatYuan(flow.rechargeAmountCent) : '',
+    amountNote: flow.rechargeAmountCent != null ? amountNote(flow) : '',
   };
 }
 

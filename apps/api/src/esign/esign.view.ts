@@ -134,6 +134,10 @@ export interface SignFlowView {
   initiator: { id: string; name: string } | null;
   /** 只在待签署时有值。 */
   signUrl: string | null;
+  /** 会员权益金额（分），签完充值到余额。不带金额的权益单为空。 */
+  rechargeAmountCent: number | null;
+  /** 签完后自动记的那笔充值流水。带金额、已签署但还没充上时为空。 */
+  rechargeEntryId: string | null;
   hasPdf: boolean;
   signedAt: string | null;
   syncedAt: string | null;
@@ -153,6 +157,8 @@ export function toSignFlowView(flow: SignFlowRecord): SignFlowView {
     store: flow.store,
     initiator: flow.initiator,
     signUrl: flow.status === SignFlowStatus.PENDING ? flow.signUrl : null,
+    rechargeAmountCent: flow.rechargeAmountCent,
+    rechargeEntryId: flow.rechargeEntryId,
     hasPdf: flow.pdfObjectKey != null,
     signedAt: flow.signedAt?.toISOString() ?? null,
     syncedAt: flow.syncedAt?.toISOString() ?? null,
@@ -181,6 +187,10 @@ export interface MemberSignFlowView {
   /** 沙箱签署，界面标「测试签署」。 */
   sandbox: boolean;
   benefitPlan: ({ id: string; title: string } & BenefitContent) | null;
+  /** 会员权益金额（分），签完后充值到余额。不带金额的权益单为空。 */
+  rechargeAmountCent: number | null;
+  /** 这笔钱已经充进余额。 */
+  recharged: boolean;
   hasPdf: boolean;
   signedAt: string | null;
   createdAt: string;
@@ -196,6 +206,8 @@ export function toMemberSignFlowView(flow: MemberSignFlowRecord): MemberSignFlow
     env: flow.env,
     sandbox: flow.env === SignEnv.SANDBOX,
     benefitPlan: plan ? { id: plan.id, title: plan.title, ...readBenefitContent(plan.contentJson) } : null,
+    rechargeAmountCent: flow.rechargeAmountCent,
+    recharged: flow.rechargeEntryId != null,
     hasPdf: flow.pdfObjectKey != null,
     signedAt: flow.signedAt?.toISOString() ?? null,
     createdAt: flow.createdAt.toISOString(),

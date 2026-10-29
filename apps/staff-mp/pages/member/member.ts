@@ -1,7 +1,8 @@
-import { fetchLedger, fetchMember } from '../../utils/api';
+import { fetchLedger, fetchMember, fetchSignFlows } from '../../utils/api';
 import { messageOf } from '../../utils/errors';
 import { LedgerRow, toLedgerRow } from '../../utils/ledger';
 import { formatCent } from '../../utils/money';
+import { orderUrl } from '../../utils/order';
 import { consumeEntryUrl } from '../../utils/paycode';
 import { maskPhone } from '../../utils/phone';
 import { scanMemberCode } from '../../utils/scan';
@@ -19,6 +20,13 @@ interface MemberHeader {
 }
 
 const HISTORY_SIZE = 10;
+
+/** 在你的门店开过、顾客还没签的合同，点进去接着签。 */
+interface OpenOrder {
+  id: string;
+  title: string;
+  amount: string;
+}
 
 function header(member: MemberCard): MemberHeader {
   const openInfo = member.hasCard
@@ -43,6 +51,7 @@ Page({
     noStore: false,
     member: null as MemberHeader | null,
     rows: [] as (LedgerRow & { date: string })[],
+    openOrders: [] as OpenOrder[],
     historyTitle: '本店记录',
     historyNote: '',
     historyEmpty: '',
@@ -74,9 +83,10 @@ Page({
       historyNote: unrestricted ? '全部门店' : '只显示在你门店办理的',
     });
     try {
-      const [member, ledger] = await Promise.all([
+      const [member, ledger, pendingFlows] = await Promise.all([
         fetchMember(this.data.id),
         fetchLedger({ memberId: this.data.id, pageSize: HISTORY_SIZE }),
+        fetchSignFlows({ memberId: this.data.id, status: 'PENDING', pageSize: 5 }).catch(() => []),
       ]);
       rememberMember(member);
       this.setData({
@@ -88,6 +98,11 @@ Page({
           date: dayLabel(dayKey(entry.createdAt)),
         })),
         historyEmpty: unrestricted ? '还没有记录' : '在你的门店还没有记录',
+        openOrders: pendingFlows.map((flow) => ({
+          id: flow.id,
+          title: flow.title,
+          amount: flow.rechargeAmountCent != null ? `会员权益金额 ${formatCent(flow.rechargeAmountCent)} 元` : '',
+        })),
       });
     } catch (error) {
       this.setData({ error: messageOf(error) });
@@ -124,7 +139,16 @@ Page({
   },
 
   onOpenCard() {
-    wx.navigateTo({ url: `/pages/open/open?phone=${this.data.phone}` });
+    wx.navigateTo({ url: orderUrl({ phone: this.data.phone }) });
+  },
+
+  /** 老会员再签一份权益单：直接填权益。 */
+  onOrder() {
+    wx.navigateTo({ url: orderUrl({ memberId: this.data.id }) });
+  },
+
+  onOpenOrder(event: WechatMiniprogram.BaseEvent<Record<string, never>, { id: string }>) {
+    wx.navigateTo({ url: orderUrl({ flowId: event.currentTarget.dataset.id }) });
   },
 
   onEntry(event: WechatMiniprogram.BaseEvent<Record<string, never>, { id: string }>) {

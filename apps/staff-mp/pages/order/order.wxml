@@ -1,0 +1,224 @@
+<view class="page">
+  <view class="steps">
+    <view wx:for="{{steps}}" wx:key="key" class="step step-{{item.state}}">
+      <view class="step-dot"><text>{{item.state === 'done' ? '✓' : item.index}}</text></view>
+      <text class="step-label">{{item.label}}</text>
+    </view>
+  </view>
+
+  <text wx:if="{{noStore}}" class="notice notice-warning">你所在的门店都已停用，暂时不能开单。</text>
+
+  <!-- 第一步：顾客手机号 -->
+  <block wx:if="{{step === 'phone'}}">
+    <view class="card">
+      <view class="field">
+        <text class="field-label">顾客手机号</text>
+        <input
+          class="field-input"
+          type="number"
+          maxlength="11"
+          placeholder="11 位手机号"
+          placeholder-class="placeholder"
+          confirm-type="next"
+          value="{{phone}}"
+          focus="{{!phone}}"
+          bindinput="onPhoneInput"
+          bindconfirm="onNext"
+        />
+        <text wx:if="{{phoneError}}" class="error">{{phoneError}}</text>
+      </view>
+      <view class="field">
+        <text class="field-label">称呼（选填）</text>
+        <input
+          class="field-input"
+          maxlength="40"
+          placeholder="如：王女士"
+          placeholder-class="placeholder"
+          value="{{name}}"
+          bindinput="onNameInput"
+        />
+      </view>
+      <view class="field">
+        <text class="field-label">开单门店</text>
+        <text class="field-value">{{storeName}}</text>
+      </view>
+    </view>
+    <text class="hint rules">输入手机号后直接填写会员权益、生成合同。新顾客在生成合同时开卡；顾客签完合同，会员权益金额才充值到账。</text>
+    <view class="btn btn-primary {{checking || noStore ? 'is-disabled' : ''}}" hover-class="is-pressed" bindtap="onNext">{{checking ? '正在查询…' : '下一步：填写权益'}}</view>
+  </block>
+
+  <!-- 第二步：会员权益，第一项是会员权益金额 -->
+  <block wx:elif="{{step === 'benefit'}}">
+    <view class="card member-card">
+      <view class="member-line">
+        <text class="member-label">{{member.label}}</text>
+        <text wx:if="{{member.hasCard}}" class="tag tag-gray">老会员</text>
+        <text wx:else class="tag tag-primary">新顾客</text>
+      </view>
+      <text class="muted">{{member.hasCard ? '当前余额 ' + member.balance + ' 元' : '生成合同时开卡，余额从 0 开始'}}</text>
+      <text wx:if="{{!uncertain && !submitting}}" class="link change" bindtap="onChangeMember">换一位</text>
+    </view>
+
+    <view class="card">
+      <text class="card-title">会员权益</text>
+      <view class="benefit-first">
+        <view class="benefit-index">1</view>
+        <view class="benefit-body">
+          <text class="benefit-title">会员权益金额</text>
+          <view class="amount-line">
+            <text class="amount-symbol">¥</text>
+            <input
+              class="amount-input"
+              type="digit"
+              placeholder="0.00"
+              placeholder-class="placeholder"
+              value="{{amount}}"
+              disabled="{{uncertain}}"
+              focus="{{!amount && !uncertain}}"
+              bindinput="onAmountInput"
+            />
+            <text class="amount-unit">元</text>
+          </view>
+          <text wx:if="{{amountError}}" class="error">{{amountError}}</text>
+          <text wx:elif="{{amountHint}}" class="hint">{{amountHint}}</text>
+          <text wx:else class="hint">写进合同，顾客签完后充值到会员余额</text>
+        </view>
+      </view>
+
+      <view wx:if="{{benefit}}" class="benefit-rest">
+        <view wx:for="{{benefit.items}}" wx:key="title" class="benefit-item">
+          <view class="benefit-index">{{index + 2}}</view>
+          <view class="benefit-body">
+            <text class="benefit-title">{{item.title}}</text>
+            <text wx:if="{{item.detail}}" class="hint">{{item.detail}}</text>
+          </view>
+        </view>
+      </view>
+      <text wx:if="{{benefit && benefit.rules}}" class="hint benefit-rules">{{benefit.rules}}</text>
+    </view>
+
+    <view wx:if="{{templates.length > 1}}" class="card">
+      <text class="card-title">选权益单</text>
+      <view
+        wx:for="{{templates}}"
+        wx:key="id"
+        class="choice {{index === templateIndex ? 'is-on' : ''}}"
+        hover-class="is-pressed"
+        data-index="{{index}}"
+        bindtap="onPickTemplate"
+      >
+        <view class="choice-radio"></view>
+        <text class="choice-text">{{item.name}}</text>
+      </view>
+    </view>
+    <view wx:elif="{{templates.length === 1}}" class="kv plain-kv">
+      <text class="kv-key">权益单</text>
+      <text class="kv-value">{{templates[0].name}}</text>
+    </view>
+    <text wx:elif="{{!loadingTemplates}}" class="notice notice-warning">还没有可用的权益单模板，请超级管理员在商家后台绑定后再开单。</text>
+
+    <block wx:if="{{uncertain}}">
+      <text class="notice notice-warning">刚才没有收到结果，合同可能已经生成了。点「重试」不会生成两份。</text>
+      <view class="btn btn-primary {{submitting ? 'is-disabled' : ''}}" hover-class="is-pressed" bindtap="onRetry">{{submitting ? '正在提交…' : '重试'}}</view>
+    </block>
+    <view
+      wx:else
+      class="btn btn-primary {{canCreate && !submitting ? '' : 'is-disabled'}}"
+      hover-class="is-pressed"
+      bindtap="onCreate"
+    >{{submitting ? '正在生成合同…' : '生成合同，请顾客签署'}}</view>
+  </block>
+
+  <!-- 第三步：顾客扫码签合同 -->
+  <block wx:elif="{{step === 'sign'}}">
+    <view class="card sign-card">
+      <block wx:if="{{progress === 'waiting'}}">
+        <view class="sign-head">
+          <text class="sign-title">请顾客用微信扫码签署合同</text>
+          <text wx:if="{{sandbox}}" class="tag tag-warning">测试签署</text>
+        </view>
+        <view class="qr-box">
+          <canvas wx:if="{{signUrl}}" type="2d" id="sign-qr" class="qr"></canvas>
+          <view wx:else class="qr qr-wait"><text class="muted">正在取签署链接…</text></view>
+        </view>
+        <view class="waiting">
+          <view class="waiting-dot"></view>
+          <text class="muted">{{pollStopped ? '已停止自动刷新，签完后点「刷新状态」' : '等待顾客签署，签完自动充值'}}</text>
+        </view>
+      </block>
+      <block wx:elif="{{progress === 'recharging'}}">
+        <view class="done">
+          <view class="done-icon"><text>✓</text></view>
+          <text class="done-title">合同已签署</text>
+          <text class="muted">正在充值会员权益金额…</text>
+        </view>
+      </block>
+      <block wx:else>
+        <view class="done">
+          <view class="ended-icon"><text>!</text></view>
+          <text class="done-title">{{endedTitle}}</text>
+          <text class="hint ended-text">{{endedText}}</text>
+        </view>
+      </block>
+    </view>
+
+    <view class="card">
+      <view class="kv"><text class="kv-key">顾客</text><text class="kv-value">{{member.label}}</text></view>
+      <view class="kv"><text class="kv-key">权益单</text><text class="kv-value">{{flowTitle}}</text></view>
+      <view wx:if="{{flowAmount}}" class="kv"><text class="kv-key">会员权益金额</text><text class="kv-value strong">{{flowAmount}} 元</text></view>
+      <view class="kv"><text class="kv-key">到账</text><text class="kv-value">{{progress === 'ended' ? '不充值' : '顾客签完后自动充值'}}</text></view>
+    </view>
+
+    <block wx:if="{{progress === 'ended'}}">
+      <view class="btn btn-primary" hover-class="is-pressed" bindtap="onReorder">重新开单</view>
+      <view class="btn btn-quiet" hover-class="is-pressed" bindtap="onHome">返回工作台</view>
+    </block>
+    <block wx:else>
+      <view class="btn-row">
+        <view class="btn btn-plain {{refreshing ? 'is-disabled' : ''}}" hover-class="is-pressed" bindtap="onRefresh">{{refreshing ? '正在核对…' : '刷新状态'}}</view>
+        <view wx:if="{{signUrl && progress === 'waiting'}}" class="btn btn-quiet" hover-class="is-pressed" bindtap="onCopyLink">复制签署链接</view>
+      </view>
+      <view class="btn btn-quiet later" hover-class="is-pressed" bindtap="onLater">稍后再签</view>
+      <view wx:if="{{canCancel}}" class="btn btn-danger" hover-class="is-pressed" bindtap="onCancelFlow">撤销这份合同</view>
+      <text wx:elif="{{progress === 'waiting'}}" class="hint center">金额填错了？请店长撤销这份合同后重新开单。</text>
+      <text class="hint center">稍后再签也行：在会员页能接着打开这份合同。</text>
+    </block>
+  </block>
+
+  <!-- 第四步：到账 -->
+  <block wx:else>
+    <view class="done">
+      <view class="done-icon"><text>✓</text></view>
+      <text class="done-title">合同已签，已充值到账</text>
+      <text wx:if="{{flowAmount}}" class="done-change plus">+{{flowAmount}} 元</text>
+    </view>
+    <view class="card">
+      <view class="kv"><text class="kv-key">会员</text><text class="kv-value">{{member.label}}</text></view>
+      <view wx:if="{{balance}}" class="kv"><text class="kv-key">当前余额</text><text class="kv-value strong">{{balance}} 元</text></view>
+      <view class="kv"><text class="kv-key">权益单</text><text class="kv-value">{{flowTitle}}</text></view>
+      <view class="kv"><text class="kv-key">门店</text><text class="kv-value">{{storeName}}</text></view>
+    </view>
+    <view class="btn btn-primary" hover-class="is-pressed" bindtap="onShowCode">给顾客看会员小程序码</view>
+    <view class="btn btn-quiet" hover-class="is-pressed" bindtap="onViewMember">查看会员</view>
+    <view class="btn btn-quiet" hover-class="is-pressed" bindtap="onHome">办理下一位</view>
+  </block>
+
+  <!-- 签完后弹出：顾客扫码登录会员小程序 -->
+  <view wx:if="{{showCode}}" class="code-mask" catchtap="onCloseCode">
+    <view class="code-sheet" catchtap="noop">
+      <text class="code-title">请顾客扫码登录会员小程序</text>
+      <text class="hint center">用 {{codePhone}} 这个手机号登录，就能看到余额和权益</text>
+      <view class="code-box">
+        <image wx:if="{{codeImage}}" class="code-image" src="{{codeImage}}" mode="aspectFit"></image>
+        <block wx:elif="{{codeDemo}}">
+          <canvas type="2d" id="app-qr" class="qr"></canvas>
+          <text class="tag tag-warning demo-tag">演示码</text>
+        </block>
+        <view wx:elif="{{codeLoading}}" class="qr qr-wait"><text class="muted">正在取小程序码…</text></view>
+        <view wx:else class="qr qr-wait"><text class="muted code-fallback">请顾客在微信里搜索「储值会员」小程序，用这个手机号登录</text></view>
+      </view>
+      <text wx:if="{{codeMessage}}" class="hint center">{{codeMessage}}</text>
+      <view class="btn btn-primary" hover-class="is-pressed" bindtap="onCloseCode">顾客已扫码</view>
+    </view>
+  </view>
+</view>

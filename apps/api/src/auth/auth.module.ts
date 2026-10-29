@@ -52,6 +52,6 @@ import { WechatPhoneClient } from './wechat/wechat-phone.client';
     RolesGuard,
     { provide: APP_GUARD, useClass: AccessGuard },
   ],
-  exports: [WechatAppConfig],
+  exports: [WechatAppConfig, WechatPhoneClient],
 })
 export class AuthModule {}

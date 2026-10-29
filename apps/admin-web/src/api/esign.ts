@@ -65,6 +65,10 @@ export interface SignFlow {
   initiator: { id: string; name: string } | null;
   /** 只有待签署时有。 */
   signUrl: string | null;
+  /** 会员权益金额（分）。员工小程序开单时填，会员签完后自动充值到余额。 */
+  rechargeAmountCent: number | null;
+  /** 签完后自动记的那笔充值。 */
+  rechargeEntryId: string | null;
   hasPdf: boolean;
   signedAt: string | null;
   syncedAt: string | null;

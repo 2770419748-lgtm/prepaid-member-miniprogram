@@ -6,7 +6,7 @@
     "pages/mine/mine",
     "pages/member/member",
     "pages/entry/entry",
-    "pages/open/open",
+    "pages/order/order",
     "pages/ledger-detail/ledger-detail",
     "pages/stores/stores"
   ],

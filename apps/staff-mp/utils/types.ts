@@ -91,3 +91,61 @@ export interface ScannedPayCode {
   /** 过了这个时间要请会员刷新会员码重新扫。 */
   expiresAt: string;
 }
+
+export type SignFlowStatus = 'DRAFT' | 'PENDING' | 'SIGNED' | 'REJECTED' | 'EXPIRED' | 'CANCELED';
+
+export interface BenefitItem {
+  title: string;
+  detail: string | null;
+}
+
+/** 权益方案：会员能享受什么。超级管理员在商家后台维护，店员只读。 */
+export interface BenefitPlan {
+  id: string;
+  title: string;
+  summary: string | null;
+  items: BenefitItem[];
+  rules: string | null;
+}
+
+/** 权益单模板：绑定电子签平台的合同模板，关联一个权益方案。 */
+export interface ContractTemplate {
+  id: string;
+  name: string;
+  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+  benefitPlan: { id: string; title: string } | null;
+}
+
+/** 一份权益单（合同）的签署。字段与 docs/backend/m4-esign-sandbox.md 一致。 */
+export interface SignFlow {
+  id: string;
+  title: string;
+  status: SignFlowStatus;
+  /** SANDBOX 是测试签署。 */
+  env: 'SANDBOX' | 'PRODUCTION';
+  member: { id: string; phone: string; name: string | null };
+  template: { id: string; name: string };
+  benefitPlan: { id: string; title: string } | null;
+  store: { id: string; name: string } | null;
+  initiator: { id: string; name: string } | null;
+  /** 顾客的签署链接，只在待签署时有。 */
+  signUrl: string | null;
+  /** 会员权益金额（分），签完充值到余额。 */
+  rechargeAmountCent: number | null;
+  /** 签完后自动记的那笔充值。签了还没充上时为空。 */
+  rechargeEntryId: string | null;
+  hasPdf: boolean;
+  signedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 开单完成后给顾客扫的会员小程序码。 */
+export interface MemberAppCode {
+  /** 小程序码图片（data URL）。拿不到时为空。 */
+  image: string | null;
+  /** 本机演示，没有真的小程序码。 */
+  demo: boolean;
+  /** 拿不到时的原因。 */
+  message: string | null;
+}

@@ -39,6 +39,12 @@ export class SignFlowsController {
     return this.flows.refresh(actor, id);
   }
 
+  @Post(':id/sign-url')
+  @ApiOperation({ summary: '重新取会员签署链接（开单页画成二维码给顾客扫）。不是待签署 409' })
+  signUrl(@CurrentPrincipal() actor: AccessPrincipal, @Param('id') id: string) {
+    return this.flows.signUrl(actor, id);
+  }
+
   @Post(':id/cancel')
   @ApiOperation({ summary: '撤销待签署的权益单（超级管理员或发起门店店长）' })
   cancel(

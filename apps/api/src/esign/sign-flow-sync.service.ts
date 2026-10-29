@@ -3,6 +3,7 @@ import { SignFlow, SignFlowStatus } from '@prisma/client';
 import { AuditAction, AuditLogWriter } from '../audit/audit-log.writer';
 import { PrismaService } from '../prisma/prisma.service';
 import { ObjectStorage } from '../storage/object-storage';
+import { WalletService } from '../wallet/wallet.service';
 import { EsignClient } from './client/esign.client';
 import { isFinal, mapEsignStatus, nextStatus } from './esign-status';
 
@@ -13,6 +14,8 @@ export interface SyncResult {
   changed: boolean;
   /** 已签署但合同文件还没归档成功。 */
   archivePending: boolean;
+  /** 已签署、带会员权益金额，但还没充上（下次回调或刷新再充）。 */
+  rechargePending: boolean;
 }
 
 export function contractObjectKey(flow: Pick<SignFlow, 'orgId' | 'id'>): string {
@@ -20,8 +23,9 @@ export function contractObjectKey(flow: Pick<SignFlow, 'orgId' | 'id'>): string 
 }
 
 /**
- * 和 e签宝核对一份流程的状态，签完后把合同 PDF 存进对象存储。
+ * 和 e签宝核对一份流程的状态。签完后：带会员权益金额的先经 WalletService 充值到余额，再把合同 PDF 存进对象存储。
  * 回调和主动刷新共用这一处，结果一致。以 e签宝查询结果为准，不轻信回调内容。
+ * 充值和归档都可以重来：充值的请求号由流程号派生，重复调用只记一笔。
  */
 @Injectable()
 export class SignFlowSyncService {
@@ -32,20 +36,17 @@ export class SignFlowSyncService {
     private readonly audit: AuditLogWriter,
     private readonly esign: EsignClient,
     private readonly storage: ObjectStorage,
+    private readonly wallet: WalletService,
   ) {}
 
   /**
-   * archiveErrors=throw：回调用，归档失败返回错误让 e签宝重试。
-   * archiveErrors=keep：手动刷新用，状态照常返回，hasPdf 仍为 false，下次刷新再归档。
+   * errors=throw：回调用，充值或归档失败返回错误让 e签宝重试。
+   * errors=keep：手动刷新用，状态照常返回，没充上或没归档的下次刷新再做。
    */
-  async sync(
-    flowId: string,
-    source: SyncSource,
-    archiveErrors: 'throw' | 'keep',
-  ): Promise<SyncResult> {
+  async sync(flowId: string, source: SyncSource, errors: 'throw' | 'keep'): Promise<SyncResult> {
     const flow = await this.prisma.signFlow.findUniqueOrThrow({ where: { id: flowId } });
     if (!flow.esignFlowId) {
-      return { status: flow.status, changed: false, archivePending: false };
+      return { status: flow.status, changed: false, archivePending: false, rechargePending: false };
     }
     let current = flow;
     let changed = false;
@@ -85,21 +86,62 @@ export class SignFlowSyncService {
         return tx.signFlow.findUniqueOrThrow({ where: { id: flow.id } });
       });
     }
-    if (current.status !== SignFlowStatus.SIGNED || current.pdfObjectKey) {
-      return { status: current.status, changed, archivePending: false };
+    if (current.status !== SignFlowStatus.SIGNED) {
+      return { status: current.status, changed, archivePending: false, rechargePending: false };
+    }
+    // 先充值再归档：钱比合同文件要紧，归档出问题不能拖着不到账。
+    let rechargePending = false;
+    try {
+      await this.credit(current);
+    } catch (error) {
+      this.logger.error(
+        `recharge after signing failed for ${current.id}: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+      if (errors === 'throw') {
+        throw error;
+      }
+      rechargePending = true;
+    }
+    if (current.pdfObjectKey) {
+      return { status: current.status, changed, archivePending: false, rechargePending };
     }
     try {
       await this.archive(current);
-      return { status: current.status, changed, archivePending: false };
+      return { status: current.status, changed, archivePending: false, rechargePending };
     } catch (error) {
       this.logger.warn(
         `archive contract failed for ${current.id}: ${error instanceof Error ? error.message : 'unknown'}`,
       );
-      if (archiveErrors === 'throw') {
+      if (errors === 'throw') {
         throw error;
       }
-      return { status: current.status, changed, archivePending: true };
+      return { status: current.status, changed, archivePending: true, rechargePending };
     }
+  }
+
+  /**
+   * 签完后把会员权益金额充进余额，记在发起开单的门店和店员名下。
+   * 先记流水再回填 rechargeEntryId：中间断了，下次同步时同一请求号直接拿回那笔，不会多充。
+   */
+  private async credit(flow: SignFlow): Promise<void> {
+    if (flow.rechargeAmountCent === null || flow.rechargeEntryId) {
+      return;
+    }
+    if (!flow.storeId) {
+      throw new Error('sign flow with recharge amount has no store');
+    }
+    const result = await this.wallet.creditSignedContract({
+      orgId: flow.orgId,
+      memberId: flow.memberId,
+      storeId: flow.storeId,
+      operatorStaffId: flow.initiatorStaffId,
+      signFlowId: flow.id,
+      amountCent: flow.rechargeAmountCent,
+    });
+    await this.prisma.signFlow.updateMany({
+      where: { id: flow.id, rechargeEntryId: null },
+      data: { rechargeEntryId: result.entry.id },
+    });
   }
 
   private async archive(flow: SignFlow): Promise<void> {
