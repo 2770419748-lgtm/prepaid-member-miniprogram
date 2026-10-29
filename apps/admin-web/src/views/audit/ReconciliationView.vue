@@ -14,7 +14,7 @@
 
     <a-alert v-if="error" class="gap" type="error" show-icon :message="error" />
 
-    <div class="figures">
+    <div class="figures" :class="{ 'has-balance': !!report?.balance }">
       <div class="figure">
         <div class="label">净充值（元）</div>
         <div class="value pm-amount-plus">{{ report ? formatCent(report.total.netRechargeCent) : '—' }}</div>
@@ -251,7 +251,7 @@ onMounted(load);
 
 .figures {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -266,8 +266,22 @@ onMounted(load);
   min-height: 120px;
 }
 
+.figures.has-balance {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 2fr);
+}
+
 .figure.wide {
-  grid-column: span 2;
+  grid-column: span 1;
+}
+
+@media (max-width: 1365px) {
+  .figures.has-balance {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .figure.wide {
+    grid-column: 1 / -1;
+  }
 }
 
 .label {
@@ -298,6 +312,7 @@ onMounted(load);
 
 .balance-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 16px;
   margin-top: 8px;

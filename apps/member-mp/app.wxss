@@ -67,6 +67,9 @@ button::after {
   line-height: 36rpx;
   color: #64748b;
   background: #f1f5f9;
+  /* 标题再长也不把标签挤成竖排。 */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-primary {
@@ -180,6 +183,24 @@ button::after {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* 门店名太长时只截门店名，时间总能看全。 */
+.lr-sub-split {
+  display: flex;
+}
+
+.lr-store {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.lr-when {
+  flex-shrink: 0;
+  margin-left: 8rpx;
+  white-space: nowrap;
 }
 
 .lr-side {

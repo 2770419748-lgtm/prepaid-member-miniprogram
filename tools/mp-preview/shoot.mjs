@@ -1,6 +1,8 @@
 // 按场景脚本给小程序页面截图。
 //
-//   node tools/mp-preview/shoot.mjs <场景脚本.mjs> [--out 输出目录]
+//   node tools/mp-preview/shoot.mjs <场景脚本.mjs> [--out 输出目录] [--screen 320x568] [--full]
+//
+// --screen 换屏幕尺寸（默认 375x812，rpx 跟着屏宽换算），查小屏排版用；--full 每张都截整页，查页面下半截用。
 //
 // 场景脚本默认导出一个对象，或返回对象的（异步）函数：
 //   {
@@ -50,6 +52,9 @@ const loaded = (await import(pathToFileURL(scenarioPath).href)).default;
 const scenario = typeof loaded === 'function' ? await loaded() : loaded;
 const appDir = resolve(dirname(scenarioPath), scenario.app ?? '.');
 const outDir = resolve(argValue('--out') ?? scenario.out ?? join(tmpdir(), 'mp-preview'));
+const screenArg = /^(\d+)x(\d+)$/.exec(argValue('--screen') ?? '');
+const screen = screenArg ? { width: Number(screenArg[1]), height: Number(screenArg[2]) } : { width: 375, height: 812 };
+const allFullPage = process.argv.includes('--full');
 mkdirSync(outDir, { recursive: true });
 
 const server = await startServer({ appDir });
@@ -97,7 +102,7 @@ async function runStep(page, step) {
     const text = await page.locator('#phone').innerText();
     if (!text.includes(step.expectText)) throw new Error(`页面上没有找到「${step.expectText}」`);
   } else if (step.shot) {
-    await capture(page, step.shot, step.caption, step.fullPage);
+    await capture(page, step.shot, step.caption, step.fullPage ?? allFullPage);
     return;
   }
   await page.waitForTimeout(step.settle ?? 120);
@@ -108,7 +113,7 @@ for (const shot of scenario.shots) {
   console.log(`· ${shot.name}`);
   if (shot.before) await shot.before();
   const context = await browser.newContext({
-    viewport: { width: 375, height: 812 },
+    viewport: screen,
     deviceScaleFactor: 2,
     locale: 'zh-CN',
     timezoneId: 'Asia/Shanghai',
@@ -122,6 +127,7 @@ for (const shot of scenario.shots) {
     location: shot.location ?? null,
     phoneDeny: shot.phoneDeny ?? false,
     envVersion: shot.envVersion ?? 'develop',
+    screen,
     scanResult: typeof shot.scanResult === 'function' ? await shot.scanResult() : (shot.scanResult ?? null),
   });
   const page = await context.newPage();
@@ -136,7 +142,7 @@ for (const shot of scenario.shots) {
     await page.waitForTimeout(150);
     await idle(page);
     for (const step of shot.steps ?? []) await runStep(page, step);
-    if (shot.capture !== false) await capture(page, shot.name, shot.caption, shot.fullPage);
+    if (shot.capture !== false) await capture(page, shot.name, shot.caption, shot.fullPage ?? allFullPage);
     const errors = await page.evaluate(() => window.__mp.errors);
     if (errors.length || consoleErrors.length) {
       failed = true;

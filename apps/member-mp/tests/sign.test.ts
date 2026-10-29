@@ -170,9 +170,9 @@ test('会员权益金额：签之前说签署后充值，签完说已充值，�
   assert.equal(toSignDetail(flow()).amountText, '');
   const pending = toSignDetail(flow({ rechargeAmountCent: 100000 }));
   assert.equal(pending.amountText, '1,000.00');
-  assert.equal(pending.amountNote, '签署完成后充值到你的余额');
-  assert.equal(amountNote({ status: 'SIGNED', recharged: true }), '已充值到你的余额');
-  assert.equal(amountNote({ status: 'SIGNED', recharged: false }), '签署完成，正在充值到你的余额');
+  assert.equal(pending.amountNote, '签署完成后充值到您的余额');
+  assert.equal(amountNote({ status: 'SIGNED', recharged: true }), '已充值到您的余额');
+  assert.equal(amountNote({ status: 'SIGNED', recharged: false }), '签署完成，正在充值到您的余额');
   for (const status of ['REJECTED', 'EXPIRED', 'CANCELED'] as SignStatus[]) {
     assert.match(amountNote({ status, recharged: false }), /没有充值/);
   }

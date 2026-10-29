@@ -116,6 +116,11 @@
   line-height: 1.6;
 }
 
+/* 「会员权益已生效」整句一起折行，不留一个字在下一行。 */
+.nowrap {
+  white-space: nowrap;
+}
+
 .success-test {
   margin-top: 20rpx;
 }

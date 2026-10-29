@@ -99,7 +99,10 @@
             <text>{{item.title}}</text>
             <text wx:if="{{item.reversed}}" class="tag lr-tag">已撤销</text>
           </view>
-          <view class="lr-sub">{{item.storeName}} · {{item.whenText}}</view>
+          <view class="lr-sub lr-sub-split">
+            <text class="lr-store">{{item.storeName}}</text>
+            <text class="lr-when">· {{item.whenText}}</text>
+          </view>
         </view>
         <view class="lr-side">
           <view class="lr-amount {{item.plus ? 'plus' : 'minus'}}">{{item.amountText}}</view>

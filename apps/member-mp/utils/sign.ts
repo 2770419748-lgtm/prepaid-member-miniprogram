@@ -165,10 +165,10 @@ export interface SignDetail {
 /** 签署后才充值：签之前说「签署后充值」，签完说「已充值」，没签成说「没有充值」。 */
 export function amountNote(flow: Pick<SignFlowView, 'status' | 'recharged'>): string {
   if (flow.status === 'SIGNED') {
-    return flow.recharged ? '已充值到你的余额' : '签署完成，正在充值到你的余额';
+    return flow.recharged ? '已充值到您的余额' : '签署完成，正在充值到您的余额';
   }
   if (flow.status === 'PENDING' || flow.status === 'DRAFT') {
-    return '签署完成后充值到你的余额';
+    return '签署完成后充值到您的余额';
   }
   return '这份权益单没有签署，金额没有充值';
 }

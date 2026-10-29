@@ -1,6 +1,8 @@
 // 用真浏览器把商家后台走一遍并截图，连本机接口和真数据。只用于开发自查和给坤总看页面，不要部署。
 //
-//   node apps/admin-web/preview/shoot.mjs --out /tmp/admin-shots [--only login,firstlogin,admin,manager,esign]
+//   node apps/admin-web/preview/shoot.mjs --out /tmp/admin-shots [--only login,firstlogin,admin,manager,esign] [--size 1280x720]
+//
+// --size 换浏览器窗口大小（默认 1440x900），查笔记本小屏下的排版用。
 //
 // 前提：干净的本机库跑过 prisma:seed 和 preview/seed-demo.mjs；接口指向假电子签平台
 // （apps/member-mp/preview/fake-esign.mjs，3901，控制口 3902）；`pnpm dev:admin` 在 5173。
@@ -18,6 +20,8 @@ const option = (name) => {
 };
 const OUT = option('--out') ?? '/tmp/admin-shots';
 const ONLY = option('--only')?.split(',') ?? null;
+const SIZE = /^(\d+)x(\d+)$/.exec(option('--size') ?? '');
+const VIEWPORT = SIZE ? { width: Number(SIZE[1]), height: Number(SIZE[2]) } : { width: 1440, height: 900 };
 const BASE = process.env.ADMIN_BASE ?? 'http://localhost:5173';
 const CONTROL = process.env.FAKE_ESIGN_CONTROL ?? 'http://127.0.0.1:3902';
 const TEMPLATE_ID = 'member-benefit-demo'; // 假电子签平台里登记的模板
@@ -28,7 +32,7 @@ const errors = [];
 
 async function newPage() {
   const ctx = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
+    viewport: VIEWPORT,
     locale: 'zh-CN',
     timezoneId: 'Asia/Shanghai',
     acceptDownloads: true,

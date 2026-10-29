@@ -28,11 +28,16 @@
 }
 
 .mc-greeting {
+  flex: 1;
+  min-width: 0;
   font-size: 32rpx;
   font-weight: 500;
+  word-break: break-all;
 }
 
 .mc-phone {
+  flex-shrink: 0;
+  margin-left: 24rpx;
   font-size: 24rpx;
   color: #64748b;
   font-variant-numeric: tabular-nums;

@@ -29,9 +29,16 @@
           allow-clear
           style="width: 120px"
         />
-        <a-range-picker v-model:value="filters.range" value-format="YYYY-MM-DD" :allow-empty="[true, true]" />
-        <a-button type="primary" @click="reload(1)">查询</a-button>
-        <a-button @click="resetFilters">重置</a-button>
+        <a-range-picker
+          v-model:value="filters.range"
+          value-format="YYYY-MM-DD"
+          :allow-empty="[true, true]"
+          style="width: 280px"
+        />
+        <span class="pm-toolbar-actions">
+          <a-button type="primary" @click="reload(1)">查询</a-button>
+          <a-button @click="resetFilters">重置</a-button>
+        </span>
       </div>
       <a-alert v-if="filterError" class="gap" type="warning" show-icon :message="filterError" />
       <LedgerTable

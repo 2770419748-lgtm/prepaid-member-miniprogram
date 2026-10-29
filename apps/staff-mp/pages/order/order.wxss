@@ -57,28 +57,34 @@
   margin: 8rpx 8rpx 32rpx;
 }
 
-/* 第二步 */
-.member-card {
-  position: relative;
+/* 第二步：名字再长也只在左边折行，「换一位」固定在右上角，不压住名字和标签。 */
+.member-top {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 8rpx;
 }
 
 .member-line {
+  flex: 1;
+  min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 8rpx;
 }
 
 .member-label {
   font-size: 34rpx;
   font-weight: 600;
   margin-right: 16rpx;
+  word-break: break-all;
 }
 
 .change {
-  position: absolute;
-  top: 32rpx;
-  right: 32rpx;
+  flex-shrink: 0;
+  margin-left: 24rpx;
   font-size: 26rpx;
+  line-height: 51rpx;
+  white-space: nowrap;
 }
 
 .benefit-first,
@@ -286,28 +292,31 @@
   font-weight: 600;
 }
 
-/* 弹出的会员小程序码 */
+/* 弹出的会员小程序码：和页面卡片一样宽，背后的页面压暗，不从两边露出来。 */
 .code-mask {
   position: fixed;
   left: 0;
   top: 0;
   right: 0;
   bottom: 0;
-  background: rgba(15, 23, 42, 0.55);
+  background: rgba(15, 23, 42, 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0 32rpx;
   z-index: 10;
 }
 
 .code-sheet {
-  width: 640rpx;
+  width: 100%;
+  max-width: 686rpx;
   background: var(--card);
   border-radius: 32rpx;
   padding: 48rpx 40rpx 40rpx;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  align-items: center;
 }
 
 .code-title {
@@ -316,11 +325,24 @@
   font-weight: 600;
 }
 
+.code-sub {
+  margin-top: 16rpx;
+  text-align: center;
+  color: var(--text-2);
+  font-size: 26rpx;
+}
+
+.code-phone {
+  margin-top: 4rpx;
+  font-size: 40rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+}
+
 .code-box {
-  position: relative;
   display: flex;
   justify-content: center;
-  margin: 32rpx 0 8rpx;
+  margin: 24rpx 0 0;
 }
 
 .code-image {
@@ -328,17 +350,28 @@
   height: 440rpx;
 }
 
-.demo-tag {
-  position: absolute;
-  top: -12rpx;
-  right: 32rpx;
-}
-
 .code-fallback {
   font-size: 28rpx;
   line-height: 1.6;
 }
 
+.code-note {
+  align-self: stretch;
+  margin-top: 24rpx;
+  padding: 16rpx 24rpx;
+  border-radius: 16rpx;
+  background: var(--warning-soft);
+  color: #92400e;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.code-note-tag {
+  margin-right: 12rpx;
+  background: #ffffff;
+}
+
 .code-sheet .btn {
+  align-self: stretch;
   margin-top: 32rpx;
 }

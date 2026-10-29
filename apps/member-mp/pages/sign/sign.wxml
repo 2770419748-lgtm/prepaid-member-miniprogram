@@ -20,7 +20,7 @@
   <view wx:elif="{{success}}" class="success">
     <image class="success-icon" src="/images/icon-success.png"></image>
     <view class="success-title">签署完成</view>
-    <view class="success-text">「{{detail.title}}」已签署，会员权益已生效。</view>
+    <view class="success-text">「{{detail.title}}」已签署，<text class="nowrap">会员权益已生效。</text></view>
     <view wx:if="{{detail.amountText}}" class="success-text">会员权益金额 {{detail.amountText}} 元，{{detail.amountNote}}。</view>
     <view wx:if="{{detail.sandbox}}" class="success-test"><text class="tag tag-test">测试签署</text></view>
     <view class="success-actions">

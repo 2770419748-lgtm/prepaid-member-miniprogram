@@ -12,6 +12,7 @@
       phoneDeny: false,
       envVersion: 'develop',
       scanResult: null,
+      screen: null,
     },
     window.__MP_PREVIEW__ || {},
   );
@@ -19,8 +20,16 @@
   if (query.get('route')) preview.route = query.get('route');
 
   const APP = '/app/';
-  const SCREEN_WIDTH = 375;
+  // 默认 iPhone X（375×812）；场景或命令行可以换成小屏，比如 iPhone SE 的 320×568。
+  const SCREEN_WIDTH = (preview.screen && preview.screen.width) || 375;
+  const SCREEN_HEIGHT = (preview.screen && preview.screen.height) || 812;
   const RPX = SCREEN_WIDTH / 750;
+  if (SCREEN_WIDTH !== 375 || SCREEN_HEIGHT !== 812) {
+    // 用样式表而不是行内样式，整页截图时 #phone.mp-expanded 的 height: auto 才压得过它。
+    const screenStyle = document.createElement('style');
+    screenStyle.textContent = `#phone { width: ${SCREEN_WIDTH}px; height: ${SCREEN_HEIGHT}px; }`;
+    document.head.appendChild(screenStyle);
+  }
   const errors = [];
 
   function reportError(where, error) {
@@ -1010,11 +1019,11 @@
     model: 'iPhone X',
     pixelRatio: 2,
     screenWidth: SCREEN_WIDTH,
-    screenHeight: 812,
+    screenHeight: SCREEN_HEIGHT,
     windowWidth: SCREEN_WIDTH,
-    windowHeight: 724,
+    windowHeight: SCREEN_HEIGHT - 88,
     statusBarHeight: 44,
-    safeArea: { left: 0, right: SCREEN_WIDTH, top: 44, bottom: 778, width: SCREEN_WIDTH, height: 734 },
+    safeArea: { left: 0, right: SCREEN_WIDTH, top: 44, bottom: SCREEN_HEIGHT - 34, width: SCREEN_WIDTH, height: SCREEN_HEIGHT - 78 },
     language: 'zh_CN',
     version: '8.0.50',
     system: 'iOS 17.0',

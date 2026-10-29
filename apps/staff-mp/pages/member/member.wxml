@@ -8,7 +8,7 @@
         <text wx:if="{{member.name}}" class="member-name">{{member.name}}</text>
         <text wx:if="{{member.disabled}}" class="tag tag-danger">已停用</text>
       </view>
-      <text class="muted">{{member.openInfo}}</text>
+      <text class="muted open-info">{{member.openInfo}}<text wx:if="{{member.openTail}}" class="nowrap">{{member.openTail}}</text></text>
       <view class="balance-block">
         <text class="muted">余额（全公司门店通用）</text>
         <view class="balance">
