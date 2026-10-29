@@ -15,6 +15,12 @@ describe('LocalObjectStorage', () => {
     expect(await storage.get('contracts/org1/missing.pdf')).toBeNull();
   });
 
+  it('survives several writes of the same key at the same moment', async () => {
+    const key = 'contracts/org1/same.pdf';
+    await Promise.all(Array.from({ length: 8 }, () => storage.put(key, Buffer.from('%PDF-1.7'), 'application/pdf')));
+    expect((await storage.get(key))?.toString()).toBe('%PDF-1.7');
+  });
+
   it('rejects keys that escape the storage directory', async () => {
     await expect(storage.put('../escape.pdf', Buffer.from('x'), 'application/pdf')).rejects.toThrow();
     await expect(storage.get('contracts/../../etc/passwd')).rejects.toThrow();

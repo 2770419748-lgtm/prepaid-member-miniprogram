@@ -233,11 +233,14 @@ async function prepare() {
     await call(`/sign-flows/${flow.id}/cancel`, { method: 'POST', token, body: { reason: '发错了，改天重新办理' } });
   }
 
-  // 签署演示：一位新会员，刚开卡充值，门店给他发了一份待签的权益单。
+  // 签署演示：一位新会员，店员刚给他开单，会员权益金额 500 元，签完合同才充值。
   const signerPhone = `139${String(Date.now()).slice(-8)}`;
   const signer = await call('/members/open', { method: 'POST', token, body: { phone: signerPhone, name: SIGNER_NAME, storeId: hubin.id } });
-  await call(`/wallets/${signer.id}/recharge`, { method: 'POST', token, body: { storeId: hubin.id, amountCent: 50000, remark: '演示', requestId: randomUUID() } });
-  const signerFlow = await call('/sign-flows', { method: 'POST', token, body: { memberId: signer.id, templateId: basic.id, storeId: hubin.id } });
+  const signerFlow = await call('/sign-flows', {
+    method: 'POST',
+    token,
+    body: { memberId: signer.id, templateId: basic.id, storeId: hubin.id, rechargeAmountCent: 50000, requestId: randomUUID() },
+  });
 
   const setStatus = async (status) => {
     for (const store of stores) {
@@ -390,7 +393,7 @@ export default async function scenario() {
       },
       {
         name: '15-首页-先引导签署',
-        caption: '有没签的权益单：进首页先打开签署页（每份每天一次），标「测试签署」',
+        caption: '有没签的权益单：进首页先打开签署页（每份每天一次），写明会员权益金额签完才充值，标「测试签署」',
         route: 'pages/index/index',
         storage: signer,
         steps: [{ expectText: '我已阅读以上权益内容' }, { expectText: '测试签署' }],
@@ -416,15 +419,16 @@ export default async function scenario() {
           { tap: '.nb-back' },
           { wait: 300 },
           { expectText: '签署完成' },
-          { shot: '18-签署完成', caption: '签完返回：自动核对结果，显示「签署完成」，可回首页或查看合同' },
+          { shot: '18-签署完成', caption: '签完返回：自动核对结果，显示「签署完成」和已充值的金额，可回首页或查看合同' },
           { tap: '.success-pdf' },
           { wait: 200 },
           { tap: '.success .btn-primary' },
           { wait: 300 },
           { expectText: '已签署' },
+          { expectText: '500.00' },
         ],
         name: '19-签完回首页',
-        caption: '回到首页：提醒条消失，会员权益标「已签署」',
+        caption: '回到首页：提醒条消失，余额已到账，会员权益标「已签署」',
       },
       {
         name: '20-会员权益',

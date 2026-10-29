@@ -1,6 +1,7 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'crypto';
 import { mkdir, readFile, rename, writeFile } from 'fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'path';
 
@@ -35,7 +36,8 @@ export class LocalObjectStorage extends ObjectStorage {
   async put(key: string, body: Buffer): Promise<void> {
     const target = this.pathOf(key);
     await mkdir(dirname(target), { recursive: true });
-    const temp = `${target}.${process.pid}.${Date.now()}.tmp`;
+    // 同一毫秒里可能有两次写同一个 key（回调和刷新同时归档），临时文件名不能撞。
+    const temp = `${target}.${process.pid}.${randomUUID()}.tmp`;
     await writeFile(temp, body);
     await rename(temp, target);
   }

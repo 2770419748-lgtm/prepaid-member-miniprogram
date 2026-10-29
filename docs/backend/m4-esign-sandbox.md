@@ -19,6 +19,7 @@
 | 状态同步 | e签宝回调（验签）或主动刷新，都以回头查询 e签宝的结果为准 |
 | 合同归档 | 签完后下载 PDF 存对象存储，库里只记 `pdfObjectKey`。会员和门店可下载 |
 | 撤销 | 超管或发起门店的店长可撤销待签署的权益单，e签宝同步撤销 |
+| 开单充值 | 发起时可带「会员权益金额」，写进合同；会员签完后自动充值到余额（2026-10-29 起，见第 10 节） |
 
 ## 2. 规则
 
@@ -74,10 +75,11 @@
 
 | 方法 | 路径 | 角色 | 说明 |
 | --- | --- | --- | --- |
-| POST | `/sign-flows` | 店员 | `{ memberId, templateId, storeId, requestId? }`。模板须启用。已有未签完的同类 → 409；模板里找不到签名 / 盖章关键字 → 400；e签宝报错 → 502（带 e签宝原话）；开关关闭却配了正式网关 → 503 |
+| POST | `/sign-flows` | 店员 | `{ memberId, templateId, storeId, rechargeAmountCent?, requestId? }`。`rechargeAmountCent` 是会员权益金额（分，1 分到 100 万元），会员必须已开卡，模板里必须有 `benefitAmount` 控件，否则 400。模板须启用。已有未签完的同类 → 409；模板里找不到签名 / 盖章关键字 → 400；e签宝报错 → 502（带 e签宝原话）；开关关闭却配了正式网关 → 503 |
 | GET | `/sign-flows` | 店员 | `status?`、`memberId?`、`templateId?`、`storeId?` |
 | GET | `/sign-flows/:id` | 店员 | 范围外 404 |
 | POST | `/sign-flows/:id/refresh` | 店员 | 查询 e签宝并回写；签完则归档 PDF。归档失败时仍返回状态，`hasPdf=false`，下次刷新重试 |
+| POST | `/sign-flows/:id/sign-url` | 店员 | 重新向 e签宝取会员签署链接并更新 `signUrl`（员工小程序屏幕上出码给会员扫）。不是待签署 → 409 |
 | POST | `/sign-flows/:id/cancel` | 超管 / 发起门店店长 | `{ reason }`。只能撤销待签署的，否则 409 |
 | GET | `/sign-flows/:id/pdf` | 店员 | `application/pdf`。还没归档 404 |
 
@@ -88,6 +90,8 @@
   member: { id, phone, name }, template: { id, name }, benefitPlan: { id, title } | null,
   store: { id, name } | null, initiator: { id, name } | null,
   signUrl,      // 只在 PENDING 时有值
+  rechargeAmountCent,   // 会员权益金额（分），没填为 null
+  rechargeEntryId,      // 签完充值的那笔流水，还没充值为 null
   hasPdf, signedAt, syncedAt, createdAt, updatedAt }
 ```
 
@@ -97,12 +101,12 @@
 | --- | --- | --- |
 | GET | `/members/me/benefits` | 在用的权益方案 + 自己签过或待签的方案。每项 `{ id, title, summary, items, rules, signFlow: { id, status, updatedAt } \| null }`。已签的排最前，其次待签 |
 | GET | `/members/me/sign-flows` | 自己的权益单，`status?`。不含发起中的 |
-| GET | `/members/me/sign-flows/:id` | 详情，带权益内容。别人的 404 |
+| GET | `/members/me/sign-flows/:id` | 详情，带权益内容、`rechargeAmountCent` 和 `recharged`（是否已充值）。别人的 404 |
 | POST | `/members/me/sign-flows/:id/sign-url` | `{ signUrl, sandbox }`，每次重新向 e签宝取。不是待签署 → 409 |
 | POST | `/members/me/sign-flows/:id/refresh` | 从签署页回来时调用，同步状态 |
 | GET | `/members/me/sign-flows/:id/pdf` | 自己签好的合同 PDF |
 
-会员看到的权益单：`{ id, title, status, env, sandbox, benefitPlan: { id, title, summary, items, rules } | null, hasPdf, signedAt, createdAt, updatedAt }`。没有员工、门店、签署链接字段。
+会员看到的权益单：`{ id, title, status, env, sandbox, benefitPlan: { id, title, summary, items, rules } | null, rechargeAmountCent, recharged, hasPdf, signedAt, createdAt, updatedAt }`。没有员工、门店、签署链接字段。
 
 ### 4.5 e签宝回调
 
@@ -141,6 +145,8 @@
    | `orgName` | 商家名称 |
    | `storeName` | 发起门店 |
    | `signDate` | 发起日期 `YYYY-MM-DD`（模板里用单行文本） |
+   | `benefitAmount` | 会员权益金额，如 `1,000.00`（带了金额时必须有这个控件） |
+   | `benefitAmountWords` | 会员权益金额大写，如 `壹仟元整`（可选） |
 
 3. 用模板生成待签文件（`/v3/files/create-by-doc-template`），等文件就绪。
 4. 在文件里检索两个关键字（默认「会员签字」「商家盖章」，可按模板改）：会员签名落在「会员签字」右侧 80pt，企业章盖在「商家盖章」上。找不到就报 400，不发起。
@@ -156,9 +162,10 @@
 | --- | --- |
 | `BENEFIT_PLAN_CREATE` / `BENEFIT_PLAN_UPDATE` | 新建 / 修改权益方案 |
 | `CONTRACT_TEMPLATE_CREATE` / `CONTRACT_TEMPLATE_UPDATE` | 绑定 / 修改模板 |
-| `SIGN_FLOW_CREATE` | 发起成功，记发起门店 |
+| `SIGN_FLOW_CREATE` | 发起成功，记发起门店；带金额时 payload 有 `rechargeAmountCent` |
 | `SIGN_FLOW_CANCEL` | 撤销，带原因 |
 | `SIGN_FLOW_STATUS_CHANGE` | 回调或刷新后状态变化，系统写入，没有操作人，payload 带 `from`、`to`、`source` |
+| `WALLET_RECHARGE` | 签完自动充值，和普通充值一样走 `WalletService`，操作人记发起的店员，payload 多一个 `signFlowId` |
 
 ## 8. 配置
 
@@ -172,7 +179,7 @@
 | `S3_ENDPOINT` / `S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_REGION` | 合同 PDF 对象存储（MinIO / S3 兼容）。`S3_FORCE_PATH_STYLE` 默认 true |
 | `STORAGE_LOCAL_DIR` | 没配 S3 时的本机目录，默认 `apps/api/.storage/`（已在 `.gitignore`）。只用于开发 |
 
-迁移：`20261027220000_m4_esign_sandbox`。模板加签名 / 盖章关键字；签署加发起门店、发起人、标题、e签宝文件号、请求号、签署完成时间、最近核对时间；e签宝流程号唯一；部分唯一索引「同一会员同一模板只有一份未签完」；CHECK「离开发起中就必须有 e签宝流程号」。
+迁移：`20261029120000_sign_flow_recharge` 给签署加会员权益金额和充值流水号（见第 10 节）。`20261027220000_m4_esign_sandbox`：模板加签名 / 盖章关键字；签署加发起门店、发起人、标题、e签宝文件号、请求号、签署完成时间、最近核对时间；e签宝流程号唯一；部分唯一索引「同一会员同一模板只有一份未签完」；CHECK「离开发起中就必须有 e签宝流程号」。
 
 ## 9. 测试与验收
 
@@ -188,3 +195,29 @@
 4. 本地收不到回调，签完后点刷新（或会员端回到小程序时自动刷新），状态变成已签署、合同可以下载。
 
 **说明：** 开发环境连不上 e签宝，本次没有对着真实沙箱跑过，接口字段按 e签宝开放平台 v3 公开文档实现。第一次真实联调时如有字段出入，以 e签宝返回的报错为准修正（客户端在 `src/esign/client/esign.client.ts` 一处）。
+
+## 10. 开单：会员权益金额签完才充值（2026-10-29）
+
+坤总要求员工小程序开单一条龙：输手机号 → 填权益（第一项是会员权益金额）→ 签合同 → 自动充值 → 弹会员小程序码。坤总确认「**签完合同才到账**」。
+
+1. **发起时只记金额，不动余额。** `POST /sign-flows` 带 `rechargeAmountCent`，金额填进合同的 `benefitAmount` / `benefitAmountWords` 控件。会员要先开卡（员工小程序在生成合同时给新顾客开卡）。
+2. **合同发出后金额改不了。** 数据库触发器 `sign_flows_recharge_is_fixed`：离开发起中以后改金额直接报错；充值流水号一旦写上就不能改。CHECK 约束：金额 1 分到 100 万元；只有已签署、带金额的才可能有充值流水。
+3. **签完才充值，只记一笔。** 回调、店员刷新、会员端刷新任何一路发现状态变成已签署，都调 `WalletService.creditSignedContract`。请求号固定是 `sign-flow-<权益单 id>`，账本按请求号去重，所以几路同时来、重复来、记完流水后进程挂了再来，都只有一笔。记完把流水 id 回写到 `rechargeEntryId`；回写没成功的，下次同步按请求号找回那笔再补上。
+4. **充值先于归档。** 签完先充值再下载 PDF。充值失败时：回调返回 5xx，让 e签宝按它的策略重发；店员或会员刷新照常返回已签署的状态，日志报错，下一次刷新或回调再充。
+5. **没签成不充值。** 撤销、拒签、过期都不充值。签完以后门店停用、会员被停用也照样充值（钱是签合同时说好的）。
+6. 签完充值的流水和普通充值一样能冲正（店长 / 超管，带原因）。
+7. 同一请求号换了金额重新提交 → 409。
+
+### 会员小程序码（员工端弹给顾客扫）
+
+| 方法 | 路径 | 角色 | 说明 |
+| --- | --- | --- | --- |
+| GET | `/member-app/code` | 店员 | `{ image, demo, message }`。`image` 是 `data:image/png;base64,…` 的小程序码，打开会员小程序首页；没配会员小程序时 `image=null`，本机演示（`WECHAT_PHONE_MOCK=true`）时 `demo=true`，员工端画一个演示码 |
+
+用微信 `getwxacodeunlimit`（`scene=from=staff`），access token 和手机号登录共用一份缓存，生成的码缓存 12 小时。`WECHAT_MEMBER_CODE_ENV` 选正式版 / 体验版 / 开发版，默认正式版；会员小程序还没发布对应版本时返回「会员小程序还没发布这个版本」。
+
+### 测试
+
+- `test/sign-order.integration.spec.ts`：11 项，签前不充值、几路并发只充一次、记完流水后崩溃能补回、撤销 / 拒签 / 过期不充值、门店停用后照样充值、冲正、模板缺 `benefitAmount` 控件、金额校验、请求号换金额 409、触发器拦改金额、店员取签署链接、`/member-app/code` 权限。
+- `test/member-app-code.spec.ts`、`test/money-words.spec.ts`：小程序码的缓存和重试、金额大写。
+- **模板作者须知：** 要带金额开单，合同模板里加 `benefitAmount`（必须）和 `benefitAmountWords`（可选）两个单行文本控件。
