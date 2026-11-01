@@ -138,13 +138,17 @@ M0 应已具备：
 
 | 方法 | 路径 | 鉴权 | 请求要点 | 响应要点 |
 | --- | --- | --- | --- | --- |
-| POST | `/auth/member/wx-phone` | 无 | `code`（wx.login）+ 手机号授权 `phoneCode`；会员端 `WECHAT_MEMBER_*`。仅小程序 | JWT + member 摘要；第一次登录只登记身份，不建余额。未开卡时 `needsCard` 为真 |
-| POST | `/auth/staff/wx-phone` | 无 | 同上，用 `WECHAT_STAFF_*`。仅小程序。手机号须已存在于 `Staff` 且在职 | JWT + staff + roles[] |
+| POST | `/auth/member/wx-phone` | 无 | `code`（wx.login）+ 手机号授权 `phoneCode`；会员端 `WECHAT_MEMBER_*`。仅小程序 | JWT + member 摘要；第一次登录只登记身份，不建余额。未开卡时 `needsCard` 为真。有效期 `MINIPROGRAM_JWT_EXPIRES_IN`（默认 30 天） |
+| POST | `/auth/member/session/renew` | 会员 | — | 和上一行一样的结构，有效期从现在重新算。会员小程序每天打开时调一次。员工调 403；会员被停用后 401 |
+| POST | `/auth/staff/wx-phone` | 无 | 同上，用 `WECHAT_STAFF_*`。仅小程序。手机号须已存在于 `Staff` 且在职 | JWT + staff + roles[]。有效期 `MINIPROGRAM_JWT_EXPIRES_IN`（默认 30 天） |
+| POST | `/auth/staff/session/renew` | 员工小程序登录 | — | 和上一行一样的结构，有效期从现在重新算。员工小程序每天打开时调一次。密码登录（网页后台）、会员调 403；停用、改密、重置后 401 |
 | POST | `/auth/staff/password/login` | 无 | 网页后台。`phone`、`password`，多家公司时带 `orgId` | JWT + `mustChangePassword`。连续错 5 次锁定 15 分钟。不返回密码 |
 | POST | `/auth/staff/password/change` | 员工 | `currentPassword`、`newPassword` | 修改成功后 `mustChangePassword` 为假。这位员工之前的登录全部作废，要用新密码重新登录 |
 | GET | `/auth/me` | 登录 | — | 当前身份：member 或 staff+roles。员工结果含 `mustChangePassword` |
 
 说明：测试号阶段按微信开放文档换 session / 手机号；密钥只读 env，不进仓。
+
+登录有效期（2026-11-01 坤总要求员工小程序和会员小程序都「一次登录以后就一直登录」）：两个小程序 30 天（`MINIPROGRAM_JWT_EXPIRES_IN`）并每天打开时自动续期，常用就不用重新登录；商家后台 12 小时（`JWT_EXPIRES_IN`），不续期。停用、改密、重置密码在每次请求时按数据库判断，马上失效。
 
 ### 5.2 门店（店员 JWT）
 

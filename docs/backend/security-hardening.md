@@ -31,6 +31,10 @@
 
 `mustChangePassword` 每次请求按数据库判断，不写进凭证，所以重置后即使有人拿着新密码登录，也一样被拦。
 
+**小程序登录时长（2026-11-01）：** 员工小程序（`WECHAT` 登录）和会员小程序的凭证默认 30 天（`MINIPROGRAM_JWT_EXPIRES_IN`），小程序每天打开时调 `POST /auth/staff/session/renew` / `POST /auth/member/session/renew` 换新的，常用就不用重新登录。续期接口过的是同一套守卫，停用、改密、重置后旧凭证 401，换不到新的；所以登录保持得再久，后台停用员工或重置密码都是马上生效。商家后台（`PASSWORD` 登录）仍是 `JWT_EXPIRES_IN`（12 小时），不能续期。
+
+会员的登录现在只能靠把会员状态改成停用来作废，后台还没有这个按钮（顾客丢了手机时要用）。
+
 ## 2. 充值、扣款、冲正的请求号必填
 
 `POST /wallets/:memberId/recharge`、`POST /wallets/:memberId/consume`、`POST /ledger/:id/reversal` 的 `requestId` 改为必填（8 到 64 位字母、数字、`-`、`_`，UUID 即可）。不带返回 400「缺少防重复提交的请求号 requestId」。
@@ -70,4 +74,5 @@
 - `test/password-change-guard.spec.ts`：放行名单、守卫判断（只拦密码登录、版本号对不上即失效）。
 - `test/m2-wallet-ledger.integration.spec.ts`：缺请求号 400 且不记账；同号并发冲正只记一笔。
 - `test/production-exposure.spec.ts`：密钥检查、跨域名单、正式环境 `/docs` 404 和跨域许可头。
+- `test/mini-program-session-renew.integration.spec.ts`（2026-11-01 两个小程序保持登录）：员工小程序和会员小程序登录 30 天、续期后重新算；密码登录 12 小时且不能续期；会员和员工不能互换着续；员工停用、重置密码后，会员停用后都续不了期；过期凭证续不了。
 - 本机按正式环境真实启动过：示例密钥、短密钥、`CORS_ORIGINS=*` 都拒绝启动并打印原因；配好以后 `/docs` 404，名单内来源拿到跨域许可，其他来源拿不到。

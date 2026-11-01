@@ -71,6 +71,11 @@ export function loginWithPhone(body: PhoneLogin): Promise<LoginResult> {
   });
 }
 
+/** 续期登录，有效期从现在重新算。见 utils/keep-login.ts。 */
+export function renewLogin(): Promise<LoginResult> {
+  return request<LoginResult>('/auth/member/session/renew', { method: 'POST' });
+}
+
 export function fetchMe(): Promise<MemberProfile> {
   return request<MemberProfile>('/members/me');
 }

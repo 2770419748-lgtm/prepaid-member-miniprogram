@@ -19,6 +19,7 @@
 | 扫码消费 | 已完成 | 消费必须先用手机扫顾客的会员码。会员码一次性、每 30 秒换新。见 [backend/pay-code.md](./backend/pay-code.md) |
 | 上线前安全加固 | 已完成 | 服务端强制首次改密、改密后旧登录作废；记账请求号必填；正式环境关文档、限跨域、拒绝示例密钥。见 [backend/security-hardening.md](./backend/security-hardening.md) |
 | 员工端开单一条龙 | 已完成 | 输手机号 → 填会员权益金额 → 顾客签合同 → 签完才充值到账 → 弹会员小程序码。见 [backend/m4-esign-sandbox.md](./backend/m4-esign-sandbox.md) 第 10 节 |
+| 小程序保持登录 | 已完成 | 2026-11-01 坤总要求员工端「一次登录以后就一直登录」、会员端「也改最长的」：两个小程序登录 30 天、每天打开自动续期；商家后台仍 12 小时。见 [backend/security-hardening.md](./backend/security-hardening.md) 第 1 节 |
 
 ## 已拍板的账务规则（2026-10-27）
 

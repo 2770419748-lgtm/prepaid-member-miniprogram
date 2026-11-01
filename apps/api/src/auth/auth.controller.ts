@@ -18,6 +18,16 @@ export class AuthController {
     return this.auth.loginMember(dto);
   }
 
+  @Post('member/session/renew')
+  @Principals('MEMBER')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: '会员小程序续期登录：用还没过期的登录换一张新的，有效期重新算（默认 30 天）。会员被停用后换不了',
+  })
+  renewMemberSession(@CurrentPrincipal() principal: AccessPrincipal) {
+    return this.auth.renewMemberSession(principal);
+  }
+
   @Public()
   @Post('staff/wx-phone')
   @ApiOperation({ summary: '员工小程序用微信手机号登录' })
@@ -30,6 +40,17 @@ export class AuthController {
   @ApiOperation({ summary: '网页后台员工登录（手机号和密码）' })
   loginStaffWithPassword(@Body() dto: StaffPasswordLoginDto) {
     return this.auth.loginStaffWithPassword(dto);
+  }
+
+  @Post('staff/session/renew')
+  @Principals('STAFF')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      '员工小程序续期登录：用还没过期的登录换一张新的，有效期重新算（默认 30 天）。停用、改密、重置密码后换不了。网页后台的密码登录不能续期',
+  })
+  renewStaffSession(@CurrentPrincipal() principal: AccessPrincipal) {
+    return this.auth.renewStaffSession(principal);
   }
 
   @Post('staff/password/change')

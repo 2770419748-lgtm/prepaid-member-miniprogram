@@ -1,5 +1,11 @@
+import { keepLoginFresh } from './utils/keep-login';
+
 /**
  * 商家小程序：店员在门店办理开卡、充值、消费记账和查余额。
  * 只记账，不收款；钱在门店线下收取，本小程序不接任何支付。
  */
-App({});
+App({
+  onShow() {
+    keepLoginFresh();
+  },
+});
