@@ -16,7 +16,7 @@
 | 签署页 | `pages/sign-webview/sign-webview` | 只放一个 `web-view` 打开电子签平台的签署页，只接受 https 链接 |
 | 会员码 | `pages/paycode/paycode` | 首页余额卡上的「会员码」进入。二维码（18 位数字，一次性，60 秒有效，每 30 秒自动换，可手动刷新）和可用余额；门店扫到后显示「某某店已扫码」并停止换码；扣款后显示金额、门店、时间、剩余余额，可查看这笔明细。出示时屏幕常亮调亮，截屏录屏时隐藏画面，截屏后马上换码 |
 | 我的 | `pages/mine/mine`（tab） | 称呼和打码手机号、明细、会员权益、我的权益单、门店、储值说明、退出登录 |
-| 登录 | `pages/login/login` | `getPhoneNumber` 手机号快捷登录 |
+| 登录 | `pages/login/login` | `getPhoneNumber` 手机号快捷登录。登录 30 天有效，每天打开小程序时自动续期（`utils/keep-login.ts`），常用就一直不用重新登录 |
 
 「冲正」对会员一律说「撤销」：消费撤销是钱退回余额，充值撤销是钱从余额扣回。
 
@@ -24,7 +24,7 @@
 
 只调用会员接口，全部带 `Authorization: Bearer`，401 自动回登录页：
 
-- `POST /auth/member/wx-phone` 登录
+- `POST /auth/member/wx-phone` 登录；`POST /auth/member/session/renew` 续期（小程序回到前台时，每天最多一次）
 - `GET /members/me`、`GET /members/me/wallet`、`GET /members/stores`
 - `GET /ledger`、`GET /ledger/:id`（只返回自己的，不含操作店员和备注）
 - 权益和签署（[docs/backend/m4-esign-sandbox.md](../../docs/backend/m4-esign-sandbox.md) 4.4、[docs/esign-frontend.md](../../docs/esign-frontend.md)）：`GET /members/me/benefits`、`GET /members/me/sign-flows`（首页用 `status=PENDING` 判断要不要引导）、`GET /members/me/sign-flows/:id`、`POST .../:id/sign-url`（每次打开签署页前现取，不缓存）、`POST .../:id/refresh`（从签署页回来时调）、`GET .../:id/pdf`（`wx.downloadFile` 带登录头，再 `wx.openDocument`）

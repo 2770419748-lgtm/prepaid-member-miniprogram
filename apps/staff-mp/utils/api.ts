@@ -24,6 +24,11 @@ export function loginWithWechatPhone(input: { code: string; phoneCode: string; m
   return request<StaffLoginResult>('POST', '/auth/staff/wx-phone', { body: input, auth: false });
 }
 
+/** 员工小程序续期登录，有效期从现在重新算。见 utils/keep-login.ts。 */
+export function renewSession(token: string) {
+  return request<StaffLoginResult>('POST', '/auth/staff/session/renew', { token });
+}
+
 export function fetchMyStores(token?: string) {
   return request<MyStoresResult>('GET', '/staff/me/stores', { token });
 }

@@ -4,7 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma, Staff, StaffStoreRole } from '@prisma/client';
+import { Member, Prisma, Staff, StaffStoreRole } from '@prisma/client';
 import { AuditAction, AuditLogWriter } from '../audit/audit-log.writer';
 import { toMemberView } from '../members/member.view';
 import { PrismaService } from '../prisma/prisma.service';
@@ -39,20 +39,22 @@ export class AuthService {
     const identity = await this.wechat.resolve('member', dto);
     const orgId = await this.orgs.resolve(dto.orgId);
     const member = await this.saveMember(orgId, identity);
-    const view = toMemberView(member);
-    return {
-      accessToken: this.tokens.sign({
-        sub: member.id,
-        orgId,
-        principalType: 'MEMBER',
-        roles: [],
-      }),
-      tokenType: 'Bearer' as const,
-      expiresIn: this.tokens.expiresInSeconds,
-      principalType: 'MEMBER' as const,
-      needsCard: view.needsCard,
-      member: view,
-    };
+    return this.issueMemberSession(member);
+  }
+
+  /**
+   * 会员小程序续期：拿还没过期的登录换一张新的，有效期从现在重新算（默认 30 天）。
+   * 小程序每天打开时调一次，常用就一直不用重新登录。会员被停用后旧登录在守卫里就被拒（401）。
+   */
+  async renewMemberSession(principal: AccessPrincipal) {
+    if (principal.principalType !== 'MEMBER') {
+      throw new ForbiddenException('只有会员小程序的登录可以续期');
+    }
+    const member = await this.prisma.member.findUnique({ where: { id: principal.sub } });
+    if (!member || member.orgId !== principal.orgId || member.status !== 'ACTIVE') {
+      throw new UnauthorizedException('登录已失效，请重新登录');
+    }
+    return this.issueMemberSession(member);
   }
 
   async loginStaff(dto: WxPhoneLoginDto) {
@@ -102,6 +104,30 @@ export class AuthService {
       data: { failedLoginCount: 0, lockedUntil: null },
     });
     return this.issueStaffSession(staff, 'PASSWORD');
+  }
+
+  /**
+   * 员工小程序续期：拿还没过期的登录换一张新的，有效期从现在重新算（默认 30 天，和会员小程序一样）。
+   * 小程序每天打开时调一次，天天用就一直不用重新登录。
+   * 停用、改密、重置密码后旧登录在守卫里就被拒（401），换不到新的。网页后台的密码登录不续期。
+   */
+  async renewStaffSession(principal: AccessPrincipal) {
+    if (principal.principalType !== 'STAFF' || principal.session?.method !== 'WECHAT') {
+      throw new ForbiddenException('只有员工小程序的登录可以续期');
+    }
+    const staff = await this.prisma.staff.findUnique({
+      where: { id: principal.sub },
+      include: staffLoginInclude,
+    });
+    if (
+      !staff ||
+      staff.orgId !== principal.orgId ||
+      staff.status !== 'ACTIVE' ||
+      staff.sessionVersion !== principal.session.version
+    ) {
+      throw new UnauthorizedException('登录已失效，请重新登录');
+    }
+    return this.issueStaffSession(staff, 'WECHAT');
   }
 
   /** 改完以后这位员工之前的登录全部作废（网页和小程序都要重新登录）。 */
@@ -179,22 +205,41 @@ export class AuthService {
     };
   }
 
+  private issueMemberSession(member: Member) {
+    const view = toMemberView(member);
+    const issued = this.tokens.issue({
+      sub: member.id,
+      orgId: member.orgId,
+      principalType: 'MEMBER',
+      roles: [],
+    });
+    return {
+      accessToken: issued.accessToken,
+      tokenType: 'Bearer' as const,
+      expiresIn: issued.expiresIn,
+      principalType: 'MEMBER' as const,
+      needsCard: view.needsCard,
+      member: view,
+    };
+  }
+
   private issueStaffSession(staff: StaffLoginRecord, method: LoginMethod) {
     const roles = staff.storeRoles.map((role) => ({
       storeId: role.storeId,
       role: role.role,
       storeName: role.store.name,
     }));
+    const issued = this.tokens.issue({
+      sub: staff.id,
+      orgId: staff.orgId,
+      principalType: 'STAFF',
+      roles: roles.map((role) => ({ storeId: role.storeId, role: role.role })),
+      session: { version: staff.sessionVersion, method },
+    });
     return {
-      accessToken: this.tokens.sign({
-        sub: staff.id,
-        orgId: staff.orgId,
-        principalType: 'STAFF' as const,
-        roles: roles.map((role) => ({ storeId: role.storeId, role: role.role })),
-        session: { version: staff.sessionVersion, method },
-      }),
+      accessToken: issued.accessToken,
       tokenType: 'Bearer' as const,
-      expiresIn: this.tokens.expiresInSeconds,
+      expiresIn: issued.expiresIn,
       principalType: 'STAFF' as const,
       mustChangePassword: staff.mustChangePassword,
       staff: {
