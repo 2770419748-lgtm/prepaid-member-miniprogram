@@ -28,7 +28,7 @@
             type="warning"
             show-icon
             message="换手机号以后"
-            description="顾客要用新手机号重新登录会员小程序，旧手机上的登录马上失效。余额、流水和权益单都跟着会员走，不受影响。请先核对是本人。"
+            description="顾客要用新手机号重新登录小程序，旧手机上的登录马上失效。余额、流水和权益单都跟着会员走，不受影响。请先核对是本人。"
           />
           <a-form-item label="换号原因" required extra="写进操作记录">
             <a-textarea

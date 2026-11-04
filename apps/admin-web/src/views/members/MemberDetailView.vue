@@ -37,7 +37,7 @@
         class="disabled-note"
         type="warning"
         show-icon
-        message="这位会员已停用：登录不了会员小程序，不能充值、消费或开权益单。余额还在，可以退余额。"
+        message="这位会员已停用：在小程序里登录不了会员卡，不能充值、消费或开权益单。余额还在，可以退余额。"
       />
       <div class="facts">
         <span>小程序：{{ member.wechatBound ? '会员已登录过' : '会员还没登录过' }}</span>
