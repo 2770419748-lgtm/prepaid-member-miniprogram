@@ -107,7 +107,7 @@ import { amountError, formatCent, yuanToCent } from '../../utils/money';
 import { maskPhone } from '../../utils/phone';
 import { newRequestId } from '../../utils/request-id';
 
-// 消费扣款必须在员工小程序里先扫会员码，后台只做充值记账。
+// 消费扣款必须在小程序工作台里先扫会员码，后台只做充值记账。
 const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();

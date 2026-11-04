@@ -1,9 +1,9 @@
 <template>
   <div class="page">
     <a-card :bordered="false" class="block">
-      <a-result status="info" title="消费扣款需要在员工小程序里扫顾客的会员码">
+      <a-result status="info" title="消费扣款需要在小程序的工作台里扫顾客的会员码">
         <template #subTitle>
-          顾客打开会员小程序出示会员码，店员用手机上的员工小程序扫码后再填金额。后台不能直接扣款，防止记错人。
+          顾客打开小程序出示会员码，店员在手机上的小程序工作台扫码后再填金额。后台不能直接扣款，防止记错人。
         </template>
         <template #extra>
           <a-button type="primary" @click="router.push({ name: 'ledger', query: { type: 'CONSUME' } })">查看消费流水</a-button>

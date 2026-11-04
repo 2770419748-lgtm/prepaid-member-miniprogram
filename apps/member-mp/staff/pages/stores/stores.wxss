@@ -1,0 +1,9 @@
+@import "../../staff.wxss";
+
+.intro {
+  margin: 0 8rpx 24rpx;
+}
+
+.is-off .row-title {
+  color: var(--text-3);
+}

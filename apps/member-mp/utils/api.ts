@@ -1,4 +1,5 @@
-import { request } from './request';
+import type { StaffLoginResult } from '../staff/utils/types';
+import { ApiError, request } from './request';
 
 /** 金额一律是整数分。字段和 docs/backend/m2-ledger.md 的会员视角一致，只有会员自己能看的内容。 */
 
@@ -13,8 +14,12 @@ export interface MemberProfile {
 export interface LoginResult {
   accessToken: string;
   expiresIn: number;
+  principalType: 'MEMBER';
   member: MemberProfile;
 }
+
+/** 小程序登录的结果：在职员工拿到员工登录（进工作台），其他人拿到会员登录。 */
+export type SignInResult = LoginResult | StaffLoginResult;
 
 export interface WalletView {
   hasCard: boolean;
@@ -63,10 +68,44 @@ export interface PhoneLogin {
   mockPhone?: string;
 }
 
-export function loginWithPhone(body: PhoneLogin): Promise<LoginResult> {
-  return request<LoginResult>('/auth/member/wx-phone', {
+/**
+ * 微信手机号一键登录。会员和员工共用这一个小程序：服务端认出这个手机号是本公司在职员工，就返回员工登录，
+ * 小程序直接进工作台；否则按会员登录（第一次登录就建好会员）。
+ */
+export function loginWithPhone(body: PhoneLogin): Promise<SignInResult> {
+  return request<SignInResult>('/auth/wx-phone', {
     method: 'POST',
     data: { code: body.code, phoneCode: body.phoneCode, mockPhone: body.mockPhone },
+    auth: false,
+  });
+}
+
+/** 会员「我的」页用：workbench 为真表示这个手机号已经开通了工作台（重新登录一次就进）。 */
+export function fetchAccount(): Promise<{ principalType: 'MEMBER'; workbench?: boolean }> {
+  return request<{ principalType: 'MEMBER'; workbench?: boolean }>('/auth/me');
+}
+
+/**
+ * 给微信审核员体验工作台的入口：超级管理员在商家后台打开「审核体验」后才有，平时登录页不显示。
+ * 服务端还没有这个接口、或者没打开，都当作没有。
+ */
+export async function fetchReviewDemo(): Promise<boolean> {
+  try {
+    const result = await request<{ enabled?: boolean }>('/auth/review-demo', { auth: false });
+    return result.enabled === true;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/** 审核体验账号登录，拿到的是工作台（演示公司的假门店、假会员），和真实数据完全隔开。 */
+export function loginReviewDemo(body: { account: string; password: string }): Promise<StaffLoginResult> {
+  return request<StaffLoginResult>('/auth/review-demo/login', {
+    method: 'POST',
+    data: { account: body.account, password: body.password },
     auth: false,
   });
 }

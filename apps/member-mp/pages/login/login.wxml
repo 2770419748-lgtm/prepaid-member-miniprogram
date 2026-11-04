@@ -1,4 +1,4 @@
-<view class="login">
+<view wx:if="{{ready}}" class="login">
   <view class="brand">
     <view class="brand-mark">
       <view class="brand-card"></view>
@@ -13,4 +13,15 @@
   </view>
 
   <view class="offline">充值、消费都在门店办理，小程序只做查询，不收款。</view>
+
+  <!-- 给微信审核员体验工作台：商家后台打开「审核体验」才显示，进的是演示公司，和真实数据隔开。 -->
+  <view wx:if="{{reviewEnabled}}" class="review">
+    <view class="review-link" bindtap="onOpenReview">审核体验入口</view>
+    <view wx:if="{{reviewOpen}}" class="review-form">
+      <input class="review-input" placeholder="审核账号" placeholder-class="review-placeholder" value="{{account}}" bindinput="onAccountInput" />
+      <input class="review-input" password="{{true}}" placeholder="密码" placeholder-class="review-placeholder" value="{{password}}" bindinput="onPasswordInput" />
+      <view wx:if="{{reviewError}}" class="review-error">{{reviewError}}</view>
+      <button class="btn-plain review-btn" bindtap="onReviewLogin" loading="{{submitting}}" disabled="{{submitting}}">登录体验</button>
+    </view>
+  </view>
 </view>

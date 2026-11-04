@@ -168,6 +168,10 @@ export class StaffService {
     }
     if (dto.phone !== undefined) {
       data.phone = dto.phone;
+      // 手机号就是小程序的登录身份（也用来「切到我的会员卡」），换了号旧手机上的登录要作废，用新号重新登录。
+      if (dto.phone !== current.phone) {
+        data.sessionVersion = { increment: 1 };
+      }
     }
     try {
       const updated = await this.prisma.$transaction(async (tx) => {

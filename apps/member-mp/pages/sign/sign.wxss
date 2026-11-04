@@ -1,3 +1,5 @@
+@import "../../styles/member.wxss";
+
 /* 底部固定的同意区不能挡住正文。 */
 .with-bar {
   padding-bottom: calc(320rpx + env(safe-area-inset-bottom));

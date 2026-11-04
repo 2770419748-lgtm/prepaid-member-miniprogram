@@ -2,7 +2,7 @@
   <div>
     <h1 class="pm-page-title">门店管理</h1>
     <p class="pm-page-sub">
-      门店的地址、电话和营业时间会显示在会员小程序的「可用门店」里，供会员导航和拨号。
+      门店的地址、电话和营业时间会显示在小程序会员页的「可用门店」里，供会员导航和拨号。
       <template v-if="!session.superAdmin && session.managed.length > 0">店长可以改自己店的资料，不能停用门店。</template>
     </p>
     <a-card :bordered="false" class="block">
@@ -256,8 +256,8 @@ function toggleStatus(store: StoreView): void {
   Modal.confirm({
     title: disabling ? `停用「${store.name}」？` : `恢复「${store.name}」营业？`,
     content: disabling
-      ? '停用后这家店不能开卡、不能记账，会员小程序也不再显示它。会员的余额不受影响，可以去其他门店用。'
-      : '恢复后这家店可以正常开卡、记账，并重新出现在会员小程序里。',
+      ? '停用后这家店不能开卡、不能记账，小程序的会员页也不再显示它。会员的余额不受影响，可以去其他门店用。'
+      : '恢复后这家店可以正常开卡、记账，并重新出现在小程序的会员页里。',
     okText: disabling ? '确认停用' : '确认恢复',
     okButtonProps: { danger: disabling },
     cancelText: '取消',

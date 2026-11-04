@@ -3,7 +3,7 @@
 //   node apps/admin-web/preview/seed-demo.mjs
 //
 // 超级管理员用种子账号 13800000000，第一次会把初始密码 Init12345 改成 Admin12345。
-// 消费必须扫会员码（员工小程序），接口不收不带码的扣款时，这里跳过消费那几笔，其余照常。
+// 消费必须扫会员码（小程序工作台），接口不收不带码的扣款时，这里跳过消费那几笔，其余照常。
 
 const API = (process.env.API_BASE ?? 'http://localhost:3000').replace(/\/$/, '');
 let token = '';

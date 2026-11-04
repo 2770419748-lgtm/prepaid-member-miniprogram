@@ -1,3 +1,5 @@
+@import "../../styles/member.wxss";
+
 page {
   background: #ffffff;
 }
@@ -75,4 +77,48 @@ page {
   font-size: 24rpx;
   color: #94a3b8;
   text-align: center;
+}
+
+/* 审核体验入口：只在商家后台打开「审核体验」时显示，做得很小，不打扰顾客。 */
+.review {
+  padding-top: 24rpx;
+  text-align: center;
+}
+
+.review-link {
+  display: inline-block;
+  padding: 12rpx 24rpx;
+  font-size: 22rpx;
+  color: #94a3b8;
+}
+
+.review-form {
+  margin-top: 16rpx;
+  text-align: left;
+}
+
+.review-input {
+  height: 88rpx;
+  padding: 0 24rpx;
+  margin-bottom: 16rpx;
+  border: 1rpx solid #e2e8f0;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  background: #ffffff;
+}
+
+.review-placeholder {
+  color: #94a3b8;
+}
+
+.review-error {
+  margin-bottom: 16rpx;
+  font-size: 24rpx;
+  color: #dc2626;
+}
+
+.review-btn {
+  height: 80rpx;
+  line-height: 80rpx;
+  font-size: 28rpx;
 }

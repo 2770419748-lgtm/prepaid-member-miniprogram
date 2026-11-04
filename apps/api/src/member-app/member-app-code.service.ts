@@ -55,11 +55,11 @@ export class MemberAppCodeService {
   async code(): Promise<MemberAppCodeView> {
     let credentials: { appId: string; secret: string };
     try {
-      credentials = this.app.credentials('member');
+      credentials = this.app.credentials();
     } catch {
       return this.app.mockEnabled
-        ? { image: null, demo: true, message: '本机演示环境没有配置会员小程序，这是演示码，扫了打不开' }
-        : { image: null, demo: false, message: '会员小程序还没配置好，暂时显示不了小程序码' };
+        ? { image: null, demo: true, message: '本机演示环境没有配置小程序，这是演示码，扫了打不开' }
+        : { image: null, demo: false, message: '小程序还没配置好，暂时显示不了小程序码' };
     }
     const envVersion = this.envVersion();
     const key = `${credentials.appId}:${envVersion}`;

@@ -9,7 +9,7 @@
 pnpm --filter api prisma:migrate
 pnpm --filter api prisma:seed
 
-# 2. 假电子签平台（会员小程序那边的，3901，控制口 3902）
+# 2. 假电子签平台（apps/member-mp/preview 里的，3901，控制口 3902）
 pnpm --filter member-mp exec tsx preview/fake-esign.mjs
 
 # 3. 接口指向假电子签平台；后台开发服务器
@@ -39,4 +39,4 @@ node apps/admin-web/preview/shoot.mjs --out /tmp/admin-shots
 
 这些只是本机演示库里的账号，不是任何真实环境的密码。
 
-消费必须由店员在员工小程序扫会员码，接口不收不带码的扣款时，`seed-demo.mjs` 会跳过消费那几笔（输出里 `skippedConsume` 是跳过的笔数），其余照常。
+消费必须由店员在小程序工作台扫会员码，接口不收不带码的扣款时，`seed-demo.mjs` 会跳过消费那几笔（输出里 `skippedConsume` 是跳过的笔数），其余照常。
