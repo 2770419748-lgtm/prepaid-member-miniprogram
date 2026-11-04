@@ -22,7 +22,8 @@ psql -X -q -v ON_ERROR_STOP=1 -d postgres -c "DROP DATABASE IF EXISTS $drill_db"
 pg_restore --no-owner --no-privileges --exit-on-error -d "$drill_db" "$tmp/x/db.dump" || fail "数据库恢复出错"
 log "数据库恢复好了，开始核对"
 
-echo "表              备份里   现在的库"
+# 中文按两格宽算，和下面的数字列对齐。
+echo "表                备份里   现在的库"
 table_counts "$drill_db" > "$tmp/restored"
 table_counts "${PGDATABASE}" > "$tmp/live"
 while read -r table restored; do
