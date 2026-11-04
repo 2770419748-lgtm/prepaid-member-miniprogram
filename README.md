@@ -36,7 +36,7 @@ docker compose --profile storage up -d
 
 ### 小程序
 
-用微信开发者工具分别打开 `apps/member-mp` 与 `apps/staff-mp`。AppID 填测试号，不要把 Secret 写入仓库。两个工程都是「首页」「我的」占位页，说明见各自目录下的 README。
+会员和员工共用一个小程序（2026-11-04 起，原 `apps/staff-mp` 已并入）。用微信开发者工具打开 `apps/member-mp`，AppID 填测试号，不要把 Secret 写入仓库。顾客登录进会员页，后台开过的员工手机号登录直接进工作台，说明见 [apps/member-mp/README.md](apps/member-mp/README.md)。
 
 ### 常用检查
 

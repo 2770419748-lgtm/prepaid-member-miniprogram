@@ -25,6 +25,9 @@ type StaffLoginRecord = Staff & {
   storeRoles: (StaffStoreRole & { store: { name: string } })[];
 };
 
+/** 建会员或更新会员微信标识用。员工切到会员卡时没有新换的微信凭证，openId 可能为空。 */
+type MemberIdentity = Omit<PhoneIdentity, 'openId'> & { openId: string | null };
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -35,10 +38,56 @@ export class AuthService {
     private readonly audit: AuditLogWriter,
   ) {}
 
+  /**
+   * 小程序登录（会员和员工共用一个小程序，2026-11-04 合并）：微信手机号只换一次，
+   * 这个手机号在本公司是在职员工就发员工登录，小程序直接进工作台；否则按会员登录（第一次登录就建会员）。
+   * 员工被停用后再登录就只是会员。员工要看自己的会员卡走 memberSessionForStaff，不在这里顺手建会员。
+   */
+  async loginWithWechatPhone(dto: WxPhoneLoginDto) {
+    const identity = await this.wechat.resolve(dto);
+    const orgId = await this.orgs.resolve(dto.orgId);
+    const staff = await this.prisma.staff.findUnique({
+      where: { orgId_phone: { orgId, phone: identity.phone } },
+      include: staffLoginInclude,
+    });
+    if (staff && staff.status === 'ACTIVE') {
+      return this.signInStaffByWechat(staff, identity);
+    }
+    const member = await this.saveMember(orgId, identity);
+    return this.issueMemberSession(member);
+  }
+
+  /** 只按会员登录。小程序用 loginWithWechatPhone；这个留给脚本和测试。 */
   async loginMember(dto: WxPhoneLoginDto) {
-    const identity = await this.wechat.resolve('member', dto);
+    const identity = await this.wechat.resolve(dto);
     const orgId = await this.orgs.resolve(dto.orgId);
     const member = await this.saveMember(orgId, identity);
+    return this.issueMemberSession(member);
+  }
+
+  /**
+   * 工作台「切到我的会员卡」：员工的手机号在小程序登录时已经由微信验证过，直接换一张这个手机号的会员登录，
+   * 不用再点一次手机号授权。只认小程序（微信手机号）登录的员工，网页后台的密码登录不行。
+   * 这个手机号还没有会员就建一个（和会员第一次登录一样，没开卡）；会员被停用则拒绝。
+   */
+  async memberSessionForStaff(principal: AccessPrincipal) {
+    if (principal.principalType !== 'STAFF' || principal.session?.method !== 'WECHAT') {
+      throw new ForbiddenException('请在小程序里用微信手机号登录后再切换');
+    }
+    const staff = await this.prisma.staff.findUnique({ where: { id: principal.sub } });
+    if (
+      !staff ||
+      staff.orgId !== principal.orgId ||
+      staff.status !== 'ACTIVE' ||
+      staff.sessionVersion !== principal.session.version
+    ) {
+      throw new UnauthorizedException('登录已失效，请重新登录');
+    }
+    const member = await this.saveMember(staff.orgId, {
+      phone: staff.phone,
+      openId: staff.wxOpenId,
+      unionId: null,
+    });
     return this.issueMemberSession(member);
   }
 
@@ -62,8 +111,9 @@ export class AuthService {
     return this.issueMemberSession(member);
   }
 
+  /** 只按员工登录，不是员工就拒绝。小程序用 loginWithWechatPhone；这个留给脚本和测试。 */
   async loginStaff(dto: WxPhoneLoginDto) {
-    const identity = await this.wechat.resolve('staff', dto);
+    const identity = await this.wechat.resolve(dto);
     const orgId = await this.orgs.resolve(dto.orgId);
     const staff = await this.prisma.staff.findUnique({
       where: { orgId_phone: { orgId, phone: identity.phone } },
@@ -75,6 +125,10 @@ export class AuthService {
     if (staff.status !== 'ACTIVE') {
       throw new ForbiddenException('账号已停用');
     }
+    return this.signInStaffByWechat(staff, identity);
+  }
+
+  private async signInStaffByWechat(staff: StaffLoginRecord, identity: PhoneIdentity) {
     await this.prisma.staff.update({
       where: { id: staff.id },
       data: { wxOpenId: identity.openId },
@@ -182,7 +236,17 @@ export class AuthService {
         throw new UnauthorizedException('登录已失效');
       }
       const view = toMemberView(member);
-      return { principalType: 'MEMBER' as const, needsCard: view.needsCard, member: view };
+      // 这个手机号是不是本公司在职员工：是的话小程序「我的」页显示「进入工作台」（重新登录一次就进）。
+      const staff = await this.prisma.staff.findUnique({
+        where: { orgId_phone: { orgId: member.orgId, phone: member.phone } },
+        select: { status: true },
+      });
+      return {
+        principalType: 'MEMBER' as const,
+        needsCard: view.needsCard,
+        member: view,
+        workbench: staff?.status === 'ACTIVE',
+      };
     }
     const staff = await this.prisma.staff.findUnique({
       where: { id: principal.sub },
@@ -276,7 +340,8 @@ export class AuthService {
     throw new UnauthorizedException('手机号或密码错误');
   }
 
-  private async saveMember(orgId: string, identity: PhoneIdentity) {
+  /** 员工切到会员卡时没有新的微信凭证，微信标识可能为空，为空就不改库里已有的。 */
+  private async saveMember(orgId: string, identity: MemberIdentity) {
     const existing = await this.prisma.member.findUnique({
       where: { orgId_phone: { orgId, phone: identity.phone } },
     });
@@ -314,7 +379,7 @@ export class AuthService {
     return this.updateMemberIdentity(orgId, identity);
   }
 
-  private async updateMemberIdentity(orgId: string, identity: PhoneIdentity) {
+  private async updateMemberIdentity(orgId: string, identity: MemberIdentity) {
     const current = await this.prisma.member.findUnique({
       where: { orgId_phone: { orgId, phone: identity.phone } },
     });
@@ -324,7 +389,7 @@ export class AuthService {
     return this.prisma.member.update({
       where: { id: current.id },
       data: {
-        wxOpenId: identity.openId,
+        ...(identity.openId ? { wxOpenId: identity.openId } : {}),
         ...(identity.unionId ? { wxUnionId: identity.unionId } : {}),
       },
     });

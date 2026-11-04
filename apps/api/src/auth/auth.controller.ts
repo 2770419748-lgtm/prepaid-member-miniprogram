@@ -12,8 +12,18 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Public()
+  @Post('wx-phone')
+  @ApiOperation({
+    summary:
+      '小程序微信手机号登录（会员和员工共用一个小程序）：手机号是本公司在职员工就返回员工登录（principalType=STAFF，直接进工作台），否则按会员登录（principalType=MEMBER）',
+  })
+  login(@Body() dto: WxPhoneLoginDto) {
+    return this.auth.loginWithWechatPhone(dto);
+  }
+
+  @Public()
   @Post('member/wx-phone')
-  @ApiOperation({ summary: '会员用微信手机号登录' })
+  @ApiOperation({ summary: '只按会员登录（脚本和测试用；小程序用 POST /auth/wx-phone）' })
   loginMember(@Body() dto: WxPhoneLoginDto) {
     return this.auth.loginMember(dto);
   }
@@ -22,7 +32,7 @@ export class AuthController {
   @Principals('MEMBER')
   @ApiBearerAuth()
   @ApiOperation({
-    summary: '会员小程序续期登录：用还没过期的登录换一张新的，有效期重新算（默认 30 天）。会员被停用后换不了',
+    summary: '小程序会员登录续期：用还没过期的登录换一张新的，有效期重新算（默认 30 天）。会员被停用后换不了',
   })
   renewMemberSession(@CurrentPrincipal() principal: AccessPrincipal) {
     return this.auth.renewMemberSession(principal);
@@ -30,9 +40,20 @@ export class AuthController {
 
   @Public()
   @Post('staff/wx-phone')
-  @ApiOperation({ summary: '员工小程序用微信手机号登录' })
+  @ApiOperation({ summary: '只按员工登录，不是员工就拒绝（脚本和测试用；小程序用 POST /auth/wx-phone）' })
   loginStaff(@Body() dto: WxPhoneLoginDto) {
     return this.auth.loginStaff(dto);
+  }
+
+  @Post('staff/member-session')
+  @Principals('STAFF')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      '工作台「切到我的会员卡」：用员工本人的手机号换一张会员登录（没有会员就建）。只认小程序微信手机号登录的员工',
+  })
+  memberSessionForStaff(@CurrentPrincipal() principal: AccessPrincipal) {
+    return this.auth.memberSessionForStaff(principal);
   }
 
   @Public()
@@ -47,7 +68,7 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({
     summary:
-      '员工小程序续期登录：用还没过期的登录换一张新的，有效期重新算（默认 30 天）。停用、改密、重置密码后换不了。网页后台的密码登录不能续期',
+      '小程序员工登录续期：用还没过期的登录换一张新的，有效期重新算（默认 30 天）。停用、改密、重置密码后换不了。网页后台的密码登录不能续期',
   })
   renewStaffSession(@CurrentPrincipal() principal: AccessPrincipal) {
     return this.auth.renewStaffSession(principal);

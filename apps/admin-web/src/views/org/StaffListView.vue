@@ -87,7 +87,7 @@
         <a-form-item label="姓名" name="name" :rules="[{ required: true, whitespace: true, message: '请填写姓名' }]">
           <a-input v-model:value="createForm.name" :maxlength="40" />
         </a-form-item>
-        <a-form-item label="手机号" name="phone" :rules="phoneRules" extra="员工用这个手机号登录后台和员工小程序">
+        <a-form-item label="手机号" name="phone" :rules="phoneRules" extra="员工在小程序里用这个手机号微信一键登录，直接进工作台；登录后台也用它">
           <a-input v-model:value="createForm.phone" :maxlength="13" />
         </a-form-item>
         <a-row :gutter="12">
@@ -472,7 +472,7 @@ function toggleStatus(staff: StaffView): void {
   Modal.confirm({
     title: disabling ? `停用「${staff.name}」的账号？` : `恢复「${staff.name}」的账号？`,
     content: disabling
-      ? '停用后这个账号不能再登录后台和员工小程序。已经记过的账不受影响。'
+      ? '停用后这个账号不能再登录后台，小程序里也进不了工作台（只能看自己的会员卡）。已经记过的账不受影响。'
       : '恢复后这个账号可以重新登录。',
     okText: disabling ? '确认停用' : '确认恢复',
     okButtonProps: { danger: disabling },

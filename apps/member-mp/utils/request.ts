@@ -1,4 +1,5 @@
 import { apiBase } from './config';
+import { currentMode } from './mode';
 import { clearSession, currentToken, goLogin } from './session';
 
 /** 给会员看的错误。message 已经是白话，可以直接显示。 */
@@ -35,6 +36,14 @@ interface RequestOptions {
   auth?: boolean;
 }
 
+/** 会员登录失效：清掉会员登录回登录页。正在用工作台时（后台续期失败）只清掉，不打断工作台。 */
+function loginExpired(): void {
+  clearSession();
+  if (currentMode() === 'member') {
+    goLogin();
+  }
+}
+
 export function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const auth = options.auth !== false;
   const header: Record<string, string> = { 'content-type': 'application/json' };
@@ -61,8 +70,7 @@ export function request<T>(path: string, options: RequestOptions = {}): Promise<
           return;
         }
         if (res.statusCode === 401 && auth) {
-          clearSession();
-          goLogin();
+          loginExpired();
           reject(new ApiError('登录已过期，请重新登录', 401));
           return;
         }
@@ -93,8 +101,7 @@ export function download(path: string): Promise<string> {
           return;
         }
         if (res.statusCode === 401) {
-          clearSession();
-          goLogin();
+          loginExpired();
           reject(new ApiError('登录已过期，请重新登录', 401));
           return;
         }

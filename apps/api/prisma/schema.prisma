@@ -143,7 +143,7 @@ model Staff {
   mustChangePassword Boolean     @default(true) @map("must_change_password")
   failedLoginCount   Int         @default(0) @map("failed_login_count")
   lockedUntil        DateTime?   @map("locked_until") @db.Timestamptz(6)
-  /// 登录版本号，写进登录凭证。改密码、重置密码时加一，之前签发的凭证全部作废。
+  /// 登录版本号，写进登录凭证。改密码、重置密码、改手机号时加一，之前签发的凭证全部作废。
   sessionVersion     Int         @default(0) @map("session_version")
   createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)

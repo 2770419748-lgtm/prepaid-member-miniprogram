@@ -64,7 +64,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'billing/consume',
         name: 'consume',
-        // 消费必须在员工小程序扫会员码，旧链接进来给提示。
+        // 消费必须在小程序工作台扫会员码，旧链接进来给提示。
         component: () => import('../views/billing/ConsumeMovedView.vue'),
         meta: { title: '消费扣款', menuKey: 'ledger' },
       },

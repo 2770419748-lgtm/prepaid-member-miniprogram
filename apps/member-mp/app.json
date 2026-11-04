@@ -1,16 +1,24 @@
 {
   "pages": [
+    "pages/login/login",
     "pages/index/index",
     "pages/ledger/ledger",
     "pages/mine/mine",
-    "pages/login/login",
     "pages/ledger-detail/ledger-detail",
     "pages/stores/stores",
     "pages/benefits/benefits",
     "pages/sign-list/sign-list",
     "pages/sign/sign",
     "pages/sign-webview/sign-webview",
-    "pages/paycode/paycode"
+    "pages/paycode/paycode",
+    "staff/pages/index/index",
+    "staff/pages/ledger/ledger",
+    "staff/pages/mine/mine",
+    "staff/pages/member/member",
+    "staff/pages/entry/entry",
+    "staff/pages/order/order",
+    "staff/pages/ledger-detail/ledger-detail",
+    "staff/pages/stores/stores"
   ],
   "window": {
     "navigationBarTitleText": "储值会员",

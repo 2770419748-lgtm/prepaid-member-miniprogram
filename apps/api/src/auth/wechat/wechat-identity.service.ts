@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { WxPhoneLoginDto } from '../dto/wx-phone-login.dto';
 import { assertMainlandMobile, normalizePhone } from '../phone';
-import { WechatAppConfig, WechatAppKind } from './wechat-app.config';
+import { WechatAppConfig } from './wechat-app.config';
 import { WechatPhoneClient } from './wechat-phone.client';
 
 export interface PhoneIdentity {
@@ -17,18 +17,19 @@ export class WechatIdentityService {
     private readonly client: WechatPhoneClient,
   ) {}
 
-  async resolve(kind: WechatAppKind, dto: WxPhoneLoginDto): Promise<PhoneIdentity> {
+  /** 用小程序给的两个凭证换出手机号和微信标识。每个手机号凭证微信只认一次，所以一次登录只调一次。 */
+  async resolve(dto: WxPhoneLoginDto): Promise<PhoneIdentity> {
     if (this.apps.mockEnabled && dto.mockPhone) {
       const phone = normalizePhone(dto.mockPhone);
       assertMainlandMobile(phone);
       return {
         phone,
-        openId: dto.mockOpenId?.trim() || `mock:${kind}:${phone}`,
+        openId: dto.mockOpenId?.trim() || `mock:${phone}`,
         unionId: dto.mockUnionId?.trim() || null,
       };
     }
 
-    const credentials = this.apps.credentials(kind);
+    const credentials = this.apps.credentials();
     const exchanged = await this.client.exchange({
       appId: credentials.appId,
       secret: credentials.secret,

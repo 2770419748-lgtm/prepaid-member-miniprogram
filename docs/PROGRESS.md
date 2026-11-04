@@ -15,10 +15,11 @@
 | M4 电子签沙箱 | 已完成 | 权益方案、模板、发起签署（会员签 + 企业章）、回调与刷新、合同归档。只连沙箱，正式开关保持关闭。见 [backend/m4-esign-sandbox.md](./backend/m4-esign-sandbox.md) |
 | 商家网页后台 | 已完成 | 登录改密、开卡、充值、流水与冲正、门店员工、概览、对账、操作记录、权益单。消费扣款只在员工小程序扫会员码后做，后台不提供。见 [frontend/admin-web.md](./frontend/admin-web.md) |
 | P2 审计与对账 | 已完成 | 操作记录查询、当日对账、余额日结与核对。见 [backend/p2-audit.md](./backend/p2-audit.md) |
-| M5 员工小程序 | 已完成 | 店员查余额、开卡、充值和消费记账、本店流水、店长冲正。见 [apps/staff-mp/README.md](../apps/staff-mp/README.md) |
+| M5 员工小程序 | 已完成 | 店员查余额、开卡、充值和消费记账、本店流水、店长冲正。2026-11-04 起并入会员小程序的工作台，见下一行 |
 | 扫码消费 | 已完成 | 消费必须先用手机扫顾客的会员码。会员码一次性、每 30 秒换新。见 [backend/pay-code.md](./backend/pay-code.md) |
 | 上线前安全加固 | 已完成 | 服务端强制首次改密、改密后旧登录作废；记账请求号必填；正式环境关文档、限跨域、拒绝示例密钥。见 [backend/security-hardening.md](./backend/security-hardening.md) |
 | 员工端开单一条龙 | 已完成 | 输手机号 → 填会员权益金额 → 顾客签合同 → 签完才充值到账 → 弹会员小程序码。见 [backend/m4-esign-sandbox.md](./backend/m4-esign-sandbox.md) 第 10 节 |
+| 会员和员工合并成一个小程序 | 已完成 | 2026-11-04 坤总定：同一个登录页，后台开过的员工手机号登录直接进工作台，其他人进会员页；员工能切到自己的会员卡再回来；员工停用后只剩会员页。只需注册、认证、备案一个小程序。见 [apps/member-mp/README.md](../apps/member-mp/README.md)「登录和分流」 |
 | 退余额、会员资料维护 | 已完成 | 2026-11-04 上线清单 B、C：店长和超管在商家后台退余额（新流水类型，对账单列）；超管给会员换手机号、改称呼、停用和恢复，换号或停用后旧手机上的登录马上失效。见 [backend/refund-member-admin.md](./backend/refund-member-admin.md) |
 | 小程序保持登录 | 已完成 | 2026-11-01 坤总要求员工端「一次登录以后就一直登录」、会员端「也改最长的」：两个小程序登录 30 天、每天打开自动续期；商家后台仍 12 小时。见 [backend/security-hardening.md](./backend/security-hardening.md) 第 1 节 |
 
@@ -32,6 +33,16 @@
 
 其余默认（整笔冲回、单笔上限 100 万元等）见 [backend/m2-ledger.md](./backend/m2-ledger.md) 第 2 节。
 
+## 会员和员工合并成一个小程序（2026-11-04）
+
+坤总原话：「可不可以做成一个小程序 通过登录得账号来区别用户和员工呢」「可以在管理后台添加员工得手机号 对应是员工手机号的登录就直接是工作台可以吗」，回「开工」。好处是注册、认证、备案、提审都只要一个小程序。
+
+- `apps/staff-mp` 整个并进 `apps/member-mp/staff/`（目录名 `member-mp` 不改，开发者工具的项目不用重导）。小程序第一页改成登录页，已登录的直接回上次用的那一边。
+- 新接口 `POST /auth/wx-phone`：微信手机号只换一次，在职员工直接拿员工登录，其他人按会员登录。`POST /auth/staff/member-session`：工作台「切到我的会员卡」，只认小程序登录的员工。`GET /auth/me` 的会员结果多一个 `workbench`。旧的 `/auth/member/wx-phone`、`/auth/staff/wx-phone` 留给脚本和测试。
+- 只剩一套微信配置 `WECHAT_MEMBER_APPID`、`WECHAT_MEMBER_SECRET`（`WECHAT_STAFF_*` 删了）。超级管理员改员工手机号时，这位员工旧的登录全部作废。
+- 会员页上仍然没有员工字样和员工入口；只有在职员工的「我的」里有「回到工作台」或「进入工作台」。登录页底部的「审核体验入口」只在商家后台打开「审核体验」时显示（接口由「补齐上线开发待办」线程做）。
+- 截图在项目文件 `screenshots/合并成一个小程序/`。
+
 ## 员工端开单一条龙已完成
 
 坤总原话：「店员这边输入顾客手机号以后 同步就直接进入权益填写和合同签署 然后权益的位置第一项填写会员权益金额 自动就充值到账 然后弹出会员端的二维码让用户登录」；确认「签完合同才到账」。
@@ -41,7 +52,7 @@
 - 会员小程序签署页显示会员权益金额和「签署完成后充值到你的余额」；商家后台权益单列表显示金额和到账状态。会员端没有任何员工入口。
 - 合同模板要加 `benefitAmount`（必须）和 `benefitAmountWords`（可选）控件才能带金额开单。
 - 迁移：`20261029120000_sign_flow_recharge`。合同发出后金额改不了，充值流水号写上后改不了。新配置：`WECHAT_MEMBER_CODE_ENV`（见 `.env.example`）。
-- 本机没有电子签沙箱时，用假电子签平台的控制页 <http://127.0.0.1:3902> 点「模拟顾客签完」试流程，步骤见 [apps/staff-mp/README.md](../apps/staff-mp/README.md)。
+- 本机没有电子签沙箱时，用假电子签平台的控制页 <http://127.0.0.1:3902> 点「模拟顾客签完」试流程，步骤见 [apps/member-mp/README.md](../apps/member-mp/README.md)「本机试开单」。
 - 截图在项目文件 `screenshots/开单流程/`。
 
 ## 上线前安全加固已完成
@@ -89,7 +100,7 @@
 - 记账提交带请求号；网络断了没收到结果时锁住金额，只能用同一个号重试，不会记重。金额在程序里只用整数分。
 - 一人在多家店有角色时可切换当前门店，开卡和记账都记在当前门店名下。
 - 只记账不收款，没有任何支付入口。会员端不受影响。
-- 截图：`node tools/mp-preview/shoot.mjs apps/staff-mp/preview/scenario.mjs`（只连本机接口）。
+- 截图：`node tools/mp-preview/shoot.mjs apps/member-mp/preview/staff-scenario.mjs`（只连本机接口；2026-11-04 起员工页面在 `apps/member-mp/staff/`）。
 
 ## M4 已完成
 

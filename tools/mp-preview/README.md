@@ -14,7 +14,7 @@ WECHAT_PHONE_MOCK=true pnpm dev:api
 node tools/mp-preview/shoot.mjs apps/member-mp/preview/scenario.mjs --out /tmp/member-shots
 
 # 查排版：换成小屏手机（iPhone SE 320×568），并且每张都截整页
-node tools/mp-preview/shoot.mjs apps/staff-mp/preview/scenario.mjs --out /tmp/staff-se --screen 320x568 --full
+node tools/mp-preview/shoot.mjs apps/member-mp/preview/staff-scenario.mjs --out /tmp/staff-se --screen 320x568 --full
 
 # 只想在浏览器里点点看：
 node tools/mp-preview/server.mjs apps/member-mp 5180

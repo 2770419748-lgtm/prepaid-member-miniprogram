@@ -8,8 +8,7 @@
 | --- | --- |
 | `apps/api` | NestJS + Prisma + PostgreSQL |
 | `apps/admin-web` | Vue3 + Vite + Ant Design Vue 商家后台壳 |
-| `apps/member-mp` | 会员微信小程序（原生 + TypeScript 占位） |
-| `apps/staff-mp` | 商家微信小程序（原生 + TypeScript 占位） |
+| `apps/member-mp` | 储值会员微信小程序（原生 + TypeScript）。会员和员工共用一个：会员页在 `pages/`，员工工作台在 `staff/`（2026-11-04 原 `apps/staff-mp` 并入） |
 | `packages/shared` | 金额单位、角色常量、健康检查类型 |
 
 ## 后端模块

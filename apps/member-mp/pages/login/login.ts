@@ -1,7 +1,12 @@
-import { loginWithPhone } from '../../utils/api';
+import { fetchMyStores } from '../../staff/utils/api';
+import { ApiError as StaffApiError, messageOf } from '../../staff/utils/errors';
+import { clearSession as clearStaffSession, saveLogin as saveStaffLogin } from '../../staff/utils/session';
+import type { StaffLoginResult } from '../../staff/utils/types';
+import { fetchReviewDemo, loginReviewDemo, loginWithPhone, SignInResult } from '../../utils/api';
 import { devMockPhone } from '../../utils/config';
+import { currentLanding, MEMBER_HOME, openWorkbench, setMode } from '../../utils/mode';
 import { errorText } from '../../utils/request';
-import { currentToken, saveSession } from '../../utils/session';
+import { clearSession as clearMemberSession, saveSession } from '../../utils/session';
 
 function wxLoginCode(): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -12,18 +17,48 @@ function wxLoginCode(): Promise<string> {
   });
 }
 
+function failureText(error: unknown): string {
+  if (error instanceof Error && error.message === 'wx.login failed') {
+    return '微信登录失败，请重试';
+  }
+  return error instanceof StaffApiError ? messageOf(error) : errorText(error);
+}
+
+/**
+ * 小程序的第一页。会员和员工共用这一个小程序：
+ * - 已经登录过的，直接回到上次用的那一边（会员首页或工作台），这一页不露面；
+ * - 没登录的点「手机号快捷登录」，在职员工的手机号直接进工作台，其他人进会员首页。
+ * 页面上不出现任何工作台的字样；只有超级管理员在商家后台打开「审核体验」时，底部才有一个给微信审核员的小入口。
+ */
 Page({
   data: {
+    ready: false,
     submitting: false,
+    reviewEnabled: false,
+    reviewOpen: false,
+    account: '',
+    password: '',
+    reviewError: '',
   },
 
   onLoad() {
-    if (currentToken()) {
-      wx.switchTab({ url: '/pages/index/index' });
+    const landing = currentLanding();
+    if (landing === 'staff') {
+      openWorkbench();
+      return;
     }
+    if (landing === 'member') {
+      setMode('member');
+      wx.switchTab({ url: MEMBER_HOME });
+      return;
+    }
+    this.setData({ ready: true });
+    fetchReviewDemo()
+      .then((enabled) => this.setData({ reviewEnabled: enabled }))
+      .catch(() => undefined);
   },
 
-  /** 「手机号快捷登录」：微信给一个手机号凭证，后端换成手机号并找到（或建好）会员。 */
+  /** 「手机号快捷登录」：微信给一个手机号凭证，后端换成手机号，认出是员工还是会员。 */
   async onPhoneNumber(event: WechatMiniprogram.CustomEvent<{ code?: string; errMsg: string }>) {
     if (this.data.submitting) {
       return;
@@ -42,10 +77,63 @@ Page({
         phoneCode: phoneCode || 'dev-mock',
         mockPhone: mockPhone ?? undefined,
       });
-      saveSession(result.accessToken, result.expiresIn);
-      wx.switchTab({ url: '/pages/index/index' });
+      await this.enter(result);
     } catch (error) {
-      wx.showToast({ title: error instanceof Error && error.message === 'wx.login failed' ? '微信登录失败，请重试' : errorText(error), icon: 'none' });
+      wx.showToast({ title: failureText(error), icon: 'none' });
+    } finally {
+      this.setData({ submitting: false });
+    }
+  },
+
+  /** 换了人登录：另一边的旧登录一起清掉，只留这次的。 */
+  async enter(result: SignInResult) {
+    if (result.principalType === 'STAFF') {
+      await this.enterWorkbench(result);
+      return;
+    }
+    clearStaffSession();
+    saveSession(result.accessToken, result.expiresIn);
+    setMode('member');
+    wx.switchTab({ url: MEMBER_HOME });
+  },
+
+  async enterWorkbench(login: StaffLoginResult) {
+    const access = await fetchMyStores(login.accessToken);
+    clearMemberSession();
+    saveStaffLogin(login, access);
+    openWorkbench();
+  },
+
+  // ---- 审核体验入口（只在商家后台打开「审核体验」时显示） ----
+
+  onOpenReview() {
+    this.setData({ reviewOpen: !this.data.reviewOpen, reviewError: '' });
+  },
+
+  onAccountInput(event: WechatMiniprogram.Input) {
+    this.setData({ account: event.detail.value, reviewError: '' });
+  },
+
+  onPasswordInput(event: WechatMiniprogram.Input) {
+    this.setData({ password: event.detail.value, reviewError: '' });
+  },
+
+  async onReviewLogin() {
+    if (this.data.submitting) {
+      return;
+    }
+    const account = this.data.account.trim();
+    const password = this.data.password;
+    if (!account || !password) {
+      this.setData({ reviewError: '请填写审核账号和密码' });
+      return;
+    }
+    this.setData({ submitting: true, reviewError: '' });
+    try {
+      const login = await loginReviewDemo({ account, password });
+      await this.enterWorkbench(login);
+    } catch (error) {
+      this.setData({ reviewError: failureText(error) });
     } finally {
       this.setData({ submitting: false });
     }
