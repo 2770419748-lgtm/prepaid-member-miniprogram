@@ -49,6 +49,10 @@ pnpm --filter api test
 
 `prisma migrate` 使用已提交的迁移：`pnpm --filter api prisma:migrate`（即 `prisma migrate deploy`）。改模型时在 `apps/api` 下执行 `prisma migrate dev`。
 
+## 正式环境部署
+
+一台服务器跑数据库、接口、商家后台（自动 HTTPS）和每天自动备份，用 `deploy/prepaid.sh` 一键安装、升级、备份、恢复演练。步骤见 [deploy/README.md](deploy/README.md)。
+
 ## 协作
 
 实现经坤总确认后再推送。PR 请技术部 Code Review。确认前不合入、不部署。
