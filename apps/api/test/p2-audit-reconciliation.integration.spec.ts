@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { LedgerEntry, StaffRole } from '@prisma/client';
+import { LedgerEntry, LedgerType, StaffRole } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
@@ -29,26 +29,36 @@ interface Figures {
   rechargeCent: number;
   consumeCount: number;
   consumeCent: number;
+  refundCount: number;
+  refundCent: number;
   reversalCount: number;
   reversedRechargeCent: number;
   reversedConsumeCent: number;
+  reversedRefundCent: number;
   netRechargeCent: number;
   netConsumeCent: number;
+  netRefundCent: number;
   netChangeCent: number;
 }
 
+type EntryWithOriginal = LedgerEntry & { reversalOf: { type: LedgerType } | null };
+
 /** 按流水逐行算一遍，用来对照接口用 SQL 汇总出来的数。 */
-function figuresOf(entries: LedgerEntry[]): Figures {
+function figuresOf(entries: EntryWithOriginal[]): Figures {
   const figures: Figures = {
     rechargeCount: 0,
     rechargeCent: 0,
     consumeCount: 0,
     consumeCent: 0,
+    refundCount: 0,
+    refundCent: 0,
     reversalCount: 0,
     reversedRechargeCent: 0,
     reversedConsumeCent: 0,
+    reversedRefundCent: 0,
     netRechargeCent: 0,
     netConsumeCent: 0,
+    netRefundCent: 0,
     netChangeCent: 0,
   };
   for (const entry of entries) {
@@ -58,18 +68,24 @@ function figuresOf(entries: LedgerEntry[]): Figures {
     } else if (entry.type === 'CONSUME') {
       figures.consumeCount += 1;
       figures.consumeCent += entry.amountCent;
+    } else if (entry.type === 'REFUND') {
+      figures.refundCount += 1;
+      figures.refundCent += entry.amountCent;
     } else {
       figures.reversalCount += 1;
-      if (entry.balanceAfter > entry.balanceBefore) {
-        figures.reversedConsumeCent += entry.amountCent;
-      } else {
+      if (entry.reversalOf?.type === 'RECHARGE') {
         figures.reversedRechargeCent += entry.amountCent;
+      } else if (entry.reversalOf?.type === 'REFUND') {
+        figures.reversedRefundCent += entry.amountCent;
+      } else {
+        figures.reversedConsumeCent += entry.amountCent;
       }
     }
   }
   figures.netRechargeCent = figures.rechargeCent - figures.reversedRechargeCent;
   figures.netConsumeCent = figures.consumeCent - figures.reversedConsumeCent;
-  figures.netChangeCent = figures.netRechargeCent - figures.netConsumeCent;
+  figures.netRefundCent = figures.refundCent - figures.reversedRefundCent;
+  figures.netChangeCent = figures.netRechargeCent - figures.netConsumeCent - figures.netRefundCent;
   return figures;
 }
 
@@ -340,6 +356,7 @@ describe('P2 audit log and reconciliation', () => {
     async function todayEntries(from: string, to: string, storeId?: string) {
       return prisma.ledgerEntry.findMany({
         where: { orgId, createdAt: { gte: new Date(from), lt: new Date(to) }, ...(storeId ? { storeId } : {}) },
+        include: { reversalOf: { select: { type: true } } },
       });
     }
 

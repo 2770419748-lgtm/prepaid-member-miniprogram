@@ -46,6 +46,15 @@ test('流水行：类型、打码手机号、带符号金额、颜色', () => {
   assert.equal(recharge.meta, '14:05 · 一号店 · 小李');
 });
 
+test('退余额和冲回退余额', () => {
+  assert.equal(toLedgerRow(entry({ type: 'REFUND', changeCent: -5000 })).title, '退余额');
+  assert.equal(
+    toLedgerRow(entry({ type: 'REVERSAL', changeCent: 5000, reversalOfType: 'REFUND' })).title,
+    '冲正 · 抵掉退余额',
+  );
+  assert.equal(toLedgerRow(entry({ type: 'REVERSAL', changeCent: 5000, reversalOfType: 'CONSUME' })).title, '冲正 · 抵掉消费');
+});
+
 test('冲正说清抵掉的是充值还是消费', () => {
   assert.equal(toLedgerRow(entry({ type: 'REVERSAL', changeCent: -10000 })).title, '冲正 · 抵掉充值');
   assert.equal(toLedgerRow(entry({ type: 'REVERSAL', changeCent: 3000 })).title, '冲正 · 抵掉消费');

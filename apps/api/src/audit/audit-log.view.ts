@@ -36,16 +36,22 @@ export function maskPhone(value: string): string {
   return '****';
 }
 
+/** 记录里可能出现会员、员工手机号的字段。换手机号时新旧两个都有。 */
+const PHONE_FIELDS = ['phone', 'previousPhone'] as const;
+
 /** 会员和员工的手机号在操作记录里打码；门店联系电话本来就公开给会员，不打码。 */
 function present(payload: Prisma.JsonValue, targetType: string | null): Prisma.JsonValue {
   if (targetType === 'Store' || !payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return payload;
   }
-  const phone = payload.phone;
-  if (typeof phone !== 'string') {
-    return payload;
+  let masked: Prisma.JsonObject | null = null;
+  for (const field of PHONE_FIELDS) {
+    const value = payload[field];
+    if (typeof value === 'string') {
+      masked = { ...(masked ?? payload), [field]: maskPhone(value) };
+    }
   }
-  return { ...payload, phone: maskPhone(phone) };
+  return masked ?? payload;
 }
 
 export function toAuditLogView(record: AuditLogRecord): AuditLogView {

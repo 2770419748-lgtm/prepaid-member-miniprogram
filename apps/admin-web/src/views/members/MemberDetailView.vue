@@ -17,13 +17,28 @@
           </a-button>
         </template>
         <a-button
-          v-else-if="!member.hasCard"
+          v-else-if="!member.hasCard && member.status === 'ACTIVE'"
           type="primary"
           @click="router.push({ name: 'member-open', query: { phone: member.phone } })"
         >
           开卡
         </a-button>
+        <a-button v-if="canRefund" danger @click="refundOpen = true">退余额</a-button>
+        <template v-if="session.superAdmin">
+          <span class="spacer" />
+          <a-button @click="editOpen = true">修改资料</a-button>
+          <a-button :danger="member.status === 'ACTIVE'" @click="statusOpen = true">
+            {{ member.status === 'ACTIVE' ? '停用会员' : '恢复会员' }}
+          </a-button>
+        </template>
       </MemberCardPanel>
+      <a-alert
+        v-if="member.status === 'DISABLED'"
+        class="disabled-note"
+        type="warning"
+        show-icon
+        message="这位会员已停用：在小程序里登录不了会员卡，不能充值、消费或开权益单。余额还在，可以退余额。"
+      />
       <div class="facts">
         <span>小程序：{{ member.wechatBound ? '会员已登录过' : '会员还没登录过' }}</span>
         <span>登记时间：{{ formatDateTime(member.createdAt) }}</span>
@@ -50,12 +65,15 @@
 
     <LedgerDetailDrawer :open="!!detail" :entry="detail" @close="detail = null" @reverse="startReverse" @jump="jump" />
     <ReversalModal :open="!!reversing" :entry="reversing" @close="reversing = null" @done="afterReverse" />
+    <RefundModal :open="refundOpen" :member="member" @close="refundOpen = false" @done="afterRefund" />
+    <MemberEditModal :open="editOpen" :member="member" @close="editOpen = false" @done="afterEdit" />
+    <MemberStatusModal :open="statusOpen" :member="member" @close="statusOpen = false" @done="afterEdit" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { message } from 'ant-design-vue';
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { errorMessage } from '../../api/http';
 import { getLedgerEntry, listLedger } from '../../api/ledger';
@@ -64,9 +82,13 @@ import type { LedgerEntry, MemberCard } from '../../api/types';
 import LedgerDetailDrawer from '../../components/LedgerDetailDrawer.vue';
 import LedgerTable from '../../components/LedgerTable.vue';
 import MemberCardPanel from '../../components/MemberCardPanel.vue';
+import MemberEditModal from '../../components/MemberEditModal.vue';
+import MemberStatusModal from '../../components/MemberStatusModal.vue';
+import RefundModal from '../../components/RefundModal.vue';
 import ReversalModal from '../../components/ReversalModal.vue';
 import { useSessionStore } from '../../stores/session';
 import { formatDateTime } from '../../utils/datetime';
+import { canRefundAt } from '../../utils/roles';
 
 const route = useRoute();
 const router = useRouter();
@@ -82,6 +104,17 @@ const pageSize = ref(10);
 const total = ref(0);
 const detail = ref<LedgerEntry | null>(null);
 const reversing = ref<LedgerEntry | null>(null);
+const refundOpen = ref(false);
+const editOpen = ref(false);
+const statusOpen = ref(false);
+
+/** 退余额：有余额，并且自己在某家在营门店是店长或超级管理员。停用的会员也能退。 */
+const canRefund = computed(
+  () =>
+    !!member.value?.hasCard &&
+    (member.value.balanceCent ?? 0) > 0 &&
+    session.activeStores.some((store) => canRefundAt(session.roles, store.id)),
+);
 
 function memberId(): string {
   return String(route.params.id);
@@ -140,6 +173,18 @@ async function afterReverse(): Promise<void> {
   await Promise.all([loadMember(), loadLedger()]);
 }
 
+async function afterRefund(): Promise<void> {
+  refundOpen.value = false;
+  page.value = 1;
+  await Promise.all([loadMember(), loadLedger()]);
+}
+
+function afterEdit(updated: MemberCard): void {
+  editOpen.value = false;
+  statusOpen.value = false;
+  member.value = updated;
+}
+
 watch(
   () => route.params.id,
   (id) => {
@@ -160,6 +205,14 @@ onMounted(() => {
 <style scoped>
 .crumb {
   margin-bottom: 16px;
+}
+
+.disabled-note {
+  margin-top: 12px;
+}
+
+.spacer {
+  flex: 1;
 }
 
 .facts {

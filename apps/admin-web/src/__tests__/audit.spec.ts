@@ -40,6 +40,25 @@ describe('操作记录翻成白话', () => {
     ).toEqual(['状态 待签署 → 已签署（刷新状态时同步）', '测试签署']);
   });
 
+  it('改会员资料写成「旧 → 新」，停用写原因', () => {
+    expect(
+      describeAuditPayload(
+        { previousPhone: '139****0001', phone: '139****0002', previousName: '', name: '王姐', reason: '手机丢了' },
+        storeName,
+      ),
+    ).toEqual(['称呼 未填 → 王姐', '手机号 139****0001 → 139****0002', '原因 手机丢了']);
+    expect(describeAuditPayload({ status: 'DISABLED', reason: '手机丢失，先停用' }, storeName)).toEqual([
+      '状态改为停用',
+      '原因 手机丢失，先停用',
+    ]);
+  });
+
+  it('退余额显示金额、前后余额和退款方式', () => {
+    expect(
+      describeAuditPayload({ amountCent: 2000, balanceBefore: 5000, balanceAfter: 3000, remark: '现金退回' }, storeName),
+    ).toEqual(['金额 20.00 元', '余额 50.00 → 30.00 元', '备注 现金退回']);
+  });
+
   it('没有内容时为空', () => {
     expect(describeAuditPayload(null, storeName)).toEqual([]);
     expect(describeAuditPayload({ status: 'DISABLED' }, storeName)).toEqual(['状态改为停用']);

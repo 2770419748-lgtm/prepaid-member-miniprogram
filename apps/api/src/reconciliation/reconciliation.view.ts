@@ -4,15 +4,22 @@ export interface DailyFigures {
   rechargeCent: number;
   consumeCount: number;
   consumeCent: number;
+  /** 退余额：把没用完的储值退给顾客（钱线下退出去）。 */
+  refundCount: number;
+  refundCent: number;
   reversalCount: number;
   /** 冲回的充值（余额减少）。 */
   reversedRechargeCent: number;
   /** 退回的消费（余额增加）。 */
   reversedConsumeCent: number;
+  /** 冲回的退款（记错了的退款，钱加回余额）。 */
+  reversedRefundCent: number;
   /** 充值减去冲回的充值：当天实际应收的储值款。 */
   netRechargeCent: number;
   /** 消费减去退回的消费：当天实际用掉的储值。 */
   netConsumeCent: number;
+  /** 退款减去冲回的退款：当天实际退给顾客的储值款。 */
+  netRefundCent: number;
   /** 当天会员余额合计的净变化。 */
   netChangeCent: number;
 }
@@ -91,18 +98,29 @@ export function emptyFigures(): DailyFigures {
     rechargeCent: 0,
     consumeCount: 0,
     consumeCent: 0,
+    refundCount: 0,
+    refundCent: 0,
     reversalCount: 0,
     reversedRechargeCent: 0,
     reversedConsumeCent: 0,
+    reversedRefundCent: 0,
     netRechargeCent: 0,
     netConsumeCent: 0,
+    netRefundCent: 0,
     netChangeCent: 0,
   };
 }
 
-/** 算出三个净额。原始计数和金额先累加好再调用。 */
+/** 算出各项净额。原始计数和金额先累加好再调用。 */
 export function settle(figures: DailyFigures): DailyFigures {
   const netRechargeCent = figures.rechargeCent - figures.reversedRechargeCent;
   const netConsumeCent = figures.consumeCent - figures.reversedConsumeCent;
-  return { ...figures, netRechargeCent, netConsumeCent, netChangeCent: netRechargeCent - netConsumeCent };
+  const netRefundCent = figures.refundCent - figures.reversedRefundCent;
+  return {
+    ...figures,
+    netRechargeCent,
+    netConsumeCent,
+    netRefundCent,
+    netChangeCent: netRechargeCent - netConsumeCent - netRefundCent,
+  };
 }

@@ -13,6 +13,15 @@ export async function recharge(memberId: string, body: MoneyMoveBody): Promise<M
   return data;
 }
 
+/** 退余额：店长（本店）或超级管理员。必须写原因和退款方式，不能超过余额。 */
+export async function refund(
+  memberId: string,
+  body: { storeId: string; amountCent: number; remark: string; requestId: string },
+): Promise<MoneyMoveResult> {
+  const { data } = await http.post<MoneyMoveResult>(`/wallets/${encodeURIComponent(memberId)}/refund`, body);
+  return data;
+}
+
 export async function reverse(
   entryId: string,
   body: { remark: string; requestId: string },

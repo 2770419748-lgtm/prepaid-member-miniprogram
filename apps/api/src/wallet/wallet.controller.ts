@@ -2,7 +2,7 @@ import { Body, Controller, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccessPrincipal } from '../auth/access-principal';
 import { CurrentPrincipal, Principals, Roles } from '../auth/decorators';
-import { ConsumeDto, MoneyMoveDto } from './dto/ledger.dto';
+import { ConsumeDto, MoneyMoveDto, RefundDto } from './dto/ledger.dto';
 import { WalletService } from './wallet.service';
 
 @ApiTags('记账')
@@ -33,5 +33,18 @@ export class WalletController {
     @Body() dto: ConsumeDto,
   ) {
     return this.wallets.consume(actor, memberId, dto);
+  }
+
+  /** 权限在服务里按门店判断（超级管理员，或这家门店的店长），这样店员能看到具体原因。 */
+  @Post(':memberId/refund')
+  @ApiOperation({
+    summary: '退余额记账：把会员没用完的储值退给顾客（钱线下退）。超级管理员或本店店长；必须写原因和退款方式；不能超过余额',
+  })
+  refund(
+    @CurrentPrincipal() actor: AccessPrincipal,
+    @Param('memberId') memberId: string,
+    @Body() dto: RefundDto,
+  ) {
+    return this.wallets.refund(actor, memberId, dto);
   }
 }

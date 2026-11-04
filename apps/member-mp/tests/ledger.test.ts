@@ -25,6 +25,16 @@ test('名称用白话：冲正说成撤销，并区分撤销的是消费还是�
   assert.equal(entryTitle({ type: 'REVERSAL', changeCent: -100 }), '充值撤销');
 });
 
+test('退余额对会员说「退款」，撤销退款钱回到余额', () => {
+  assert.equal(entryTitle({ type: 'REFUND', changeCent: -100 }), '退款');
+  assert.equal(entryTitle({ type: 'REVERSAL', changeCent: 100, reversalOfType: 'REFUND' }), '退款撤销');
+  assert.equal(entryTitle({ type: 'REVERSAL', changeCent: 100, reversalOfType: 'CONSUME' }), '消费撤销');
+  const row = toRow(entry({ type: 'REFUND', amountCent: 2500, changeCent: -2500, balanceAfter: 500 }));
+  assert.equal(row.title, '退款');
+  assert.equal(row.amountText, '-25.00');
+  assert.equal(row.plus, false);
+});
+
 test('明细行：加减号、颜色、余额、已撤销标记', () => {
   const now = new Date('2026-10-27T04:00:00.000Z');
   const row = toRow(entry({ type: 'CONSUME', amountCent: 3000, changeCent: -3000, balanceAfter: 7000, reversed: true }), now);

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { buildMenu } from '../menu';
-import { canEditStaff, canManageStore, canReverse, hasRoleAtLeast, highestRole, type RoleClaim } from '../utils/roles';
+import {
+  canEditStaff,
+  canManageStore,
+  canRefundAt,
+  canReverse,
+  hasRoleAtLeast,
+  highestRole,
+  type RoleClaim,
+} from '../utils/roles';
 
 const admin: RoleClaim[] = [{ storeId: 's1', role: 'SUPER_ADMIN' }];
 const manager: RoleClaim[] = [
@@ -42,6 +50,20 @@ describe('冲正按钮', () => {
   it('冲正流水和已冲正的不能再冲', () => {
     expect(canReverse(admin, { ...entry, type: 'REVERSAL' })).toBe(false);
     expect(canReverse(admin, { ...entry, reversedById: 'x' })).toBe(false);
+  });
+
+  it('记错的退余额也能冲回', () => {
+    expect(canReverse(manager, { ...entry, type: 'REFUND' })).toBe(true);
+    expect(canReverse(clerk, { ...entry, type: 'REFUND', storeId: 's2' })).toBe(false);
+  });
+});
+
+describe('退余额按钮', () => {
+  it('超级管理员任一门店，店长只在自己当店长的门店，店员不行', () => {
+    expect(canRefundAt(admin, 'any')).toBe(true);
+    expect(canRefundAt(manager, 's1')).toBe(true);
+    expect(canRefundAt(manager, 's2')).toBe(false);
+    expect(canRefundAt(clerk, 's2')).toBe(false);
   });
 });
 

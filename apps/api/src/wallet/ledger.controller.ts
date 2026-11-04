@@ -32,7 +32,7 @@ export class LedgerController {
   /** 权限在服务里按原流水的门店判断，这样店员能看到具体原因。 */
   @Post(':id/reversal')
   @Principals('STAFF')
-  @ApiOperation({ summary: '冲正：整笔冲回一条记错的充值或消费。超级管理员或原门店店长；每条只能冲一次' })
+  @ApiOperation({ summary: '冲正：整笔冲回一条记错的充值、消费或退款。超级管理员或原门店店长；每条只能冲一次' })
   reverse(
     @CurrentPrincipal() actor: AccessPrincipal,
     @Param('id') id: string,

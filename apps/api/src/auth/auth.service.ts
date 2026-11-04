@@ -93,14 +93,19 @@ export class AuthService {
 
   /**
    * 会员小程序续期：拿还没过期的登录换一张新的，有效期从现在重新算（默认 30 天）。
-   * 小程序每天打开时调一次，常用就一直不用重新登录。会员被停用后旧登录在守卫里就被拒（401）。
+   * 小程序每天打开时调一次，常用就一直不用重新登录。会员被停用、被换手机号后旧登录在守卫里就被拒（401）。
    */
   async renewMemberSession(principal: AccessPrincipal) {
     if (principal.principalType !== 'MEMBER') {
       throw new ForbiddenException('只有会员小程序的登录可以续期');
     }
     const member = await this.prisma.member.findUnique({ where: { id: principal.sub } });
-    if (!member || member.orgId !== principal.orgId || member.status !== 'ACTIVE') {
+    if (
+      !member ||
+      member.orgId !== principal.orgId ||
+      member.status !== 'ACTIVE' ||
+      member.sessionVersion !== principal.session?.version
+    ) {
       throw new UnauthorizedException('登录已失效，请重新登录');
     }
     return this.issueMemberSession(member);
@@ -276,6 +281,7 @@ export class AuthService {
       orgId: member.orgId,
       principalType: 'MEMBER',
       roles: [],
+      session: { version: member.sessionVersion, method: 'WECHAT' },
     });
     return {
       accessToken: issued.accessToken,

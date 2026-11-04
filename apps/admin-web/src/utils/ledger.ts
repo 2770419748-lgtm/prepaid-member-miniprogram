@@ -4,6 +4,7 @@ export const LEDGER_TYPE_LABEL: Record<LedgerType, string> = {
   RECHARGE: '充值',
   CONSUME: '消费',
   REVERSAL: '冲正',
+  REFUND: '退余额',
 };
 
 export const LEDGER_TYPE_OPTIONS = (Object.keys(LEDGER_TYPE_LABEL) as LedgerType[]).map((value) => ({

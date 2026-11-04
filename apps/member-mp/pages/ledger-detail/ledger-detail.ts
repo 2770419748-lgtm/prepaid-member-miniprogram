@@ -23,7 +23,13 @@ function toDetail(entry: LedgerItem): Detail {
   const title = entryTitle(entry);
   let note = '';
   if (entry.type === 'REVERSAL') {
-    note = entry.changeCent > 0 ? '门店撤销了一笔记错的消费，这笔钱已退回您的余额。' : '门店撤销了一笔记错的充值，这笔钱已从余额扣回。';
+    if (entry.reversalOfType === 'REFUND') {
+      note = '门店撤销了一笔记错的退款，这笔钱已回到您的余额。';
+    } else {
+      note = entry.changeCent > 0 ? '门店撤销了一笔记错的消费，这笔钱已退回您的余额。' : '门店撤销了一笔记错的充值，这笔钱已从余额扣回。';
+    }
+  } else if (entry.type === 'REFUND' && !entry.reversed) {
+    note = '门店已把这笔储值退给您，余额相应减少。';
   } else if (entry.reversed) {
     note = '这笔记录有误，门店已撤销，对余额的影响已经抵消。';
   }

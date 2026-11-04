@@ -1,7 +1,8 @@
 /** 服务端接口的返回结构，字段与 docs/backend/m1-auth-stores.md、m2-ledger.md 一致。金额单位都是分。 */
 
 export type StaffRole = 'SUPER_ADMIN' | 'STORE_MANAGER' | 'STAFF';
-export type LedgerType = 'RECHARGE' | 'CONSUME' | 'REVERSAL';
+/** REFUND 是退余额：店长或超级管理员在商家后台把没用完的储值退给顾客。 */
+export type LedgerType = 'RECHARGE' | 'CONSUME' | 'REVERSAL' | 'REFUND';
 export type ActiveStatus = 'ACTIVE' | 'DISABLED';
 
 export interface PageResult<T> {
@@ -82,6 +83,8 @@ export interface LedgerEntry {
   balanceAfter: number;
   remark: string | null;
   reversalOfId: string | null;
+  /** 冲正抵掉的是哪一类。不是冲正为空。 */
+  reversalOfType?: LedgerType | null;
   reversedById: string | null;
   createdAt: string;
 }

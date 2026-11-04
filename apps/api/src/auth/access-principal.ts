@@ -11,8 +11,11 @@ export interface RoleClaim {
 /** 员工怎么登录的：网页后台用手机号和密码，员工小程序用微信手机号。 */
 export type LoginMethod = 'PASSWORD' | 'WECHAT';
 
+/** 登录凭证里的版本号和登录方式。员工和会员的凭证都带（会员只有微信手机号登录）。 */
 export interface StaffSession {
-  /** 签发时员工的登录版本号。改密码、重置密码后加一，之前签发的凭证全部作废。 */
+  /**
+   * 签发时的登录版本号。员工改密码、被重置密码，会员被换手机号、被停用时加一，之前签发的凭证全部作废。
+   */
   version: number;
   /** 只有用密码登录的才要先改掉初始密码；微信手机号登录没用到初始密码。 */
   method: LoginMethod;
@@ -23,7 +26,7 @@ export interface AccessPrincipal {
   orgId: string;
   principalType: PrincipalType;
   roles: RoleClaim[];
-  /** 员工凭证才有。 */
+  /** 登录版本号和方式。员工和会员凭证都带；没带的是升级前签发的旧凭证，要重新登录。 */
   session?: StaffSession;
   /**
    * 用初始密码（或被重置的密码）登录网页后台、还没改密。不在凭证里，每次请求按数据库算。
@@ -55,8 +58,8 @@ function readRoles(value: unknown): RoleClaim[] {
   });
 }
 
-/** 员工凭证必须带登录版本号和登录方式。缺了是升级前签发的旧凭证，要重新登录。 */
-function readStaffSession(version: unknown, method: unknown): StaffSession {
+/** 凭证必须带登录版本号和登录方式。缺了是升级前签发的旧凭证，要重新登录。 */
+function readSession(version: unknown, method: unknown): StaffSession {
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 0) {
     throw new UnauthorizedException('登录已失效');
   }
@@ -93,13 +96,18 @@ export function parsePrincipal(payload: unknown): AccessPrincipal {
     if (roles.length > 0) {
       throw new UnauthorizedException('未登录');
     }
-    return { sub: body.sub, orgId: body.orgId, principalType: 'MEMBER', roles };
+    const session = readSession(body.sessionVersion, body.loginMethod);
+    // 会员只能用微信手机号登录。
+    if (session.method !== 'WECHAT') {
+      throw new UnauthorizedException('登录已失效');
+    }
+    return { sub: body.sub, orgId: body.orgId, principalType: 'MEMBER', roles, session };
   }
   return {
     sub: body.sub,
     orgId: body.orgId,
     principalType: 'STAFF',
     roles,
-    session: readStaffSession(body.sessionVersion, body.loginMethod),
+    session: readSession(body.sessionVersion, body.loginMethod),
   };
 }

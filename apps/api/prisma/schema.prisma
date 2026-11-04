@@ -44,10 +44,13 @@ enum MemberStatus {
   DISABLED
 }
 
+/// RECHARGE 充值（加）、CONSUME 消费（减）、REVERSAL 冲正（与原流水反向）、
+/// REFUND 退余额（减）：店长或超级管理员把会员没用完的储值退给顾客，钱在线下退。
 enum LedgerType {
   RECHARGE
   CONSUME
   REVERSAL
+  REFUND
 }
 
 enum BenefitPlanStatus {
@@ -172,17 +175,19 @@ model StaffStoreRole {
 }
 
 model Member {
-  id          String       @id @default(cuid())
-  orgId       String       @map("org_id")
-  phone       String
+  id             String       @id @default(cuid())
+  orgId          String       @map("org_id")
+  phone          String
   /// 开卡时店员登记的称呼，可空。
-  name        String?
-  wxOpenId    String?      @map("wx_open_id")
-  wxUnionId   String?      @map("wx_union_id")
-  openStoreId String?      @map("open_store_id")
-  status      MemberStatus @default(ACTIVE)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  name           String?
+  wxOpenId       String?      @map("wx_open_id")
+  wxUnionId      String?      @map("wx_union_id")
+  openStoreId    String?      @map("open_store_id")
+  status         MemberStatus @default(ACTIVE)
+  /// 登录版本号，写进会员小程序的登录凭证。换手机号、停用时加一，之前的登录全部作废。
+  sessionVersion Int          @default(0) @map("session_version")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   org       Org             @relation(fields: [orgId], references: [id], onDelete: Restrict)
   openStore Store?          @relation("MemberOpenStore", fields: [openStoreId], references: [id], onDelete: SetNull)
@@ -214,7 +219,7 @@ model Wallet {
 }
 
 /// 账本流水。只追加，数据库触发器拒绝修改和删除。金额单位为分。
-/// amountCent 记绝对值（正整数）。RECHARGE 加、CONSUME 减；REVERSAL 与被冲的原流水方向相反，
+/// amountCent 记绝对值（正整数）。RECHARGE 加、CONSUME 和 REFUND 减；REVERSAL 与被冲的原流水方向相反，
 /// 实际变动看 balanceAfter - balanceBefore。
 model LedgerEntry {
   id              String     @id @default(cuid())

@@ -1,6 +1,6 @@
 // 用真浏览器把商家后台走一遍并截图，连本机接口和真数据。只用于开发自查和给坤总看页面，不要部署。
 //
-//   node apps/admin-web/preview/shoot.mjs --out /tmp/admin-shots [--only login,firstlogin,admin,manager,esign] [--size 1280x720]
+//   node apps/admin-web/preview/shoot.mjs --out /tmp/admin-shots [--only login,firstlogin,admin,manager,esign,refund] [--size 1280x720]
 //
 // --size 换浏览器窗口大小（默认 1440x900），查笔记本小屏下的排版用。
 //
@@ -286,6 +286,85 @@ try {
     await clerk.waitForSelector('.ant-table-row');
     await shot(clerk, '34-店员的签署列表');
     await clerk.context().close();
+  }
+  if (run('refund')) {
+    const openMember = async (page, name) => {
+      await page.goto(`${BASE}/members`);
+      await page.waitForSelector('.ant-table-row');
+      await page.click(`text=${name}`);
+      await page.waitForSelector('.ant-table-row');
+    };
+
+    // 店员：会员详情里没有退余额、修改资料、停用
+    const clerk = await newPage();
+    await login(clerk, '13800000002', 'Clerk12345');
+    await openMember(clerk, '王女士');
+    await shot(clerk, 'r01-店员看不到退余额');
+    await clerk.context().close();
+
+    // 店长：给孙先生退一部分余额
+    const manager = await newPage();
+    await login(manager, '13800000001', 'Manager123');
+    await openMember(manager, '孙先生');
+    await manager.click('button:has-text("退余额")');
+    const refund = modal(manager);
+    await refund.locator('input[placeholder="0.00"]').fill('500');
+    await refund.locator('textarea').fill('顾客要退 500 元，现金当面退回');
+    await shot(manager, 'r02-店长退余额');
+    await refund.locator('.ant-modal-footer .ant-btn-dangerous').click();
+    await manager.waitForSelector('.ant-table-row:has-text("退余额")');
+    await manager.waitForTimeout(800);
+    await shot(manager, 'r03-退余额后');
+    await manager.context().close();
+
+    // 超管：换手机号、停用、对账和操作记录
+    const admin = await newPage();
+    await login(admin, '13800000000', 'Admin12345');
+    await openMember(admin, '周女士');
+    await shot(admin, 'r04-超管的会员详情');
+    await admin.click('button:has-text("修改资料")');
+    const edit = modal(admin);
+    await edit.locator('input').nth(0).fill('周姐');
+    await edit.locator('input').nth(1).fill('13711113333');
+    await edit.locator('textarea').fill('顾客手机丢了，本人到店出示身份证核对');
+    await shot(admin, 'r05-换手机号');
+    await edit.locator('.ant-modal-footer .ant-btn-primary').click();
+    await admin.waitForSelector('text=13711113333');
+    await admin.waitForTimeout(800);
+    await shot(admin, 'r06-换号后');
+
+    await openMember(admin, '刘先生');
+    await admin.click('button:has-text("停用会员")');
+    const status = modal(admin);
+    await status.locator('textarea').fill('顾客要求退卡，先停用');
+    await shot(admin, 'r07-停用会员');
+    await status.locator('.ant-modal-footer .ant-btn-dangerous').click();
+    await admin.waitForSelector('.disabled-note');
+    await admin.waitForTimeout(800);
+    await shot(admin, 'r08-已停用仍可退余额');
+    await admin.click('button:has-text("退余额")');
+    await modal(admin).locator('button:has-text("全部退")').click();
+    await modal(admin).locator('textarea').fill('退卡，余额微信转账退回');
+    await shot(admin, 'r09-停用后全部退');
+    await modal(admin).locator('.ant-modal-footer .ant-btn-dangerous').click();
+    await admin.waitForSelector('.ant-table-row:has-text("退余额")');
+    await admin.waitForTimeout(800);
+    await shot(admin, 'r10-全部退完');
+
+    await admin.goto(`${BASE}/reconciliation`);
+    await admin.waitForSelector('.ant-table-row');
+    await admin.click('button:has-text("开始核对")');
+    await admin.waitForSelector('.check');
+    await shot(admin, 'r11-当日对账有退余额', true);
+    await admin.goto(`${BASE}/audit-logs`);
+    await admin.waitForSelector('.ant-table-row');
+    await shot(admin, 'r12-操作记录');
+    await admin.goto(`${BASE}/ledger`);
+    await admin.waitForSelector('.ant-table-row');
+    await admin.locator('.ant-table-row', { hasText: '退余额' }).first().locator('button:has-text("详情")').click();
+    await admin.waitForSelector('.ant-drawer-content');
+    await shot(admin, 'r13-退余额流水详情');
+    await admin.context().close();
   }
 } catch (error) {
   console.error(error);

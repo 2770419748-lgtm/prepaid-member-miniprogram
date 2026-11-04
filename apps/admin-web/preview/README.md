@@ -21,7 +21,7 @@ node apps/admin-web/preview/seed-demo.mjs
 
 # 5. 截图，35 张
 node apps/admin-web/preview/shoot.mjs --out /tmp/admin-shots
-# 只跑几组：--only login,firstlogin,admin,manager,esign
+# 只跑几组：--only login,firstlogin,admin,manager,esign,refund（refund 是退余额、换手机号、停用会员）
 ```
 
 需要本机装有 Playwright 和 Chromium（`require('playwright')` 能找到即可）。场景会开卡、充值、冲正、建权益方案和发起签署，对同一个库只跑一次；要重跑就从第 1 步换个新库。

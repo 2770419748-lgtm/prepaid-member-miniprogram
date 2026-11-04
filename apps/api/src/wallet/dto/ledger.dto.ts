@@ -67,6 +67,30 @@ export class ConsumeDto extends MoneyMoveDto {
   payCode!: string;
 }
 
+/** 退余额：把会员没用完的储值退给顾客。钱在店里线下退（现金、转账等），这里只记账。 */
+export class RefundDto {
+  @ApiProperty({ description: '在哪家门店办理。超级管理员任一门店；店长只能是自己管的门店' })
+  @IsString()
+  @IsNotEmpty()
+  storeId!: string;
+
+  @ApiProperty({ example: 25000, description: '退多少，单位分，正整数，不能超过当前余额。全部退就填当前余额' })
+  @IsInt()
+  @Min(1)
+  @Max(MAX_AMOUNT_CENT)
+  amountCent!: number;
+
+  @ApiProperty({ example: '顾客搬家，现金退回', description: '必填：为什么退、钱怎么退给顾客。会员端不显示' })
+  @IsString()
+  @IsNotEmpty({ message: '请写明退款原因和退款方式' })
+  @MaxLength(200)
+  remark!: string;
+
+  @ApiProperty({ description: '必填。防重复提交的请求号，同充值' })
+  @Matches(REQUEST_ID, { message: requestIdMessage })
+  requestId!: string;
+}
+
 export class ReversalDto {
   @ApiProperty({ example: '金额录错', description: '冲正原因，必填' })
   @IsString()

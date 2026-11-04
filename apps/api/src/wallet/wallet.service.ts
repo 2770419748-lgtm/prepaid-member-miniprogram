@@ -11,7 +11,7 @@ import { AccessPrincipal } from '../auth/access-principal';
 import { assertStoreAccess, isSuperAdmin } from '../auth/staff-access';
 import { PayCodeService } from '../pay-code/pay-code.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ConsumeDto, MoneyMoveDto, ReversalDto } from './dto/ledger.dto';
+import { ConsumeDto, MoneyMoveDto, RefundDto, ReversalDto } from './dto/ledger.dto';
 import { ledgerInclude, LedgerRecord, StaffLedgerView, toStaffLedgerView } from './ledger.view';
 
 /** 钱包余额是 Int（分）。再往上加会溢出。 */
@@ -71,6 +71,7 @@ const auditActionOf: Record<LedgerType, string> = {
   RECHARGE: AuditAction.WalletRecharge,
   CONSUME: AuditAction.WalletConsume,
   REVERSAL: AuditAction.WalletReversal,
+  REFUND: AuditAction.WalletRefund,
 };
 
 function cleanRemark(value: string | undefined): string | null {
@@ -155,7 +156,61 @@ export class WalletService {
   }
 
   /**
-   * 整笔冲回一条充值或消费。冲正记在原流水的门店名下。
+   * 退余额：把会员没用完的储值退给顾客（消保条例要求可退）。钱在门店线下退，这里只记一笔 REFUND 减余额。
+   * 只有超级管理员（任一门店）或这家门店的店长能做；必须写原因和退款方式。可以只退一部分，不能超过余额。
+   * 停用的会员也能退（先停用、再退余额是常见做法）；门店要在营。记错了可以冲正，钱加回余额。
+   */
+  async refund(actor: AccessPrincipal, memberId: string, dto: RefundDto): Promise<MoveResult> {
+    const canRefund =
+      isSuperAdmin(actor.roles) ||
+      actor.roles.some((role) => role.storeId === dto.storeId && role.role === 'STORE_MANAGER');
+    if (!canRefund) {
+      throw new ForbiddenException('只有超级管理员或本店店长可以退余额');
+    }
+    const sameRequest = { memberId, type: LedgerType.REFUND, amountCent: dto.amountCent, storeId: dto.storeId };
+    const replay = await this.replay(actor.orgId, dto.requestId, sameRequest);
+    if (replay) {
+      return replay;
+    }
+    const store = await this.prisma.store.findUnique({ where: { id: dto.storeId } });
+    if (!store || store.orgId !== actor.orgId) {
+      throw new NotFoundException('门店不存在');
+    }
+    if (store.status !== 'ACTIVE') {
+      throw new BadRequestException('门店已停用，不能记账');
+    }
+    const member = await this.prisma.member.findUnique({
+      where: { id: memberId },
+      include: { wallet: { select: { id: true } } },
+    });
+    if (!member || member.orgId !== actor.orgId) {
+      throw new NotFoundException('会员不存在');
+    }
+    if (!member.wallet) {
+      throw new BadRequestException('会员还没开卡');
+    }
+    const remark = cleanRemark(dto.remark);
+    if (!remark) {
+      throw new BadRequestException('请写明退款原因和退款方式');
+    }
+    return this.apply({
+      orgId: actor.orgId,
+      memberId,
+      storeId: store.id,
+      operatorStaffId: actor.sub,
+      type: LedgerType.REFUND,
+      direction: -1,
+      amountCent: dto.amountCent,
+      remark,
+      reversalOfId: null,
+      requestId: dto.requestId,
+      payCodeId: null,
+      signFlowId: null,
+    });
+  }
+
+  /**
+   * 整笔冲回一条充值、消费或退款。冲正记在原流水的门店名下。
    * 只有超级管理员或原门店店长能做；一条流水只能冲一次；冲正流水不能再冲。
    */
   async reverse(actor: AccessPrincipal, entryId: string, dto: ReversalDto): Promise<MoveResult> {
@@ -192,6 +247,7 @@ export class WalletService {
       storeId: original.storeId,
       operatorStaffId: actor.sub,
       type: LedgerType.REVERSAL,
+      // 冲回充值减余额；冲回消费、退款把钱加回来。
       direction: original.type === LedgerType.RECHARGE ? -1 : 1,
       amountCent: original.amountCent,
       remark: cleanRemark(dto.remark),
@@ -299,7 +355,11 @@ export class WalletService {
     const balanceAfter = wallet.balanceCent + movement.direction * movement.amountCent;
     if (balanceAfter < 0) {
       throw new BadRequestException(
-        movement.type === LedgerType.REVERSAL ? '余额不足，无法冲正这笔充值' : '余额不足',
+        movement.type === LedgerType.REVERSAL
+          ? '余额不足，无法冲正这笔充值'
+          : movement.type === LedgerType.REFUND
+            ? '退款金额超过了会员余额'
+            : '余额不足',
       );
     }
     if (balanceAfter > MAX_BALANCE_CENT) {
@@ -350,6 +410,8 @@ export class WalletService {
         ...(movement.reversalOfId ? { reversalOfId: movement.reversalOfId } : {}),
         ...(movement.payCodeId ? { payCodeId: movement.payCodeId } : {}),
         ...(movement.signFlowId ? { signFlowId: movement.signFlowId } : {}),
+        // 退余额的原因和退款方式要在操作记录里看得到。
+        ...(movement.type === LedgerType.REFUND && movement.remark ? { remark: movement.remark } : {}),
       },
     });
     return { entry: toStaffLedgerView(entry), balanceCent: balanceAfter, replayed: false };

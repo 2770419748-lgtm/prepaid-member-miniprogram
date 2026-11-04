@@ -18,7 +18,7 @@
         <a-descriptions-item label="操作人">{{ entry.operatorName || '系统' }}</a-descriptions-item>
         <a-descriptions-item label="变动前余额"><MoneyText :cent="entry.balanceBefore" /> 元</a-descriptions-item>
         <a-descriptions-item label="变动后余额"><MoneyText :cent="entry.balanceAfter" /> 元</a-descriptions-item>
-        <a-descriptions-item label="备注">{{ entry.remark || '无' }}</a-descriptions-item>
+        <a-descriptions-item :label="entry.type === 'REFUND' ? '退款原因和方式' : '备注'">{{ entry.remark || '无' }}</a-descriptions-item>
         <a-descriptions-item v-if="entry.reversalOfId" label="抵掉的原流水">
           <a @click="emit('jump', entry.reversalOfId)">查看原流水</a>
         </a-descriptions-item>

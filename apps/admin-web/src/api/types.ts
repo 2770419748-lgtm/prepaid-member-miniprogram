@@ -2,7 +2,8 @@
 
 export type StaffRole = 'SUPER_ADMIN' | 'STORE_MANAGER' | 'STAFF';
 export type ActiveStatus = 'ACTIVE' | 'DISABLED';
-export type LedgerType = 'RECHARGE' | 'CONSUME' | 'REVERSAL';
+/** REFUND 是退余额：把会员没用完的储值退给顾客（钱线下退）。 */
+export type LedgerType = 'RECHARGE' | 'CONSUME' | 'REVERSAL' | 'REFUND';
 
 export interface PageResult<T> {
   items: T[];
@@ -119,6 +120,8 @@ export interface LedgerEntry {
   balanceAfter: number;
   remark: string | null;
   reversalOfId: string | null;
+  /** 冲正抵掉的是哪一类。不是冲正为空。 */
+  reversalOfType: LedgerType | null;
   reversedById: string | null;
   createdAt: string;
 }

@@ -20,6 +20,7 @@
 | 上线前安全加固 | 已完成 | 服务端强制首次改密、改密后旧登录作废；记账请求号必填；正式环境关文档、限跨域、拒绝示例密钥。见 [backend/security-hardening.md](./backend/security-hardening.md) |
 | 员工端开单一条龙 | 已完成 | 输手机号 → 填会员权益金额 → 顾客签合同 → 签完才充值到账 → 弹会员小程序码。见 [backend/m4-esign-sandbox.md](./backend/m4-esign-sandbox.md) 第 10 节 |
 | 会员和员工合并成一个小程序 | 已完成 | 2026-11-04 坤总定：同一个登录页，后台开过的员工手机号登录直接进工作台，其他人进会员页；员工能切到自己的会员卡再回来；员工停用后只剩会员页。只需注册、认证、备案一个小程序。见 [apps/member-mp/README.md](../apps/member-mp/README.md)「登录和分流」 |
+| 退余额、会员资料维护 | 已完成 | 2026-11-04 上线清单 B、C：店长和超管在商家后台退余额（新流水类型，对账单列）；超管给会员换手机号、改称呼、停用和恢复，换号或停用后旧手机上的登录马上失效。见 [backend/refund-member-admin.md](./backend/refund-member-admin.md) |
 | 小程序保持登录 | 已完成 | 2026-11-01 坤总要求员工端「一次登录以后就一直登录」、会员端「也改最长的」：两个小程序登录 30 天、每天打开自动续期；商家后台仍 12 小时。见 [backend/security-hardening.md](./backend/security-hardening.md) 第 1 节 |
 
 ## 已拍板的账务规则（2026-10-27）
