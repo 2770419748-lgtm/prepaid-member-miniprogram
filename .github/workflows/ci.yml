@@ -64,3 +64,59 @@ jobs:
       # 每个包自己的 test 脚本都会跑（没有 test 脚本的包跳过）。新包加测试不用改这里。
       - name: unit tests
         run: pnpm -r --if-present test
+
+  # 正式环境部署包：用真正的 Dockerfile 和 ./prepaid.sh 在一台空机器上从零装一遍，
+  # 建公司、走 HTTPS、加密备份、恢复演练、真恢复、升级。域名用 *.localhost（Caddy 自己发证书），密钥都是临时生成的。
+  deploy-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: deploy
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: script syntax
+        run: |
+          for f in backup/*.sh; do sh -n "$f"; done
+          bash -n prepaid.sh
+
+      - name: install
+        run: |
+          cp env.example .env
+          sed -i \
+            -e 's/^API_DOMAIN=.*/API_DOMAIN=api.localhost/' \
+            -e 's/^ADMIN_DOMAIN=.*/ADMIN_DOMAIN=admin.localhost/' \
+            -e 's/^ACME_EMAIL=.*/ACME_EMAIL=ci@example.com/' \
+            -e 's/^BACKUP_PASSPHRASE=.*/BACKUP_PASSPHRASE=ci-only-passphrase/' \
+            -e 's/^NPM_REGISTRY=.*/NPM_REGISTRY=/' \
+            -e 's/^APK_MIRROR=.*/APK_MIRROR=/' \
+            -e 's/^PRISMA_ENGINES_MIRROR=.*/PRISMA_ENGINES_MIRROR=/' \
+            .env
+          ./prepaid.sh install
+
+      - name: create company and check https
+        run: |
+          printf '%s\n' 'CI 测试公司' '一号店' '13800000009' '测试管理员' | ./prepaid.sh init-company > /dev/null
+          # 只能建一次
+          if printf '%s\n' 'again' 'again' '13800000008' 'again' | ./prepaid.sh init-company; then exit 1; fi
+          curl -fsS -k --retry 10 --retry-all-errors --retry-delay 3 --resolve api.localhost:443:127.0.0.1 https://api.localhost/health | grep '"db":"up"'
+          curl -fsS -k --resolve admin.localhost:443:127.0.0.1 https://admin.localhost/ | grep -q '<div id="app">'
+          # 正式环境不开接口文档
+          test "$(curl -s -k -o /dev/null -w '%{http_code}' --resolve api.localhost:443:127.0.0.1 https://api.localhost/docs)" = 404
+
+      - name: backup, drill and restore
+        run: |
+          ./prepaid.sh backup
+          ./prepaid.sh drill
+          printf '确认恢复\n' | ./prepaid.sh restore latest
+          curl -fsS -k --retry 10 --retry-all-errors --retry-delay 3 --resolve api.localhost:443:127.0.0.1 https://api.localhost/health | grep '"db":"up"'
+          ./prepaid.sh status
+
+      - name: upgrade
+        run: ./prepaid.sh upgrade
+
+      - name: logs
+        if: failure()
+        run: docker compose --env-file .env -f docker-compose.yml logs --tail 100

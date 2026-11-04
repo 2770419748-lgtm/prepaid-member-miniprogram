@@ -1,0 +1,16 @@
+# 正式镜像只需要源码和依赖清单（见 deploy/Dockerfile）。密钥、本机数据和编译产物都不进构建上下文。
+.git
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+deploy/.env
+deploy/backups
+apps/api/.storage
+**/coverage
+**/*.log
+docs
+tools
+apps/member-mp
+!apps/member-mp/package.json
