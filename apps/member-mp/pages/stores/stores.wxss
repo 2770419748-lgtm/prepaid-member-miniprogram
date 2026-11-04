@@ -1,3 +1,5 @@
+@import "../../styles/member.wxss";
+
 .stores-empty {
   padding: 160rpx 32rpx;
   text-align: center;

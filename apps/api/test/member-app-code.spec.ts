@@ -107,7 +107,7 @@ describe('member mini program code', () => {
     expect(await service.code()).toEqual({
       image: null,
       demo: false,
-      message: '会员小程序还没配置好，暂时显示不了小程序码',
+      message: '小程序还没配置好，暂时显示不了小程序码',
     });
   });
 });

@@ -52,8 +52,7 @@ M0（全栈 · 须坤总确认合入） → M1 账号门店 → M2 账务 → �
 ```text
 apps/api          # NestJS 后端（本目录任务全部落在此）
 apps/admin-web    # Vue3 商家后台
-apps/member-mp    # 会员小程序
-apps/staff-mp     # 商家小程序
+apps/member-mp    # 储值会员小程序：会员页 pages/ + 员工工作台 staff/（2026-11-04 起合并成一个，原 apps/staff-mp 已并入）
 ```
 
 ---

@@ -1,6 +1,7 @@
 import { fetchBenefits, fetchLedger, fetchMe, fetchSignFlows, fetchStores, fetchWallet } from '../../utils/api';
 import { clock, dayLabel, formatYuan, maskPhone } from '../../utils/format';
 import { LedgerRow, toRow } from '../../utils/ledger';
+import { setMode } from '../../utils/mode';
 import { errorText } from '../../utils/request';
 import { ensureLogin } from '../../utils/session';
 import { BenefitSummary, GUIDED_KEY, guidedMark, homeBenefit, shouldGuide } from '../../utils/sign';
@@ -35,6 +36,8 @@ Page({
     if (!ensureLogin()) {
       return;
     }
+    // 从小程序码直接打开首页时也算回到会员这一边，下次打开小程序还是这里。
+    setMode('member');
     this.load();
   },
 

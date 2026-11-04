@@ -51,7 +51,7 @@ describe('WechatIdentityService', () => {
       client as unknown as WechatPhoneClient,
     );
 
-    const identity = await service.resolve('member', {
+    const identity = await service.resolve({
       code: 'login-code',
       phoneCode: 'phone-code',
       mockPhone: '13800138000',
@@ -73,12 +73,12 @@ describe('WechatIdentityService', () => {
     );
 
     await expect(
-      service.resolve('staff', {
+      service.resolve({
         code: 'login-code',
         phoneCode: 'phone-code',
         mockPhone: '+86 138-0013-8000',
       }),
-    ).resolves.toMatchObject({ phone: '13800138000', openId: 'mock:staff:13800138000' });
+    ).resolves.toMatchObject({ phone: '13800138000', openId: 'mock:13800138000' });
     expect(client.exchange).not.toHaveBeenCalled();
     expect(apps.credentials).not.toHaveBeenCalled();
   });

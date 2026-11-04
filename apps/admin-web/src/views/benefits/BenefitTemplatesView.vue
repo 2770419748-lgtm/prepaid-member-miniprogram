@@ -133,7 +133,7 @@
         <a-form-item label="一句话说明">
           <a-input v-model:value="planForm.summary" :maxlength="200" placeholder="会员首页显示的摘要" />
         </a-form-item>
-        <a-form-item label="权益条目" required extra="1 到 20 条，会员小程序最多展示前 3 条">
+        <a-form-item label="权益条目" required extra="1 到 20 条，小程序会员页最多展示前 3 条">
           <div v-for="(item, i) in planForm.items" :key="i" class="item-row">
             <a-input v-model:value="item.title" :maxlength="40" placeholder="权益名称" style="width: 200px" />
             <a-input v-model:value="item.detail" :maxlength="500" placeholder="细则（可不填）" style="flex: 1" />
