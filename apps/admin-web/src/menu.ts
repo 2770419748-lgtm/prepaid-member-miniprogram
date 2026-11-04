@@ -47,6 +47,7 @@ export const MENU: MenuGroup[] = [
     children: [
       { key: 'stores', label: '门店管理' },
       { key: 'staff', label: '员工管理', minRole: 'STORE_MANAGER' },
+      { key: 'review-demo', label: '小程序审核入口', superAdminOnly: true },
     ],
   },
   {

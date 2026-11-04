@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { AccessPrincipal } from './access-principal';
 import { AllowPendingPassword, CurrentPrincipal, Principals, Public } from './decorators';
+import { ReviewDemoLoginDto, ReviewDemoQueryDto } from './dto/review-demo-login.dto';
 import { ChangeStaffPasswordDto, StaffPasswordLoginDto } from './dto/staff-password.dto';
 import { WxPhoneLoginDto } from './dto/wx-phone-login.dto';
 
@@ -54,6 +55,25 @@ export class AuthController {
   })
   memberSessionForStaff(@CurrentPrincipal() principal: AccessPrincipal) {
     return this.auth.memberSessionForStaff(principal);
+  }
+
+  @Public()
+  @Get('review-demo')
+  @ApiOperation({
+    summary: '小程序登录页要不要显示「审核体验入口」：超级管理员在商家后台打开后 7 天内为 true，只回 enabled',
+  })
+  reviewDemo(@Query() query: ReviewDemoQueryDto) {
+    return this.auth.reviewDemoEnabled(query.orgId);
+  }
+
+  @Public()
+  @Post('review-demo/login')
+  @ApiOperation({
+    summary:
+      '审核体验入口登录（微信审核员用）：账号密码在商家后台「小程序审核入口」里看，登进演示公司，返回和员工登录一样的结果（principalType=STAFF）。入口关着时 403',
+  })
+  loginReviewDemo(@Body() dto: ReviewDemoLoginDto) {
+    return this.auth.loginReviewDemo(dto);
   }
 
   @Public()

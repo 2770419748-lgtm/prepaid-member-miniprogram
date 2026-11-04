@@ -3,12 +3,24 @@ import { Reflector } from '@nestjs/core';
 import { AccessPrincipal, PrincipalType } from './access-principal';
 import { ALLOW_PENDING_PASSWORD, IS_PUBLIC, PRINCIPALS_KEY } from './decorators';
 import { PrismaService } from '../prisma/prisma.service';
+import { reviewDemoOpen } from '../review-demo/review-demo.constants';
 
 /** 还没改初始密码时调了别的接口。网页后台据此跳到改密页。 */
 export const MUST_CHANGE_PASSWORD = 'MUST_CHANGE_PASSWORD';
 
 interface AuthenticatedRequest {
   user?: AccessPrincipal;
+}
+
+const orgState = {
+  select: { status: true, demoOf: { select: { reviewDemoUntil: true } } },
+} as const;
+
+/** 演示公司（微信审核用）的登录只在真实公司的审核体验入口开着时有效：关了或到期，审核员马上进不去。 */
+function assertDemoStillOpen(org: { demoOf: { reviewDemoUntil: Date | null } | null }): void {
+  if (org.demoOf && !reviewDemoOpen(org.demoOf.reviewDemoUntil)) {
+    throw new UnauthorizedException('审核体验已关闭');
+  }
 }
 
 /**
@@ -22,7 +34,7 @@ export async function refreshPrincipal(
   if (current.principalType === 'STAFF') {
     const staff = await prisma.staff.findUnique({
       where: { id: current.sub },
-      include: { storeRoles: true, org: { select: { status: true } } },
+      include: { storeRoles: true, org: orgState },
     });
     if (
       !staff ||
@@ -32,6 +44,7 @@ export async function refreshPrincipal(
     ) {
       throw new UnauthorizedException('登录已失效');
     }
+    assertDemoStillOpen(staff.org);
     // 改过密码或被重置过密码，之前签发的凭证都作废。
     if (!current.session || current.session.version !== staff.sessionVersion) {
       throw new UnauthorizedException('登录已失效，请重新登录');
@@ -48,7 +61,7 @@ export async function refreshPrincipal(
 
   const member = await prisma.member.findUnique({
     where: { id: current.sub },
-    include: { org: { select: { status: true } } },
+    include: { org: orgState },
   });
   if (
     !member ||
@@ -58,6 +71,7 @@ export async function refreshPrincipal(
   ) {
     throw new UnauthorizedException('登录已失效');
   }
+  assertDemoStillOpen(member.org);
   // 后台给会员换过手机号（例如丢了手机）或停用过，旧手机上的登录作废。
   if (!current.session || current.session.version !== member.sessionVersion) {
     throw new UnauthorizedException('登录已失效，请重新登录');

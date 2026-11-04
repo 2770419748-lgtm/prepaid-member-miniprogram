@@ -87,6 +87,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '员工管理', minRole: 'STORE_MANAGER' },
       },
       {
+        path: 'review-demo',
+        name: 'review-demo',
+        component: () => import('../views/org/ReviewDemoView.vue'),
+        meta: { title: '小程序审核入口', minRole: 'SUPER_ADMIN' },
+      },
+      {
         path: 'benefits/templates',
         name: 'benefit-templates',
         component: () => import('../views/benefits/BenefitTemplatesView.vue'),

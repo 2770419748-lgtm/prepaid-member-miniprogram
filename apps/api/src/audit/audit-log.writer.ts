@@ -29,6 +29,11 @@ export const AuditAction = {
   SignFlowCancel: 'SIGN_FLOW_CANCEL',
   /** e签宝回调或主动核对后状态变化（签完、拒签、过期、撤销）。系统写入，没有操作人。 */
   SignFlowStatusChange: 'SIGN_FLOW_STATUS_CHANGE',
+  /** 微信审核体验入口：超级管理员打开（或延长）、换密码、关闭；审核员用审核账号登录。记在真实公司名下。 */
+  ReviewDemoOpen: 'REVIEW_DEMO_OPEN',
+  ReviewDemoPassword: 'REVIEW_DEMO_PASSWORD',
+  ReviewDemoClose: 'REVIEW_DEMO_CLOSE',
+  ReviewDemoLogin: 'REVIEW_DEMO_LOGIN',
 } as const;
 
 export type AuditActionCode = (typeof AuditAction)[keyof typeof AuditAction];
@@ -58,6 +63,10 @@ export const AuditActionLabel: Record<AuditActionCode, string> = {
   SIGN_FLOW_CREATE: '发起签署',
   SIGN_FLOW_CANCEL: '取消签署',
   SIGN_FLOW_STATUS_CHANGE: '签署状态变化',
+  REVIEW_DEMO_OPEN: '打开审核体验入口',
+  REVIEW_DEMO_PASSWORD: '更换审核密码',
+  REVIEW_DEMO_CLOSE: '关闭审核体验入口',
+  REVIEW_DEMO_LOGIN: '审核账号登录',
 };
 
 export interface AuditWriteInput {

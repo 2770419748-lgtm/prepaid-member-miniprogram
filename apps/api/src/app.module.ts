@@ -11,6 +11,7 @@ import { OrgModule } from './org/org.module';
 import { PayCodeModule } from './pay-code/pay-code.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
+import { ReviewDemoModule } from './review-demo/review-demo.module';
 import { StorageModule } from './storage/storage.module';
 import { WalletModule } from './wallet/wallet.module';
 
@@ -21,6 +22,7 @@ import { WalletModule } from './wallet/wallet.module';
  * EsignModule：权益方案、权益单模板、e签宝沙箱签署与回调、合同 PDF 归档。正式签署开关默认关闭。
  *   带会员权益金额的权益单签完后经 WalletService 充值。
  * MemberAppModule：开单完成后给顾客扫的会员小程序码。
+ * ReviewDemoModule：微信审核体验入口（演示公司、假数据），超级管理员提审时打开，7 天自动关。
  */
 @Module({
   imports: [
@@ -41,6 +43,7 @@ import { WalletModule } from './wallet/wallet.module';
     ReconciliationModule,
     EsignModule,
     MemberAppModule,
+    ReviewDemoModule,
   ],
 })
 export class AppModule {}
