@@ -15,6 +15,7 @@
 | 线下充值 | 只记账，不收款。钱在门店线下收 |
 | 消费扣款 | 必须先扫顾客的会员码（见 [pay-code.md](./pay-code.md)）；余额不足拒绝；同一张卡被同时扣款也不会扣成负数 |
 | 冲正 | 记错了账，补记一笔反方向的把原流水整笔抵掉 |
+| 退余额 | 2026-11-04 起：店长或超管把没用完的储值退给顾客（`REFUND`），见 [refund-member-admin.md](./refund-member-admin.md) |
 | 流水查询 | 店员按门店范围查；会员只看自己的 |
 | 余额 | 挂在会员钱包上，全公司门店通用 |
 
@@ -63,15 +64,18 @@
 | GET | `/members/me/wallet` | 会员 | — | `{ hasCard, balanceCent, openedAt, updatedAt }` |
 | POST | `/wallets/:memberId/recharge` | 店员及以上 | `storeId`, `amountCent`, `remark?`, `requestId`（必填） | `{ entry, balanceCent, replayed }` |
 | POST | `/wallets/:memberId/consume` | 店员及以上 | 同上，另加必填 `payCode`（刚扫到的会员码） | 同上。余额不足 400；码的问题见 [pay-code.md](./pay-code.md) |
+| POST | `/wallets/:memberId/refund` | 超管或本店店长 | `storeId`, `amountCent`, `remark`（必填，原因和退款方式）, `requestId`（必填） | 同上。超过余额 400。见 [refund-member-admin.md](./refund-member-admin.md) |
 | POST | `/ledger/:id/reversal` | 超管或原门店店长 | `remark`, `requestId`（必填） | 同上。已冲过 409 |
+| PATCH | `/members/:id` | 超管 | `phone?`, `name?`, `reason?`（换号必填） | 会员卡。换号后会员旧登录作废 |
+| POST | `/members/:id/disable`、`/members/:id/enable` | 超管 | `reason` | 会员卡 |
 | GET | `/ledger` | 店员按范围；会员只看自己 | `memberId?`, `storeId?`, `type?`, `from?`, `to?`, `page`, `pageSize` | 分页流水 |
 | GET | `/ledger/:id` | 同上 | — | 一条流水 |
 
 会员卡（店员视角）字段：`id`, `phone`, `name`, `status`, `hasCard`, `openStoreId`, `openStoreName`, `balanceCent`, `openedAt`, `wechatBound`, `createdAt`。
 
-流水（店员视角）字段：`id`, `memberId`, `memberPhone`, `memberName`, `storeId`, `storeName`, `operatorStaffId`, `operatorName`, `type`, `amountCent`（绝对值）, `changeCent`（对余额的实际影响，加为正、减为负）, `balanceBefore`, `balanceAfter`, `remark`, `reversalOfId`（冲正指向的原流水）, `reversedById`（被哪笔冲正）, `createdAt`。
+流水（店员视角）字段：`id`, `memberId`, `memberPhone`, `memberName`, `storeId`, `storeName`, `operatorStaffId`, `operatorName`, `type`, `amountCent`（绝对值）, `changeCent`（对余额的实际影响，加为正、减为负）, `balanceBefore`, `balanceAfter`, `remark`, `reversalOfId`（冲正指向的原流水）, `reversalOfType`（冲正抵掉的原流水类型）, `reversedById`（被哪笔冲正）, `createdAt`。
 
-流水（会员视角）只有：`id`, `type`, `amountCent`, `changeCent`, `balanceAfter`, `storeName`, `reversalOfId`, `reversed`, `createdAt`。
+流水（会员视角）只有：`id`, `type`, `amountCent`, `changeCent`, `balanceAfter`, `storeName`, `reversalOfId`, `reversalOfType`, `reversed`, `createdAt`。
 
 `from` 含、`to` 不含，ISO 时间，例如 `2026-10-01T00:00:00+08:00`。
 
@@ -99,11 +103,11 @@ COMMIT
 数据库层另有兜底（M2 迁移，Prisma 不描述这些，见 `prisma/migrations/20261027200000_m2_wallet_ledger`）：
 
 - `wallets.balance_cent >= 0`。
-- 流水金额为正；前后余额不为负；`RECHARGE` 必须是加、`CONSUME` 必须是减、`REVERSAL` 必须指向原流水且金额对得上。
+- 流水金额为正；前后余额不为负；`RECHARGE` 必须是加、`CONSUME` 和 `REFUND` 必须是减、`REVERSAL` 必须指向原流水且金额对得上（`REFUND` 自 2026-11-04 迁移 `20261104100100_ledger_refund_check`）。
 - `ledger_entries` 触发器拒绝 `UPDATE`、`DELETE` 和 `TRUNCATE`。连带后果：有流水的员工、会员、门店都不能被硬删（本来也没有硬删接口，停用即可）。
 - `reversal_of_id` 唯一：同一条流水并发冲正也只会成功一笔。
 
-操作记录：`MEMBER_CARD_OPEN`、`WALLET_RECHARGE`、`WALLET_CONSUME`、`WALLET_REVERSAL`，与业务写入同一事务。
+操作记录：`MEMBER_CARD_OPEN`、`WALLET_RECHARGE`、`WALLET_CONSUME`、`WALLET_REVERSAL`、`WALLET_REFUND`，与业务写入同一事务。
 
 ## 6. 测试
 

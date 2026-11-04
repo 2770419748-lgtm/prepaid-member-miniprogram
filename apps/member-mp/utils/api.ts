@@ -23,7 +23,8 @@ export interface WalletView {
   updatedAt: string | null;
 }
 
-export type LedgerType = 'RECHARGE' | 'CONSUME' | 'REVERSAL';
+/** REFUND 是退款：门店把没用完的储值退给会员。 */
+export type LedgerType = 'RECHARGE' | 'CONSUME' | 'REVERSAL' | 'REFUND';
 
 export interface LedgerItem {
   id: string;
@@ -35,6 +36,8 @@ export interface LedgerItem {
   storeName: string;
   /** 撤销记录指向被撤销的那一笔。 */
   reversalOfId: string | null;
+  /** 撤销记录撤销的是哪一类。不是撤销记录为空。 */
+  reversalOfType?: LedgerType | null;
   /** 这一笔已经被撤销。 */
   reversed: boolean;
   createdAt: string;

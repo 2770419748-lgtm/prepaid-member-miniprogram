@@ -37,7 +37,7 @@ export function toLedgerRow(entry: LedgerEntry, options: { showStore?: boolean }
   }
   return {
     id: entry.id,
-    title: ledgerTitle(entry.type, entry.changeCent),
+    title: ledgerTitle(entry.type, entry.changeCent, entry.reversalOfType),
     member: memberLabel(entry.memberPhone, entry.memberName),
     meta: meta.join(' · '),
     change: formatChange(entry.changeCent),

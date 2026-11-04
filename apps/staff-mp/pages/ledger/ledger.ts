@@ -18,6 +18,7 @@ const TYPES: { value: LedgerType | ''; label: string }[] = [
   { value: 'RECHARGE', label: '充值' },
   { value: 'CONSUME', label: '消费' },
   { value: 'REVERSAL', label: '冲正' },
+  { value: 'REFUND', label: '退余额' },
 ];
 
 Page({

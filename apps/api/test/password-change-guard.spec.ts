@@ -60,7 +60,7 @@ function fakePrisma(staff: StaffRow): PrismaService {
     staff: { findUnique: jest.fn(() => Promise.resolve(staff)) },
     member: {
       findUnique: jest.fn(() =>
-        Promise.resolve({ id: 'member-1', orgId: 'org-1', status: 'ACTIVE', org: { status: 'ACTIVE' } }),
+        Promise.resolve({ id: 'member-1', orgId: 'org-1', status: 'ACTIVE', sessionVersion: 1, org: { status: 'ACTIVE' } }),
       ),
     },
   } as unknown as PrismaService;
@@ -142,7 +142,27 @@ describe('forced password change guard', () => {
 
   it('leaves members alone', async () => {
     const guard = new PrincipalGuard(new Reflector(), fakePrisma(staffRow()));
-    const member: AccessPrincipal = { sub: 'member-1', orgId: 'org-1', principalType: 'MEMBER', roles: [] };
+    const member: AccessPrincipal = {
+      sub: 'member-1',
+      orgId: 'org-1',
+      principalType: 'MEMBER',
+      roles: [],
+      session: { version: 1, method: 'WECHAT' },
+    };
     await expect(guard.canActivate(contextFor(member, 'recharge'))).resolves.toBe(true);
+  });
+
+  it('treats a member token from before a phone change or disable as logged out', async () => {
+    const guard = new PrincipalGuard(new Reflector(), fakePrisma(staffRow()));
+    const stale: AccessPrincipal = {
+      sub: 'member-1',
+      orgId: 'org-1',
+      principalType: 'MEMBER',
+      roles: [],
+      session: { version: 0, method: 'WECHAT' },
+    };
+    await expect(guard.canActivate(contextFor(stale, 'recharge'))).rejects.toThrow('登录已失效');
+    const legacy: AccessPrincipal = { sub: 'member-1', orgId: 'org-1', principalType: 'MEMBER', roles: [] };
+    await expect(guard.canActivate(contextFor(legacy, 'recharge'))).rejects.toThrow('登录已失效');
   });
 });

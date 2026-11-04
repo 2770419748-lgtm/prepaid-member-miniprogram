@@ -27,7 +27,7 @@ interface DetailView {
 
 function toView(entry: LedgerEntry): DetailView {
   return {
-    title: ledgerTitle(entry.type, entry.changeCent),
+    title: ledgerTitle(entry.type, entry.changeCent, entry.reversalOfType),
     change: formatChange(entry.changeCent),
     tone: entry.changeCent >= 0 ? 'plus' : 'minus',
     reversed: entry.reversedById != null,

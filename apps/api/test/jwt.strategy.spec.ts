@@ -37,19 +37,29 @@ describe('JwtStrategy', () => {
     expect(() => strategy().validate({ ...base, sessionVersion: 0, loginMethod: 'SMS' })).toThrow('登录已失效');
   });
 
-  it('reads a member principal without roles', () => {
+  it('reads a member principal without roles, with its login version', () => {
     expect(
       strategy().validate({
         sub: 'member-1',
         orgId: 'org-1',
         principalType: 'MEMBER',
+        sessionVersion: 2,
+        loginMethod: 'WECHAT',
       }),
     ).toEqual({
       sub: 'member-1',
       orgId: 'org-1',
       principalType: 'MEMBER',
       roles: [],
+      session: { version: 2, method: 'WECHAT' },
     });
+  });
+
+  it('rejects a member token issued before login versions, or one claiming a password login', () => {
+    const base = { sub: 'member-1', orgId: 'org-1', principalType: 'MEMBER' };
+    expect(() => strategy().validate(base)).toThrow('登录已失效');
+    expect(() => strategy().validate({ ...base, sessionVersion: 0 })).toThrow('登录已失效');
+    expect(() => strategy().validate({ ...base, sessionVersion: 0, loginMethod: 'PASSWORD' })).toThrow('登录已失效');
   });
 
   it('rejects a member token that smuggles store roles', () => {
@@ -59,6 +69,8 @@ describe('JwtStrategy', () => {
         orgId: 'org-1',
         principalType: 'MEMBER',
         roles: [{ storeId: 'store-1', role: 'SUPER_ADMIN' }],
+        sessionVersion: 0,
+        loginMethod: 'WECHAT',
       }),
     ).toThrow(UnauthorizedException);
   });

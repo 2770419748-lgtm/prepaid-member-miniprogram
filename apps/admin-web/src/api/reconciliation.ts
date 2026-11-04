@@ -6,13 +6,19 @@ export interface DayFigures {
   rechargeCent: number;
   consumeCount: number;
   consumeCent: number;
+  /** 退余额：把没用完的储值退给顾客。 */
+  refundCount: number;
+  refundCent: number;
   reversalCount: number;
   reversedRechargeCent: number;
   reversedConsumeCent: number;
+  reversedRefundCent: number;
   /** 扣掉冲正后的净充值。 */
   netRechargeCent: number;
   /** 扣掉冲正后的净消费。 */
   netConsumeCent: number;
+  /** 扣掉冲正后的净退余额。 */
+  netRefundCent: number;
   netChangeCent: number;
 }
 

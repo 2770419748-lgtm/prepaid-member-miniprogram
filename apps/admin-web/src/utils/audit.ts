@@ -38,7 +38,12 @@ export function describeAuditPayload(payload: Record<string, unknown> | null, st
   if (typeof p.balanceBefore === 'number' && typeof p.balanceAfter === 'number') {
     lines.push(`余额 ${formatCent(p.balanceBefore)} → ${formatCent(p.balanceAfter)} 元`);
   }
-  const name = text(p.name) || text(p.title);
+  // 改会员资料时新旧都记了：称呼、手机号写成「旧 → 新」。
+  const renamed = 'previousName' in p;
+  if (renamed) {
+    lines.push(`称呼 ${text(p.previousName) || '未填'} → ${text(p.name) || '未填'}`);
+  }
+  const name = renamed ? text(p.title) : text(p.name) || text(p.title);
   if (name) {
     lines.push(`名称 ${name}`);
   }
@@ -55,8 +60,11 @@ export function describeAuditPayload(payload: Record<string, unknown> | null, st
   if (p.env === 'SANDBOX') {
     lines.push('测试签署');
   }
-  if (typeof p.phone === 'string' && p.phone) {
-    lines.push(`电话 ${/^1\d{10}$/.test(p.phone) ? maskPhone(p.phone) : p.phone}`);
+  const phoneText = (value: string) => (/^1\d{10}$/.test(value) ? maskPhone(value) : value);
+  if (typeof p.previousPhone === 'string' && typeof p.phone === 'string') {
+    lines.push(`手机号 ${phoneText(p.previousPhone)} → ${phoneText(p.phone)}`);
+  } else if (typeof p.phone === 'string' && p.phone) {
+    lines.push(`电话 ${phoneText(p.phone)}`);
   }
   if (isRole(p.role)) {
     const store = typeof p.storeId === 'string' ? storeName(p.storeId) : null;

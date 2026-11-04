@@ -47,6 +47,11 @@ export function canManageStore(roles: readonly RoleClaim[], storeId: string): bo
   return isSuperAdmin(roles) || managedStoreIds(roles).includes(storeId);
 }
 
+/** 退余额：超级管理员在任一门店，店长只在自己管的门店。和后端一致。 */
+export function canRefundAt(roles: readonly RoleClaim[], storeId: string): boolean {
+  return canManageStore(roles, storeId);
+}
+
 /** 冲正：超级管理员，或流水所在门店的店长。冲正流水本身和已冲正过的不能再冲。 */
 export function canReverse(
   roles: readonly RoleClaim[],

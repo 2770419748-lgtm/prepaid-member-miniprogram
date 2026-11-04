@@ -37,3 +37,33 @@ export class MemberListQueryDto extends PageQueryDto {
   @MaxLength(40)
   keyword?: string;
 }
+
+/** 超级管理员修改会员资料。只填要改的项。 */
+export class UpdateMemberDto {
+  @ApiPropertyOptional({ example: '13900139000', description: '新手机号。换号后会员要用新号重新登录，旧手机上的登录立即作废' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(20)
+  phone?: string;
+
+  @ApiPropertyOptional({ example: '王女士', description: '称呼。传空字符串表示清掉' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  name?: string;
+
+  @ApiPropertyOptional({ example: '顾客换号，本人到店出示身份证核对', description: '为什么改。换手机号时必填，写进操作记录' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  reason?: string;
+}
+
+export class MemberStatusDto {
+  @ApiProperty({ example: '顾客手机丢失，先停用', description: '为什么停用或恢复，必填，写进操作记录' })
+  @IsString()
+  @IsNotEmpty({ message: '请写明原因' })
+  @MaxLength(200)
+  reason!: string;
+}

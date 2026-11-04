@@ -22,7 +22,8 @@ import {
 interface AggregateRow {
   store_id: string;
   type: LedgerType;
-  up: boolean;
+  /** 冲正抵掉的原流水类型；不是冲正为空。 */
+  original_type: LedgerType | null;
   count: number;
   total: bigint;
 }
@@ -50,12 +51,17 @@ function add(figures: DailyFigures, row: AggregateRow): void {
   } else if (row.type === LedgerType.CONSUME) {
     figures.consumeCount += row.count;
     figures.consumeCent += total;
+  } else if (row.type === LedgerType.REFUND) {
+    figures.refundCount += row.count;
+    figures.refundCent += total;
   } else {
     figures.reversalCount += row.count;
-    if (row.up) {
-      figures.reversedConsumeCent += total;
-    } else {
+    if (row.original_type === LedgerType.RECHARGE) {
       figures.reversedRechargeCent += total;
+    } else if (row.original_type === LedgerType.REFUND) {
+      figures.reversedRefundCent += total;
+    } else {
+      figures.reversedConsumeCent += total;
     }
   }
 }
@@ -154,9 +160,9 @@ export class ReconciliationService {
                e."balance_after",
                CASE
                  WHEN e."type" = 'RECHARGE' THEN e."amount_cent"
-                 WHEN e."type" = 'CONSUME' THEN -e."amount_cent"
+                 WHEN e."type" IN ('CONSUME', 'REFUND') THEN -e."amount_cent"
                  WHEN o."type" = 'RECHARGE' THEN -e."amount_cent"
-                 WHEN o."type" = 'CONSUME' THEN e."amount_cent"
+                 WHEN o."type" IN ('CONSUME', 'REFUND') THEN e."amount_cent"
                END AS "delta"
         FROM "ledger_entries" e
         LEFT JOIN "ledger_entries" o ON o."id" = e."reversal_of_id"
@@ -292,22 +298,23 @@ export class ReconciliationService {
     return { openingCent, netChangeCent, closingCent: openingCent + netChangeCent };
   }
 
-  /** 按门店、类型、方向汇总。方向只对冲正有意义：余额变多是退回消费，变少是冲回充值。 */
+  /** 按门店、类型汇总；冲正再按抵掉的原流水类型拆开（冲回充值、退回消费、冲回退款）。 */
   private aggregate(orgId: string, storeIds: string[], from: Date, to: Date): Promise<AggregateRow[]> {
     if (storeIds.length === 0) {
       return Promise.resolve([]);
     }
     return this.prisma.$queryRaw<AggregateRow[]>`
-      SELECT "store_id",
-             "type",
-             ("balance_after" > "balance_before") AS "up",
+      SELECT e."store_id",
+             e."type",
+             o."type" AS "original_type",
              COUNT(*)::int AS "count",
-             COALESCE(SUM("amount_cent"), 0)::bigint AS "total"
-      FROM "ledger_entries"
-      WHERE "org_id" = ${orgId}
-        AND "store_id" IN (${Prisma.join(storeIds)})
-        AND "created_at" >= ${from}
-        AND "created_at" < ${to}
+             COALESCE(SUM(e."amount_cent"), 0)::bigint AS "total"
+      FROM "ledger_entries" e
+      LEFT JOIN "ledger_entries" o ON o."id" = e."reversal_of_id"
+      WHERE e."org_id" = ${orgId}
+        AND e."store_id" IN (${Prisma.join(storeIds)})
+        AND e."created_at" >= ${from}
+        AND e."created_at" < ${to}
       GROUP BY 1, 2, 3
     `;
   }

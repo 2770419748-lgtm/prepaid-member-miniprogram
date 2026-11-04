@@ -2,14 +2,21 @@ import type { LedgerItem } from './api';
 import { clock, dateTime, dayKey, dayLabel, formatChange, formatYuan } from './format';
 
 /**
- * 会员看到的名称。「冲正」对会员说成「撤销」：消费被撤销钱回到余额，充值被撤销钱从余额扣回。
+ * 会员看到的名称。「冲正」对会员说成「撤销」：消费被撤销钱回到余额，充值被撤销钱从余额扣回，
+ * 退款被撤销钱回到余额。「退余额」对会员说成「退款」。
  */
-export function entryTitle(entry: Pick<LedgerItem, 'type' | 'changeCent'>): string {
+export function entryTitle(entry: Pick<LedgerItem, 'type' | 'changeCent' | 'reversalOfType'>): string {
   if (entry.type === 'RECHARGE') {
     return '充值';
   }
   if (entry.type === 'CONSUME') {
     return '消费';
+  }
+  if (entry.type === 'REFUND') {
+    return '退款';
+  }
+  if (entry.reversalOfType === 'REFUND') {
+    return '退款撤销';
   }
   return entry.changeCent > 0 ? '消费撤销' : '充值撤销';
 }

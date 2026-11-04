@@ -5,6 +5,7 @@ export const ledgerInclude = {
   store: { select: { name: true } },
   operator: { select: { name: true } },
   reversedBy: { select: { id: true } },
+  reversalOf: { select: { type: true } },
 } satisfies Prisma.LedgerEntryInclude;
 
 export type LedgerRecord = Prisma.LedgerEntryGetPayload<{ include: typeof ledgerInclude }>;
@@ -29,6 +30,8 @@ export interface StaffLedgerView {
   remark: string | null;
   /** 冲正流水指向的原流水。 */
   reversalOfId: string | null;
+  /** 冲正流水抵掉的是哪一类（充值、消费或退款）。不是冲正为空。 */
+  reversalOfType: LedgerType | null;
   /** 已被哪笔冲正。空表示没被冲正。 */
   reversedById: string | null;
   createdAt: string;
@@ -43,6 +46,8 @@ export interface MemberLedgerView {
   balanceAfter: number;
   storeName: string;
   reversalOfId: string | null;
+  /** 撤销记录撤销的是哪一类（充值、消费或退款）。不是撤销记录为空。 */
+  reversalOfType: LedgerType | null;
   reversed: boolean;
   createdAt: string;
 }
@@ -64,6 +69,7 @@ export function toStaffLedgerView(entry: LedgerRecord): StaffLedgerView {
     balanceAfter: entry.balanceAfter,
     remark: entry.remark,
     reversalOfId: entry.reversalOfId,
+    reversalOfType: entry.reversalOf?.type ?? null,
     reversedById: entry.reversedBy?.id ?? null,
     createdAt: entry.createdAt.toISOString(),
   };
@@ -78,6 +84,7 @@ export function toMemberLedgerView(entry: LedgerRecord): MemberLedgerView {
     balanceAfter: entry.balanceAfter,
     storeName: entry.store.name,
     reversalOfId: entry.reversalOfId,
+    reversalOfType: entry.reversalOf?.type ?? null,
     reversed: entry.reversedBy != null,
     createdAt: entry.createdAt.toISOString(),
   };

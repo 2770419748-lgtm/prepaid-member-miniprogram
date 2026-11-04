@@ -12,6 +12,7 @@ const META: Record<LedgerType, { label: string; color: string }> = {
   RECHARGE: { label: '充值', color: 'success' },
   CONSUME: { label: '消费', color: 'processing' },
   REVERSAL: { label: '冲正', color: 'warning' },
+  REFUND: { label: '退余额', color: 'purple' },
 };
 
 const meta = computed(() => META[props.type]);

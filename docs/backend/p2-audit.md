@@ -113,8 +113,9 @@
       "storeId": "…", "storeName": "旗舰店", "storeStatus": "ACTIVE",
       "rechargeCount": 2, "rechargeCent": 120000,
       "consumeCount": 1, "consumeCent": 12800,
-      "reversalCount": 1, "reversedRechargeCent": 20000, "reversedConsumeCent": 0,
-      "netRechargeCent": 100000, "netConsumeCent": 12800, "netChangeCent": 87200
+      "refundCount": 0, "refundCent": 0,
+      "reversalCount": 1, "reversedRechargeCent": 20000, "reversedConsumeCent": 0, "reversedRefundCent": 0,
+      "netRechargeCent": 100000, "netConsumeCent": 12800, "netRefundCent": 0, "netChangeCent": 87200
     }
   ],
   "total": { "…": "同上各项的合计" },
@@ -123,6 +124,7 @@
 ```
 
 - `stores` 列出范围内全部门店（包括当天没有流水的、已停用的），按建店先后排。
+- 退余额（2026-11-04 起）单列：`refund*`。冲正按被冲原流水的类型拆开；`netChangeCent = netRechargeCent − netConsumeCent − netRefundCent`。见 [refund-member-admin.md](./refund-member-admin.md)。
 - `balance` 只有超级管理员、且不带 `storeId` 时给出，其余为 `null`。日初余额 = 当天零点前全部流水的加减之和（开卡时余额为 0）。
 
 `GET /reconciliation/overview`：

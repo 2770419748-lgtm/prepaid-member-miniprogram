@@ -13,7 +13,7 @@ interface AuthenticatedRequest {
 
 /**
  * 以数据库里的当前状态为准，不轻信凭证里旧的角色。停用后立即失效。
- * 员工凭证的登录版本号对不上（改过或被重置过密码）也失效。
+ * 登录版本号对不上也失效：员工改过或被重置过密码，会员被换过手机号或停用过。
  */
 export async function refreshPrincipal(
   prisma: PrismaService,
@@ -58,11 +58,16 @@ export async function refreshPrincipal(
   ) {
     throw new UnauthorizedException('登录已失效');
   }
+  // 后台给会员换过手机号（例如丢了手机）或停用过，旧手机上的登录作废。
+  if (!current.session || current.session.version !== member.sessionVersion) {
+    throw new UnauthorizedException('登录已失效，请重新登录');
+  }
   return {
     sub: member.id,
     orgId: member.orgId,
     principalType: 'MEMBER',
     roles: [],
+    session: current.session,
   };
 }
 
