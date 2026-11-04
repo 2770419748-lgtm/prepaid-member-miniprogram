@@ -1,6 +1,6 @@
 // 用真浏览器把商家后台走一遍并截图，连本机接口和真数据。只用于开发自查和给坤总看页面，不要部署。
 //
-//   node apps/admin-web/preview/shoot.mjs --out /tmp/admin-shots [--only login,firstlogin,admin,manager,esign,refund] [--size 1280x720]
+//   node apps/admin-web/preview/shoot.mjs --out /tmp/admin-shots [--only login,firstlogin,admin,manager,esign,refund,review] [--size 1280x720]
 //
 // --size 换浏览器窗口大小（默认 1440x900），查笔记本小屏下的排版用。
 //
@@ -8,8 +8,9 @@
 // （apps/member-mp/preview/fake-esign.mjs，3901，控制口 3902）；`pnpm dev:admin` 在 5173。
 // 场景会开卡、充值、冲正、建权益方案和发起签署，所以对同一个库只跑一次。
 
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { join } from 'node:path';
 
 const { chromium } = createRequire(import.meta.url)('playwright');
 
@@ -364,6 +365,33 @@ try {
     await admin.locator('.ant-table-row', { hasText: '退余额' }).first().locator('button:has-text("详情")').click();
     await admin.waitForSelector('.ant-drawer-content');
     await shot(admin, 'r13-退余额流水详情');
+    await admin.context().close();
+  }
+
+  if (run('review')) {
+    // 超管打开微信审核体验入口：关着 → 打开看到密码 → 再进来密码不显示 → 操作记录 → 关闭确认
+    const admin = await newPage();
+    await login(admin, '13800000000', 'Admin12345');
+    await admin.goto(`${BASE}/review-demo`);
+    await admin.waitForSelector('text=已关闭');
+    await shot(admin, 'v01-审核入口关着', true);
+    await admin.click('button:has-text("打开 7 天")');
+    await admin.waitForSelector('.mono.strong');
+    await admin.waitForTimeout(800);
+    await shot(admin, 'v02-打开后看到密码', true);
+    const password = (await admin.locator('.mono.strong').innerText()).trim();
+    writeFileSync(join(OUT, 'review-password.txt'), `${password}\n`);
+    await admin.reload();
+    await admin.waitForSelector('text=已打开');
+    await shot(admin, 'v03-开着时再进来');
+    await admin.goto(`${BASE}/audit-logs`);
+    await admin.waitForSelector('.ant-table-row');
+    await shot(admin, 'v04-操作记录');
+    await admin.goto(`${BASE}/review-demo`);
+    await admin.waitForSelector('text=已打开');
+    await admin.click('button:has-text("关闭入口")');
+    await admin.waitForSelector('.ant-popover');
+    await shot(admin, 'v05-关闭前确认');
     await admin.context().close();
   }
 } catch (error) {

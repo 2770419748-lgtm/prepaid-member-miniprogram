@@ -71,7 +71,7 @@
 会员页只调用会员接口，全部带 `Authorization: Bearer`，401 自动回登录页（`tests/constraints.test.ts` 静态检查会员页里出现的接口地址）：
 
 - `POST /auth/wx-phone` 登录（员工和会员共用，返回 `principalType` 区分）；`POST /auth/member/session/renew` 续期（小程序回到前台时，每天最多一次）；`GET /auth/me` 看这个手机号能不能进工作台
-- `GET /auth/review-demo`、`POST /auth/review-demo/login`：审核体验入口（「补齐上线开发待办」那边做的接口；接口没有或没打开时入口不显示）
+- `GET /auth/review-demo`、`POST /auth/review-demo/login`：审核体验入口。超级管理员在商家后台「小程序审核入口」打开 7 天后入口才显示，规则见 [docs/backend/review-demo.md](../../docs/backend/review-demo.md)；截图场景 `preview/review-demo-scenario.mjs`
 - `GET /members/me`、`GET /members/me/wallet`、`GET /members/stores`
 - `GET /ledger`、`GET /ledger/:id`（只返回自己的，不含操作店员和备注）
 - 权益和签署（[docs/backend/m4-esign-sandbox.md](../../docs/backend/m4-esign-sandbox.md) 4.4、[docs/esign-frontend.md](../../docs/esign-frontend.md)）：`GET /members/me/benefits`、`GET /members/me/sign-flows`（首页用 `status=PENDING` 判断要不要引导）、`GET /members/me/sign-flows/:id`、`POST .../:id/sign-url`（每次打开签署页前现取，不缓存）、`POST .../:id/refresh`（从签署页回来时调）、`GET .../:id/pdf`（`wx.downloadFile` 带登录头，再 `wx.openDocument`）

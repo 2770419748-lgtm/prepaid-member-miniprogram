@@ -84,7 +84,10 @@ export class SignFlowsService {
       }
     }
     const [store, member, template] = await Promise.all([
-      this.prisma.store.findUnique({ where: { id: dto.storeId }, include: { org: { select: { name: true } } } }),
+      this.prisma.store.findUnique({
+        where: { id: dto.storeId },
+        include: { org: { select: { name: true, demoOfId: true } } },
+      }),
       this.prisma.member.findUnique({ where: { id: dto.memberId }, include: { wallet: { select: { id: true } } } }),
       this.prisma.contractTemplate.findUnique({
         where: { id: dto.templateId },
@@ -96,6 +99,10 @@ export class SignFlowsService {
     }
     if (store.status !== 'ACTIVE') {
       throw new BadRequestException('门店已停用，不能发起签署');
+    }
+    if (store.org.demoOfId) {
+      // 微信审核用的演示公司：不向 e签宝 发起任何流程，免得产生真实合同和费用。
+      throw new ForbiddenException('审核体验里不发起真实的合同签署。正式使用时，顾客在这一步扫码签合同，签完自动充值到账');
     }
     if (!member || member.orgId !== actor.orgId) {
       throw new NotFoundException('会员不存在');

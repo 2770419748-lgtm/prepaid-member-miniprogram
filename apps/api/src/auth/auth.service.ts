@@ -8,8 +8,10 @@ import { Member, Prisma, Staff, StaffStoreRole } from '@prisma/client';
 import { AuditAction, AuditLogWriter } from '../audit/audit-log.writer';
 import { toMemberView } from '../members/member.view';
 import { PrismaService } from '../prisma/prisma.service';
+import { REVIEW_DEMO_ACCOUNT, REVIEW_STAFF_PHONE, reviewDemoOpen } from '../review-demo/review-demo.constants';
 import { AccessPrincipal, LoginMethod } from './access-principal';
 import { AccessTokenService } from './access-token.service';
+import { ReviewDemoLoginDto } from './dto/review-demo-login.dto';
 import { ChangeStaffPasswordDto, StaffPasswordLoginDto } from './dto/staff-password.dto';
 import { WxPhoneLoginDto } from './dto/wx-phone-login.dto';
 import { OrgResolver } from './org-resolver.service';
@@ -163,6 +165,82 @@ export class AuthService {
       data: { failedLoginCount: 0, lockedUntil: null },
     });
     return this.issueStaffSession(staff, 'PASSWORD');
+  }
+
+  /**
+   * 小程序登录页问要不要显示「审核体验入口」。只回开或关，别的什么都不透露；出任何问题都当关着。
+   */
+  async reviewDemoEnabled(orgId?: string): Promise<{ enabled: boolean }> {
+    const org = await this.reviewDemoOrg(orgId);
+    return { enabled: !!org && this.reviewDemoUsable(org) };
+  }
+
+  /**
+   * 审核体验入口登录：账号固定、密码是超级管理员打开入口时生成的。登进去的是演示公司里的审核员
+   * （两家演示门店的店长），和员工微信手机号登录一样能用工作台、切到自己的会员卡，碰不到真实公司的数据。
+   * 登录方式记成 WECHAT（都是小程序里的登录），所以能续期、能切会员卡；入口一关，守卫里马上失效。
+   * 连续输错 5 次锁 15 分钟，和网页后台密码一样。
+   */
+  async loginReviewDemo(dto: ReviewDemoLoginDto) {
+    const org = await this.reviewDemoOrg(dto.orgId);
+    if (!org || !this.reviewDemoUsable(org) || !org.demo) {
+      throw new ForbiddenException('审核体验入口没有打开');
+    }
+    const demoOrgId = org.demo.id;
+    const staff = await this.prisma.staff.findUnique({
+      where: { orgId_phone: { orgId: demoOrgId, phone: REVIEW_STAFF_PHONE } },
+      include: staffLoginInclude,
+    });
+    if (!staff || staff.status !== 'ACTIVE') {
+      throw new ForbiddenException('审核体验账号不可用，请联系商家');
+    }
+    if (lockActive(staff.lockedUntil, new Date())) {
+      throw new ForbiddenException('登录已锁定，请 15 分钟后再试');
+    }
+    const accountOk = dto.account.trim().toLowerCase() === REVIEW_DEMO_ACCOUNT;
+    const matches = await passwordMatches(dto.password, org.reviewDemoPasswordHash);
+    if (!accountOk || !matches) {
+      await this.recordPasswordFailure(staff.id, '审核账号或密码错误');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.staff.update({
+        where: { id: staff.id },
+        data: { failedLoginCount: 0, lockedUntil: null },
+      });
+      await this.audit.write(tx, {
+        orgId: org.id,
+        action: AuditAction.ReviewDemoLogin,
+        targetType: 'Org',
+        targetId: demoOrgId,
+      });
+    });
+    return this.issueStaffSession(staff, 'WECHAT');
+  }
+
+  private async reviewDemoOrg(requestedOrgId?: string) {
+    let orgId: string;
+    try {
+      orgId = await this.orgs.resolve(requestedOrgId);
+    } catch {
+      return null;
+    }
+    return this.prisma.org.findUnique({
+      where: { id: orgId },
+      select: {
+        id: true,
+        reviewDemoUntil: true,
+        reviewDemoPasswordHash: true,
+        demo: { select: { id: true, status: true } },
+      },
+    });
+  }
+
+  private reviewDemoUsable(org: {
+    reviewDemoUntil: Date | null;
+    reviewDemoPasswordHash: string | null;
+    demo: { status: string } | null;
+  }): boolean {
+    return reviewDemoOpen(org.reviewDemoUntil) && !!org.reviewDemoPasswordHash && org.demo?.status === 'ACTIVE';
   }
 
   /**
@@ -323,7 +401,7 @@ export class AuthService {
     };
   }
 
-  private async recordPasswordFailure(staffId: string): Promise<never> {
+  private async recordPasswordFailure(staffId: string, message = '手机号或密码错误'): Promise<never> {
     const updated = await this.prisma.staff.update({
       where: { id: staffId },
       data: { failedLoginCount: { increment: 1 } },
@@ -337,7 +415,7 @@ export class AuthService {
       });
       throw new ForbiddenException('登录已锁定，请 15 分钟后再试');
     }
-    throw new UnauthorizedException('手机号或密码错误');
+    throw new UnauthorizedException(message);
   }
 
   /** 员工切到会员卡时没有新的微信凭证，微信标识可能为空，为空就不改库里已有的。 */

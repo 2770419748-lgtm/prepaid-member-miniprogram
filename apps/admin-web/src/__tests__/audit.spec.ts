@@ -63,4 +63,13 @@ describe('操作记录翻成白话', () => {
     expect(describeAuditPayload(null, storeName)).toEqual([]);
     expect(describeAuditPayload({ status: 'DISABLED' }, storeName)).toEqual(['状态改为停用']);
   });
+  it('审核体验入口写清开到什么时候', () => {
+    const lines = describeAuditPayload(
+      { until: '2026-11-11T05:00:00.000Z', extended: false, demoCreated: true },
+      storeName,
+    );
+    expect(lines[0]).toMatch(/^开到 2026-11-11 \d{2}:00$/);
+    expect(lines[1]).toBe('建好了演示公司和演示数据');
+    expect(describeAuditPayload({ until: '2026-11-11T05:00:00.000Z', extended: true }, storeName)[0]).toMatch(/^延长到/);
+  });
 });

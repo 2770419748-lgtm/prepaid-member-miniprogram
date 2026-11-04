@@ -97,6 +97,12 @@ describe('菜单按角色隐藏', () => {
     expect(keys(admin)).toContain('staff');
   });
 
+  it('小程序审核入口只给超级管理员', () => {
+    expect(keys(clerk)).not.toContain('review-demo');
+    expect(keys(manager)).not.toContain('review-demo');
+    expect(keys(admin)).toContain('review-demo');
+  });
+
   it('谁都没有消费扣款入口（消费要在小程序工作台扫会员码）', () => {
     for (const roles of [clerk, manager, admin]) {
       expect(keys(roles)).not.toContain('consume');

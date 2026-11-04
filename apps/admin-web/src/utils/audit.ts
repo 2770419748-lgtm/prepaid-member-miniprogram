@@ -1,4 +1,5 @@
 import type { StaffRole } from '../api/types';
+import { formatDateTime } from './datetime';
 import { SIGN_STATUS } from './esign';
 import { formatCent } from './money';
 import { maskPhone } from './phone';
@@ -97,6 +98,13 @@ export function describeAuditPayload(payload: Record<string, unknown> | null, st
   }
   if (p.mustChangePassword === true) {
     lines.push('下次登录需改密码');
+  }
+  // 打开审核体验入口：开到什么时候、是不是延长、是不是第一次建演示公司。
+  if (typeof p.until === 'string') {
+    lines.push(`${p.extended === true ? '延长到' : '开到'} ${formatDateTime(p.until)}`);
+  }
+  if (p.demoCreated === true) {
+    lines.push('建好了演示公司和演示数据');
   }
   const reason = text(p.reason);
   if (reason) {

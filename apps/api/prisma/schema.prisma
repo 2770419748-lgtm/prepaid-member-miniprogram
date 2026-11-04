@@ -81,11 +81,20 @@ enum SignEnv {
 }
 
 model Org {
-  id        String    @id @default(cuid())
-  name      String
-  status    OrgStatus @default(ACTIVE)
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                     String    @id @default(cuid())
+  name                   String
+  status                 OrgStatus @default(ACTIVE)
+  /// 微信审核用的演示公司指向它所属的真实公司；真实公司为空。演示公司不出现在任何正常登录里，只能从审核体验入口进。
+  demoOfId               String?   @unique @map("demo_of_id")
+  /// 真实公司的审核体验入口开到什么时候（超级管理员打开时设为 7 天后）。为空或已过 = 关闭。
+  reviewDemoUntil        DateTime? @map("review_demo_until") @db.Timestamptz(6)
+  /// 审核账号密码的 bcrypt 哈希。打开或换密码时重新生成，关闭时清空。
+  reviewDemoPasswordHash String?   @map("review_demo_password_hash")
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  demoOf Org? @relation("OrgReviewDemo", fields: [demoOfId], references: [id], onDelete: Restrict)
+  demo   Org? @relation("OrgReviewDemo")
 
   stores            Store[]
   staff             Staff[]
