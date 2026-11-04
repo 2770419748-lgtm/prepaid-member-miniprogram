@@ -64,7 +64,7 @@
         :pagination="false"
         row-key="storeId"
         size="middle"
-        :scroll="{ x: 1200 }"
+        :scroll="{ x: 940 }"
       >
         <template #emptyText><a-empty description="没有可对账的门店" /></template>
         <template #bodyCell="{ column, record }">
@@ -73,37 +73,23 @@
             <a-tag v-if="record.storeStatus === 'DISABLED'" class="tag">已停用</a-tag>
           </template>
           <template v-else-if="column.key === 'recharge'">
-            <span class="pm-num">{{ formatCent(record.rechargeCent) }}</span>
-            <span class="count">{{ record.rechargeCount }} 笔</span>
+            <span class="pm-num strong">{{ formatCent(record.netRechargeCent) }}</span>
+            <div class="sub">{{ record.rechargeCount }} 笔 {{ formatCent(record.rechargeCent) }}{{ cutBack(record.reversedRechargeCent) }}</div>
           </template>
           <template v-else-if="column.key === 'consume'">
-            <span class="pm-num">{{ formatCent(record.consumeCent) }}</span>
-            <span class="count">{{ record.consumeCount }} 笔</span>
+            <span class="pm-num strong">{{ formatCent(record.netConsumeCent) }}</span>
+            <div class="sub">{{ record.consumeCount }} 笔 {{ formatCent(record.consumeCent) }}{{ cutBack(record.reversedConsumeCent) }}</div>
           </template>
           <template v-else-if="column.key === 'refund'">
             <template v-if="record.refundCount > 0">
-              <span class="pm-num">{{ formatCent(record.refundCent) }}</span>
-              <span class="count">{{ record.refundCount }} 笔</span>
+              <span class="pm-num strong">{{ formatCent(record.netRefundCent) }}</span>
+              <div class="sub">{{ record.refundCount }} 笔 {{ formatCent(record.refundCent) }}{{ cutBack(record.reversedRefundCent) }}</div>
             </template>
             <span v-else class="muted">无</span>
           </template>
           <template v-else-if="column.key === 'reversal'">
-            <template v-if="record.reversalCount > 0">
-              <span class="count">{{ record.reversalCount }} 笔</span>
-              <div v-if="record.reversedRechargeCent" class="sub">冲回充值 {{ formatCent(record.reversedRechargeCent) }}</div>
-              <div v-if="record.reversedConsumeCent" class="sub">冲回消费 {{ formatCent(record.reversedConsumeCent) }}</div>
-              <div v-if="record.reversedRefundCent" class="sub">冲回退款 {{ formatCent(record.reversedRefundCent) }}</div>
-            </template>
+            <span v-if="record.reversalCount > 0">{{ record.reversalCount }} 笔</span>
             <span v-else class="muted">无</span>
-          </template>
-          <template v-else-if="column.key === 'netRecharge'">
-            <span class="pm-num strong">{{ formatCent(record.netRechargeCent) }}</span>
-          </template>
-          <template v-else-if="column.key === 'netConsume'">
-            <span class="pm-num strong">{{ formatCent(record.netConsumeCent) }}</span>
-          </template>
-          <template v-else-if="column.key === 'netRefund'">
-            <span class="pm-num strong">{{ formatCent(record.netRefundCent) }}</span>
           </template>
           <template v-else-if="column.key === 'net'">
             <MoneyText :cent="record.netChangeCent" signed />
@@ -117,18 +103,18 @@
             <a-table-summary-row class="total">
               <a-table-summary-cell>合计</a-table-summary-cell>
               <a-table-summary-cell align="right">
-                {{ formatCent(report.total.rechargeCent) }}<span class="count">{{ report.total.rechargeCount }} 笔</span>
+                <span class="strong">{{ formatCent(report.total.netRechargeCent) }}</span>
+                <div class="sub">{{ report.total.rechargeCount }} 笔</div>
               </a-table-summary-cell>
               <a-table-summary-cell align="right">
-                {{ formatCent(report.total.consumeCent) }}<span class="count">{{ report.total.consumeCount }} 笔</span>
+                <span class="strong">{{ formatCent(report.total.netConsumeCent) }}</span>
+                <div class="sub">{{ report.total.consumeCount }} 笔</div>
               </a-table-summary-cell>
               <a-table-summary-cell align="right">
-                {{ formatCent(report.total.refundCent) }}<span class="count">{{ report.total.refundCount }} 笔</span>
+                <span class="strong">{{ formatCent(report.total.netRefundCent) }}</span>
+                <div class="sub">{{ report.total.refundCount }} 笔</div>
               </a-table-summary-cell>
               <a-table-summary-cell align="right">{{ report.total.reversalCount }} 笔</a-table-summary-cell>
-              <a-table-summary-cell align="right">{{ formatCent(report.total.netRechargeCent) }}</a-table-summary-cell>
-              <a-table-summary-cell align="right">{{ formatCent(report.total.netConsumeCent) }}</a-table-summary-cell>
-              <a-table-summary-cell align="right">{{ formatCent(report.total.netRefundCent) }}</a-table-summary-cell>
               <a-table-summary-cell align="right"><MoneyText :cent="report.total.netChangeCent" signed /></a-table-summary-cell>
               <a-table-summary-cell />
             </a-table-summary-row>
@@ -136,8 +122,8 @@
         </template>
       </a-table>
       <p class="hint">
-        金额单位：元。净充值 = 充值 − 被冲回的充值；净消费 = 消费 − 被冲回的消费；净退余额 = 退余额 − 被冲回的退款。
-        余额净变动 = 净充值 − 净消费 − 净退余额。
+        金额单位：元。大字是净额，小字是笔数、合计和被冲正抵掉的金额：净充值 = 充值 − 冲回的充值；净消费 = 消费 − 冲回的消费；
+        净退余额 = 退余额 − 冲回的退款。余额净变动 = 净充值 − 净消费 − 净退余额。
       </p>
     </a-card>
 
@@ -209,15 +195,13 @@ const checkResult = ref<CheckResult | null>(null);
 
 const storeOptions = computed(() => session.stores.map((s) => ({ value: s.id, label: s.name })));
 
+// 每类都是大字写净额（扣掉冲正后），下面小字写笔数、合计和冲回了多少。1280 宽的笔记本不用横向拖动。
 const columns: ColumnsType<StoreDayFigures> = [
-  { title: '门店', key: 'store', width: 140 },
-  { title: '充值', key: 'recharge', align: 'right', width: 150 },
-  { title: '消费', key: 'consume', align: 'right', width: 150 },
-  { title: '退余额', key: 'refund', align: 'right', width: 130 },
-  { title: '冲正', key: 'reversal', align: 'right', width: 150 },
-  { title: '净充值', key: 'netRecharge', align: 'right', width: 120 },
-  { title: '净消费', key: 'netConsume', align: 'right', width: 120 },
-  { title: '净退余额', key: 'netRefund', align: 'right', width: 110 },
+  { title: '门店', key: 'store', width: 130 },
+  { title: '净充值', key: 'recharge', align: 'right', width: 180 },
+  { title: '净消费', key: 'consume', align: 'right', width: 180 },
+  { title: '净退余额', key: 'refund', align: 'right', width: 180 },
+  { title: '冲正', key: 'reversal', align: 'right', width: 70 },
   { title: '余额净变动', key: 'net', align: 'right', width: 120 },
   { title: '', key: 'actions', width: 80 },
 ];
@@ -236,6 +220,11 @@ function future(current: Dayjs): boolean {
 
 function minus(cent: number): string {
   return cent > 0 ? `，冲回 ${formatCent(cent)} 元` : '';
+}
+
+/** 表格里地方小，不写「元」。 */
+function cutBack(cent: number): string {
+  return cent > 0 ? `，冲回 ${formatCent(cent)}` : '';
 }
 
 async function load(): Promise<void> {
