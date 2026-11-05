@@ -6,7 +6,7 @@
     :pagination="pagination"
     row-key="id"
     size="middle"
-    :scroll="{ x: showMember ? 1240 : 1110 }"
+    :scroll="{ x: showMember ? 1120 : 990 }"
     @change="onChange"
   >
     <template #emptyText>
@@ -38,6 +38,10 @@
       </template>
       <template v-else-if="column.key === 'balanceAfter'">
         <MoneyText :cent="record.balanceAfter" />
+      </template>
+      <template v-else-if="column.key === 'store'">
+        {{ record.storeName }}
+        <div class="muted">{{ record.operatorName || '系统' }}</div>
       </template>
       <template v-else-if="column.key === 'remark'">
         <span class="remark">{{ record.remark || '' }}</span>
@@ -98,9 +102,9 @@ const columns = computed<ColumnsType<LedgerEntry>>(() => [
   { title: '类型', key: 'type', width: 130 },
   { title: '金额（元）', key: 'change', align: 'right' as const, width: 110 },
   { title: '九讯云订单', key: 'order', width: 130 },
-  { title: '变动后余额（元）', key: 'balanceAfter', align: 'right' as const, width: 140 },
-  { title: '门店', dataIndex: 'storeName', key: 'storeName', width: 110 },
-  { title: '操作人', dataIndex: 'operatorName', key: 'operatorName', width: 90 },
+  // 门店和操作人并成一列（操作人在下一行），给九讯云订单腾地方，1440 宽屏幕不用左右拖就能看到备注。
+  { title: '余额（元）', key: 'balanceAfter', align: 'right' as const, width: 110 },
+  { title: '门店 / 操作人', key: 'store', width: 120 },
   { title: '备注', key: 'remark', ellipsis: true },
   { title: '操作', key: 'actions', width: 120, fixed: 'right' as const },
 ]);

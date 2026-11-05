@@ -261,7 +261,7 @@ Page({
     const cap = maxOffsetCent(productParsed.cent);
     const capText =
       cap > balanceCent
-        ? `能抵 ${formatCent(cap)} 元（商品金额的 ${OFFSET_PERCENT}%），余额只有 ${balance} 元`
+        ? `余额只有 ${balance} 元，最多抵 ${balance} 元`
         : `最多可抵 ${formatCent(cap)} 元（商品金额的 ${OFFSET_PERCENT}%）`;
     if (!amount.trim()) {
       this.setData({ ...reset, capText });

@@ -147,6 +147,22 @@ try {
     await shot(page, '15-冲正后的流水详情');
     await page.keyboard.press('Escape');
 
+    // 九讯云订单：只输小票上的数字也能查；详情带订单号和商品应付；按当前条件导出对账表格。
+    await page.goto(`${BASE}/ledger`);
+    await page.waitForSelector('.ant-table-row');
+    await page.fill('input[placeholder="九讯云单号"]', '8000');
+    await page.click('button:has-text("查询")');
+    await page.waitForTimeout(800);
+    await shot(page, '15a-按九讯云单号查');
+    await page.locator('.ant-table-row').first().locator('button:has-text("详情")').click();
+    await page.waitForSelector('.ant-drawer-content');
+    await shot(page, '15b-抵扣流水详情');
+    await page.keyboard.press('Escape');
+    await page.click('button:has-text("重置")');
+    await page.waitForTimeout(800);
+    const [download] = await Promise.all([page.waitForEvent('download'), page.click('button:has-text("导出表格")')]);
+    await download.saveAs(join(OUT, '15c-导出的流水.csv'));
+
     await page.goto(`${BASE}/stores`);
     await page.waitForSelector('.ant-table-row');
     await shot(page, '16-门店管理');
