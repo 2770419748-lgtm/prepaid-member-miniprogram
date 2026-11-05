@@ -472,8 +472,10 @@ export class WalletService {
               ...(movement.order.typed ? { orderNoTyped: true } : {}),
             }
           : {}),
-        // 退余额的原因和退款方式要在操作记录里看得到。
-        ...(movement.type === LedgerType.REFUND && movement.remark ? { remark: movement.remark } : {}),
+        // 退余额的原因和退款方式、冲正的原因，要在操作记录里看得到。
+        ...((movement.type === LedgerType.REFUND || movement.type === LedgerType.REVERSAL) && movement.remark
+          ? { remark: movement.remark }
+          : {}),
       },
     });
     return { entry: toStaffLedgerView(entry), balanceCent: balanceAfter, replayed: false };

@@ -40,7 +40,7 @@ interface RequestOptions {
 function loginExpired(): void {
   clearSession();
   if (currentMode() === 'member') {
-    goLogin();
+    goLogin(true);
   }
 }
 

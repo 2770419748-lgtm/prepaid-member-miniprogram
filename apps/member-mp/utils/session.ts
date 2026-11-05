@@ -89,11 +89,12 @@ export function ensureLogin(): boolean {
   return false;
 }
 
-export function goLogin(): void {
+/** expired：登录失效被送回去的，登录页会说一声「登录已失效」。 */
+export function goLogin(expired = false): void {
   const pages = getCurrentPages();
   const current = pages[pages.length - 1];
   if (current && current.route === LOGIN_PAGE) {
     return;
   }
-  wx.reLaunch({ url: `/${LOGIN_PAGE}` });
+  wx.reLaunch({ url: `/${LOGIN_PAGE}${expired ? '?expired=1' : ''}` });
 }

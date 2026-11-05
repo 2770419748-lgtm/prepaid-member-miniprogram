@@ -39,9 +39,11 @@ Page({
     account: '',
     password: '',
     reviewError: '',
+    /** 按钮上方的一行提示：登录失效被送回来的原因，或者刚才登录没成功的原因。 */
+    notice: '',
   },
 
-  onLoad() {
+  onLoad(query: Record<string, string | undefined>) {
     const landing = currentLanding();
     if (landing === 'staff') {
       openWorkbench();
@@ -52,7 +54,8 @@ Page({
       wx.switchTab({ url: MEMBER_HOME });
       return;
     }
-    this.setData({ ready: true });
+    // 换了手机号、被停用、改了密码等，旧登录失效后被送回这一页：说一声，不然像是莫名其妙退出了。
+    this.setData({ ready: true, notice: query && query.expired === '1' ? '登录已失效，请重新登录' : '' });
     fetchReviewDemo()
       .then((enabled) => this.setData({ reviewEnabled: enabled }))
       .catch(() => undefined);
@@ -69,7 +72,7 @@ Page({
       wx.showToast({ title: '需要授权手机号才能登录', icon: 'none' });
       return;
     }
-    this.setData({ submitting: true });
+    this.setData({ submitting: true, notice: '' });
     try {
       const code = await wxLoginCode();
       const result = await loginWithPhone({
@@ -79,7 +82,8 @@ Page({
       });
       await this.enter(result);
     } catch (error) {
-      wx.showToast({ title: failureText(error), icon: 'none' });
+      // 留在页面上（比如「会员卡已停用」），不只是一闪而过的提示。
+      this.setData({ notice: failureText(error) });
     } finally {
       this.setData({ submitting: false });
     }

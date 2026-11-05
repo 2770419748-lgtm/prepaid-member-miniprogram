@@ -22,7 +22,7 @@
     </view>
     <view class="scan-text">
       <text class="scan-title">扫码消费</text>
-      <text class="scan-sub">请顾客打开小程序出示会员码，扫到后填写消费金额</text>
+      <text class="scan-sub">请顾客出示小程序里的会员码，再扫九讯云订单码、填商品金额</text>
     </view>
   </view>
 

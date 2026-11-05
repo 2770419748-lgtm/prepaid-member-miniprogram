@@ -70,6 +70,8 @@
       </view>
       <view wx:else class="cc-refresh">
         <text>扣款完成后这里会显示结果</text>
+        <!-- 门店扫错了、要换人办理时，顾客能自己换一张码，不用等 5 分钟或退出重进。 -->
+        <text class="link refresh-link" bindtap="onRenewScanned">换一张码</text>
       </view>
     </block>
   </view>
