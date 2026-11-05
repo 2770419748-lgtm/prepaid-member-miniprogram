@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   defaultOffsetCent,
   maxOffsetCent,
+  offsetCapReason,
   readScannedOrder,
   readTypedOrder,
 } from '../../staff/utils/sale-order';
@@ -44,4 +45,14 @@ test('最多抵商品应付金额的 10%，向下取整到分；余额不够就�
   assert.equal(defaultOffsetCent(239_900, 288_000), 23_990);
   assert.equal(defaultOffsetCent(239_900, 10_000), 10_000);
   assert.equal(defaultOffsetCent(239_900, 0), 0);
+});
+
+test('一张单最多抵 1000 元：10% 超过 1000 元也只抵 1000 元，并说清楚是哪条卡住的', () => {
+  assert.equal(maxOffsetCent(999_999), 99_999);
+  assert.equal(maxOffsetCent(1_000_000), 100_000);
+  assert.equal(maxOffsetCent(1_599_900), 100_000);
+  assert.equal(defaultOffsetCent(1_599_900, 500_000), 100_000);
+  assert.equal(defaultOffsetCent(1_599_900, 65_660), 65_660);
+  assert.equal(offsetCapReason(239_900), '商品金额的 10%');
+  assert.equal(offsetCapReason(1_599_900), '一张单最多抵 1,000 元');
 });

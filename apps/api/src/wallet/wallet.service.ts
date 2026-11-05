@@ -9,12 +9,11 @@ import { LedgerType, Prisma } from '@prisma/client';
 import { AuditAction, AuditLogWriter } from '../audit/audit-log.writer';
 import { AccessPrincipal } from '../auth/access-principal';
 import { assertStoreAccess, isSuperAdmin } from '../auth/staff-access';
-import { formatYuan } from '../common/money-words';
 import { PayCodeService } from '../pay-code/pay-code.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConsumeDto, MoneyMoveDto, RefundDto, ReversalDto } from './dto/ledger.dto';
 import { ledgerInclude, LedgerRecord, StaffLedgerView, toStaffLedgerView } from './ledger.view';
-import { maxOffsetCent, ORDER_OFFSET_PERCENT } from './order-no';
+import { maxOffsetCent, offsetCapMessage } from './order-no';
 import { OrderRedemptionService, redeemedMessage } from './order-redemption.service';
 
 /** 钱包余额是 Int（分）。再往上加会溢出。 */
@@ -136,7 +135,7 @@ export class WalletService {
 
   /**
    * 消费扣款必须带上这位店员在这家门店刚扫到的会员码（码只能用一次），
-   * 和这笔抵的收银订单：最多抵商品应付金额的 10%，同一张单全公司只能抵一次（冲正后放开）。
+   * 和这笔抵的收银订单：最多抵商品应付金额的 10%、一张单最多 1000 元，同一张单全公司只能抵一次（冲正后放开）。
    */
   async consume(actor: AccessPrincipal, memberId: string, dto: ConsumeDto): Promise<MoveResult> {
     const order: OrderOffset = {
@@ -144,11 +143,8 @@ export class WalletService {
       productAmountCent: dto.productAmountCent,
       typed: dto.orderNoTyped ?? false,
     };
-    const cap = maxOffsetCent(order.productAmountCent);
-    if (dto.amountCent > cap) {
-      throw new BadRequestException(
-        `这单最多只能抵 ${formatYuan(cap)} 元（商品金额 ${formatYuan(order.productAmountCent)} 元的 ${ORDER_OFFSET_PERCENT}%）`,
-      );
+    if (dto.amountCent > maxOffsetCent(order.productAmountCent)) {
+      throw new BadRequestException(offsetCapMessage(order.productAmountCent));
     }
     return this.move(actor, memberId, dto, LedgerType.CONSUME, -1, dto.payCode, order);
   }
