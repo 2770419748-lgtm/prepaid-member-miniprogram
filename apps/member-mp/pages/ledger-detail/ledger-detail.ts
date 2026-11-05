@@ -17,6 +17,10 @@ interface Detail {
   reversalOfId: string;
   /** 白话说明这一笔对余额做了什么。 */
   note: string;
+  /** 门店消费抵扣的订单号；没有为空。 */
+  orderNo: string;
+  /** 商品金额（元）；没有为空。 */
+  productText: string;
 }
 
 function toDetail(entry: LedgerItem): Detail {
@@ -44,6 +48,8 @@ function toDetail(entry: LedgerItem): Detail {
     reversed: entry.reversed,
     reversalOfId: entry.reversalOfId ?? '',
     note,
+    orderNo: entry.orderNo ?? '',
+    productText: entry.productAmountCent != null ? formatYuan(entry.productAmountCent) : '',
   };
 }
 

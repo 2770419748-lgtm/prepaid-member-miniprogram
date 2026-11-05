@@ -8,6 +8,7 @@ import type {
   MemberCard,
   MoveResult,
   MyStoresResult,
+  OrderCheck,
   OwnMemberSession,
   PageResult,
   ScannedPayCode,
@@ -57,6 +58,15 @@ export interface MoneyMove {
   requestId: string;
   /** 消费必须带上刚扫到的会员码。充值不用。 */
   payCode?: string;
+  /** 消费必须带九讯云订单号和商品应付金额（分），最多抵商品金额的 10%。充值不用。 */
+  orderNo?: string;
+  orderNoTyped?: boolean;
+  productAmountCent?: number;
+}
+
+/** 扫到订单码后先查这张单抵过没有。真正拦住重复抵扣的是扣款时的服务端校验。 */
+export function checkOrder(orderNo: string) {
+  return request<OrderCheck>('GET', '/orders/check', { query: { orderNo } });
 }
 
 /** 店员扫顾客出示的会员码。之后 5 分钟内，这位店员在这家门店可以用这张码扣一次款。 */

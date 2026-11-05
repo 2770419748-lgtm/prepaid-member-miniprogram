@@ -1220,9 +1220,13 @@
     reLaunch: asyncApi('reLaunch', ({ url }) => router.reLaunch(url)),
 
     // 扫码：结果由场景脚本给（shot.scanResult），没给就当店员取消了扫码。
+    // 给数组时一次扫码用一个（先扫会员码、再扫订单码），用完就当取消。
     scanCode: asyncApi('scanCode', () => {
-      if (preview.scanResult == null) throw new Error('cancel');
-      return { result: String(preview.scanResult), scanType: 'QR_CODE', charSet: 'utf-8', path: '', rawData: '' };
+      const next = Array.isArray(preview.scanResult) ? preview.scanResult.shift() : preview.scanResult;
+      if (next == null) throw new Error('cancel');
+      const text = String(next);
+      const scanType = /^[A-Za-z]?\d+$/.test(text) ? 'CODE_128' : 'QR_CODE';
+      return { result: text, scanType, charSet: 'utf-8', path: '', rawData: '' };
     }),
     setKeepScreenOn: asyncApi('setKeepScreenOn', () => ({})),
     getScreenBrightness: asyncApi('getScreenBrightness', () => ({ value: 0.6 })),

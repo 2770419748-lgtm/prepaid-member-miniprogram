@@ -31,8 +31,23 @@ test('门店扫过了：到点也不换码，等扣款结果', () => {
 test('扣款成功：显示金额、门店、北京时间和剩余余额', () => {
   assert.deepEqual(nextStep(state('USED', { storeName: '旗舰店', entry }), false), {
     kind: 'used',
-    used: { entryId: 'entry-1', amountText: '-30.00', balanceText: '70.00', storeName: '旗舰店', timeText: '2026-10-27 18:20' },
+    used: {
+      entryId: 'entry-1',
+      amountText: '-30.00',
+      balanceText: '70.00',
+      storeName: '旗舰店',
+      timeText: '2026-10-27 18:20',
+      orderText: '',
+      productText: '',
+    },
   });
+});
+
+test('扣款成功：带订单的消费还显示订单号和商品金额', () => {
+  const withOrder: LedgerItem = { ...entry, orderNo: 'A5982', productAmountCent: 30_000 };
+  const step = nextStep(state('USED', { storeName: '旗舰店', entry: withOrder }), false);
+  assert.equal(step.kind, 'used');
+  assert.deepEqual(step.kind === 'used' ? [step.used.orderText, step.used.productText] : [], ['A5982', '300.00']);
 });
 
 test('过期了（没扫，或扫了没扣）：换新码', () => {

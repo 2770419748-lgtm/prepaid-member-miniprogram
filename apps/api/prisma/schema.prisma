@@ -105,6 +105,7 @@ model Org {
   signFlows         SignFlow[]
   auditLogs         AuditLog[]
   payCodes          MemberPayCode[]
+  orderRedemptions  OrderRedemption[]
 
   @@map("orgs")
 }
@@ -231,40 +232,71 @@ model Wallet {
 /// amountCent 记绝对值（正整数）。RECHARGE 加、CONSUME 和 REFUND 减；REVERSAL 与被冲的原流水方向相反，
 /// 实际变动看 balanceAfter - balanceBefore。
 model LedgerEntry {
-  id              String     @id @default(cuid())
-  orgId           String     @map("org_id")
-  memberId        String     @map("member_id")
-  walletId        String     @map("wallet_id")
-  storeId         String     @map("store_id")
-  operatorStaffId String?    @map("operator_staff_id")
-  type            LedgerType
-  amountCent      Int        @map("amount_cent")
-  balanceBefore   Int        @map("balance_before")
-  balanceAfter    Int        @map("balance_after")
-  remark          String?
+  id                String     @id @default(cuid())
+  orgId             String     @map("org_id")
+  memberId          String     @map("member_id")
+  walletId          String     @map("wallet_id")
+  storeId           String     @map("store_id")
+  operatorStaffId   String?    @map("operator_staff_id")
+  type              LedgerType
+  amountCent        Int        @map("amount_cent")
+  balanceBefore     Int        @map("balance_before")
+  balanceAfter      Int        @map("balance_after")
+  remark            String?
   /// REVERSAL 指向被冲的原流水。唯一：一笔流水最多冲一次。
-  reversalOfId    String?    @unique @map("reversal_of_id")
+  reversalOfId      String?    @unique @map("reversal_of_id")
   /// 客户端生成的请求号。同一组织内唯一，重复提交返回第一次的结果，不会记两笔。
-  requestId       String?    @map("request_id")
-  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  requestId         String?    @map("request_id")
+  /// 消费抵扣的是收银系统（九讯云）哪张订单，规范写法「A+数字」，如 A5982。只有消费有；2026-11-05 以前的消费为空。
+  orderNo           String?    @map("order_no")
+  /// 这张订单的商品应付金额（总计减优惠），单位分。抵扣不能超过它的 10%（CHECK 约束）。
+  productAmountCent Int?       @map("product_amount_cent")
+  /// 订单号是店员手输的（条码扫不出来时），不是扫码读到的。
+  orderNoTyped      Boolean?   @map("order_no_typed")
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  org        Org            @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  member     Member         @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  wallet     Wallet         @relation(fields: [walletId], references: [id], onDelete: Restrict)
-  store      Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  operator   Staff?         @relation("LedgerOperator", fields: [operatorStaffId], references: [id], onDelete: SetNull)
-  reversalOf LedgerEntry?   @relation("LedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
-  reversedBy LedgerEntry?   @relation("LedgerReversal")
-  payCode    MemberPayCode?
+  org             Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  member          Member           @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  wallet          Wallet           @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  store           Store            @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  operator        Staff?           @relation("LedgerOperator", fields: [operatorStaffId], references: [id], onDelete: SetNull)
+  reversalOf      LedgerEntry?     @relation("LedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy      LedgerEntry?     @relation("LedgerReversal")
+  payCode         MemberPayCode?
   /// 签完权益单后自动记的那笔充值，指回那份权益单。
-  signFlow   SignFlow?
+  signFlow        SignFlow?
+  /// 带订单号的消费占用的那张订单。
+  orderRedemption OrderRedemption? @relation("OrderRedemptionConsume")
+  /// 冲正一笔带订单号的消费时，放开的那张订单。
+  orderRelease    OrderRedemption? @relation("OrderRedemptionRelease")
 
   @@unique([orgId, requestId])
   @@index([orgId, createdAt])
   @@index([memberId, createdAt])
   @@index([storeId, createdAt])
   @@index([walletId])
+  @@index([orgId, orderNo])
   @@map("ledger_entries")
+}
+
+/// 订单抵扣占用：同一张收银订单在全公司只能抵扣一次。
+/// 「同一组织、同一订单号、还没放开的只能有一条」是迁移里的部分唯一索引（Prisma 不描述），
+/// 冲正那笔消费时在同一事务里填上 releasedAt / releasedByEntryId，订单号就能再用。只能放开一次，不能删。
+model OrderRedemption {
+  id                String    @id @default(cuid())
+  orgId             String    @map("org_id")
+  orderNo           String    @map("order_no")
+  consumeEntryId    String    @unique @map("consume_entry_id")
+  releasedByEntryId String?   @unique @map("released_by_entry_id")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  releasedAt        DateTime? @map("released_at") @db.Timestamptz(6)
+
+  org          Org          @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  consumeEntry LedgerEntry  @relation("OrderRedemptionConsume", fields: [consumeEntryId], references: [id], onDelete: Restrict)
+  releasedBy   LedgerEntry? @relation("OrderRedemptionRelease", fields: [releasedByEntryId], references: [id], onDelete: Restrict)
+
+  @@index([orgId, orderNo])
+  @@map("order_redemptions")
 }
 
 /// 会员码的状态。过期不单独存，按 expiresAt / claimExpiresAt 判断。

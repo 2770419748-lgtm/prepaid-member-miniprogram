@@ -35,6 +35,9 @@ export function toLedgerRow(entry: LedgerEntry, options: { showStore?: boolean }
   if (entry.operatorName) {
     meta.push(entry.operatorName);
   }
+  if (entry.orderNo) {
+    meta.push(`单号 ${entry.orderNo}`);
+  }
   return {
     id: entry.id,
     title: ledgerTitle(entry.type, entry.changeCent, entry.reversalOfType),

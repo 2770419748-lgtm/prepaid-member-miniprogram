@@ -3,6 +3,7 @@ import { AuditLogWriter } from '../src/audit/audit-log.writer';
 import type { AccessPrincipal } from '../src/auth/access-principal';
 import type { PayCodeService } from '../src/pay-code/pay-code.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
+import { OrderRedemptionService } from '../src/wallet/order-redemption.service';
 import { WalletService } from '../src/wallet/wallet.service';
 
 const clerk: AccessPrincipal = {
@@ -19,9 +20,11 @@ interface FakeWallet {
 }
 
 /** 只模拟 WalletService 用到的几个 Prisma 调用。updateMany 的结果由测试控制，用来制造版本冲突。 */
-function fakePrisma(wallet: FakeWallet, updateCounts: number[] = []) {
+function fakePrisma(wallet: FakeWallet, updateCounts: number[] = [], activeOrder: unknown = null) {
   const created: Record<string, unknown>[] = [];
   const audits: Record<string, unknown>[] = [];
+  const occupied: Record<string, unknown>[] = [];
+  const released: Record<string, unknown>[] = [];
   let transactions = 0;
   const tx = {
     wallet: {
@@ -61,6 +64,16 @@ function fakePrisma(wallet: FakeWallet, updateCounts: number[] = []) {
         return Promise.resolve(args.data);
       }),
     },
+    orderRedemption: {
+      create: jest.fn((args: { data: Record<string, unknown> }) => {
+        occupied.push(args.data);
+        return Promise.resolve(args.data);
+      }),
+      updateMany: jest.fn((args: Record<string, unknown>) => {
+        released.push(args);
+        return Promise.resolve({ count: 1 });
+      }),
+    },
   };
   const prisma = {
     store: { findUnique: jest.fn(() => Promise.resolve({ id: 'store-1', orgId: 'org-1', status: 'ACTIVE' })) },
@@ -70,6 +83,7 @@ function fakePrisma(wallet: FakeWallet, updateCounts: number[] = []) {
       ),
     },
     ledgerEntry: { findUnique: jest.fn(() => Promise.resolve(null)) },
+    orderRedemption: { findFirst: jest.fn(() => Promise.resolve(activeOrder)) },
     $transaction: jest.fn(async (fn: (client: typeof tx) => Promise<unknown>) => {
       transactions += 1;
       return fn(tx);
@@ -80,6 +94,8 @@ function fakePrisma(wallet: FakeWallet, updateCounts: number[] = []) {
     tx,
     created,
     audits,
+    occupied,
+    released,
     transactions: () => transactions,
   };
 }
@@ -104,7 +120,8 @@ function fakePayCodes(options: { usable?: boolean; markFails?: boolean } = {}) {
   return { service: service as unknown as PayCodeService, raw: service, used };
 }
 
-const scanned = { payCode: '800000000000000000' };
+/** 消费都要带会员码和收银订单：商品 1000 元，最多抵 100 元。 */
+const scanned = { payCode: '800000000000000000', orderNo: 'A5982', productAmountCent: 100_000 };
 /** 充值、扣款、冲正都必须带请求号。 */
 const req = { requestId: 'request-0001' };
 
@@ -112,7 +129,7 @@ describe('WalletService', () => {
   it('writes the wallet, the ledger entry and the audit record in one transaction', async () => {
     const wallet = { id: 'wallet-1', balanceCent: 0, version: 0 };
     const fake = fakePrisma(wallet);
-    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service);
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service, new OrderRedemptionService(fake.prisma));
     const result = await service.recharge(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 10000 });
     expect(result.balanceCent).toBe(10000);
     expect(fake.transactions()).toBe(1);
@@ -134,7 +151,7 @@ describe('WalletService', () => {
   it('refuses to overdraw and writes nothing', async () => {
     const wallet = { id: 'wallet-1', balanceCent: 500, version: 3 };
     const fake = fakePrisma(wallet);
-    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service);
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service, new OrderRedemptionService(fake.prisma));
     await expect(service.consume(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 501, ...scanned })).rejects.toThrow(
       BadRequestException,
     );
@@ -146,7 +163,7 @@ describe('WalletService', () => {
   it('re-reads and retries when someone else changed the wallet first', async () => {
     const wallet = { id: 'wallet-1', balanceCent: 1000, version: 0 };
     const fake = fakePrisma(wallet, [0, 0]);
-    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service);
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service, new OrderRedemptionService(fake.prisma));
     const result = await service.consume(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 300, ...scanned });
     expect(fake.transactions()).toBe(3);
     expect(result.balanceCent).toBe(700);
@@ -157,7 +174,7 @@ describe('WalletService', () => {
   it('gives up with 409 when the wallet keeps changing underneath', async () => {
     const wallet = { id: 'wallet-1', balanceCent: 1000, version: 0 };
     const fake = fakePrisma(wallet, Array.from({ length: 20 }, () => 0));
-    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service);
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service, new OrderRedemptionService(fake.prisma));
     await expect(service.consume(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 300, ...scanned })).rejects.toThrow(
       ConflictException,
     );
@@ -169,7 +186,7 @@ describe('WalletService', () => {
     const wallet = { id: 'wallet-1', balanceCent: 1000, version: 0 };
     const fake = fakePrisma(wallet);
     const codes = fakePayCodes();
-    const service = new WalletService(fake.prisma, new AuditLogWriter(), codes.service);
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), codes.service, new OrderRedemptionService(fake.prisma));
     await service.consume(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 300, ...scanned });
     expect(codes.raw.assertUsable).toHaveBeenCalledWith(clerk, 'member-1', 'store-1', scanned.payCode);
     expect(codes.raw.markUsed).toHaveBeenCalledWith(fake.tx, 'code-1', 'staff-1', 'store-1', 'entry-1');
@@ -179,7 +196,7 @@ describe('WalletService', () => {
   it('does not deduct without a usable member code', async () => {
     const wallet = { id: 'wallet-1', balanceCent: 1000, version: 0 };
     const fake = fakePrisma(wallet);
-    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes({ usable: false }).service);
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes({ usable: false }).service, new OrderRedemptionService(fake.prisma));
     await expect(
       service.consume(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 300, ...scanned }),
     ).rejects.toThrow('请先扫顾客的会员码');
@@ -189,7 +206,7 @@ describe('WalletService', () => {
   it('fails the whole deduction when the code was used up in the meantime', async () => {
     const wallet = { id: 'wallet-1', balanceCent: 1000, version: 0 };
     const fake = fakePrisma(wallet);
-    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes({ markFails: true }).service);
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes({ markFails: true }).service, new OrderRedemptionService(fake.prisma));
     await expect(
       service.consume(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 300, ...scanned }),
     ).rejects.toThrow(ConflictException);
@@ -201,7 +218,7 @@ describe('WalletService', () => {
     const wallet = { id: 'wallet-1', balanceCent: 0, version: 0 };
     const fake = fakePrisma(wallet);
     const codes = fakePayCodes();
-    const service = new WalletService(fake.prisma, new AuditLogWriter(), codes.service);
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), codes.service, new OrderRedemptionService(fake.prisma));
     await service.recharge(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 100 });
     expect(codes.raw.assertUsable).not.toHaveBeenCalled();
     expect(codes.raw.markUsed).not.toHaveBeenCalled();
@@ -210,10 +227,79 @@ describe('WalletService', () => {
   it('checks the store scope before touching anything', async () => {
     const wallet = { id: 'wallet-1', balanceCent: 1000, version: 0 };
     const fake = fakePrisma(wallet);
-    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service);
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service, new OrderRedemptionService(fake.prisma));
     await expect(
       service.recharge(clerk, 'member-1', { ...req, storeId: 'store-2', amountCent: 100 }),
     ).rejects.toThrow('无权操作该门店');
     expect(fake.transactions()).toBe(0);
+  });
+
+  it('refuses to deduct more than 10% of the order before touching anything', async () => {
+    const wallet = { id: 'wallet-1', balanceCent: 100_000, version: 0 };
+    const fake = fakePrisma(wallet);
+    const codes = fakePayCodes();
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), codes.service, new OrderRedemptionService(fake.prisma));
+    await expect(
+      service.consume(clerk, 'member-1', { ...req, ...scanned, storeId: 'store-1', productAmountCent: 239_900, amountCent: 23_991 }),
+    ).rejects.toThrow('这单最多只能抵 239.90 元（商品金额 2,399.00 元的 10%）');
+    expect(codes.raw.assertUsable).not.toHaveBeenCalled();
+    expect(fake.transactions()).toBe(0);
+  });
+
+  it('deducts exactly 10% and occupies the order inside the deduction transaction', async () => {
+    const wallet = { id: 'wallet-1', balanceCent: 100_000, version: 0 };
+    const fake = fakePrisma(wallet);
+    const service = new WalletService(
+      fake.prisma,
+      new AuditLogWriter(),
+      fakePayCodes().service,
+      new OrderRedemptionService(fake.prisma),
+    );
+    const result = await service.consume(clerk, 'member-1', {
+      ...req,
+      ...scanned,
+      storeId: 'store-1',
+      orderNo: ' 05982 ',
+      orderNoTyped: true,
+      productAmountCent: 239_900,
+      amountCent: 23_990,
+    });
+    expect(result.balanceCent).toBe(76_010);
+    expect(fake.created[0]).toMatchObject({ orderNo: 'A5982', productAmountCent: 239_900, orderNoTyped: true });
+    expect(fake.occupied).toEqual([{ orgId: 'org-1', orderNo: 'A5982', consumeEntryId: 'entry-1' }]);
+    expect(fake.audits[0]).toMatchObject({
+      action: 'WALLET_CONSUME',
+      payloadJson: { orderNo: 'A5982', productAmountCent: 239_900, orderNoTyped: true },
+    });
+  });
+
+  it('says where and when an order was already used, without deducting', async () => {
+    const wallet = { id: 'wallet-1', balanceCent: 100_000, version: 0 };
+    const active = {
+      consumeEntry: {
+        id: 'entry-old',
+        amountCent: 23_990,
+        productAmountCent: 239_900,
+        createdAt: new Date('2026-11-05T06:32:00Z'),
+        store: { name: '滨江店' },
+      },
+    };
+    const fake = fakePrisma(wallet, [], active);
+    const codes = fakePayCodes();
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), codes.service, new OrderRedemptionService(fake.prisma));
+    await expect(
+      service.consume(clerk, 'member-1', { ...req, ...scanned, storeId: 'store-1', amountCent: 1_000 }),
+    ).rejects.toThrow('这张单已经抵扣过了：11月5日 14:32 在滨江店抵了 239.90 元');
+    expect(codes.raw.assertUsable).not.toHaveBeenCalled();
+    expect(fake.transactions()).toBe(0);
+  });
+
+  it('never occupies an order when recharging', async () => {
+    const wallet = { id: 'wallet-1', balanceCent: 0, version: 0 };
+    const fake = fakePrisma(wallet);
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service, new OrderRedemptionService(fake.prisma));
+    await service.recharge(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 100 });
+    expect(fake.created[0]).toMatchObject({ orderNo: null, productAmountCent: null, orderNoTyped: null });
+    expect(fake.occupied).toHaveLength(0);
   });
 });

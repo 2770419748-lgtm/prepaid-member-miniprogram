@@ -103,10 +103,28 @@ async function scanFor(memberToken, staffToken, storeId) {
   return code;
 }
 
-/** 门店扫码以后扣款：消费必须带着刚扫的会员码。 */
+/** 九讯云小票的单号（A + 数字）：从 start 往后找第一张还没抵扣过的，同一个库重复跑也不会撞。 */
+async function freshOrder(staffToken, start) {
+  for (let n = start; ; n += 1) {
+    const checked = await call(`/orders/check?orderNo=A${n}`, { token: staffToken });
+    if (!checked.redeemed) return checked.orderNo;
+  }
+}
+
+/** 消费抵扣要带的订单：一张没抵过的单，商品应付金额按抵扣的 10 倍算（正好抵满 10%）。 */
+async function orderFor(staffToken, amountCent) {
+  return { orderNo: await freshOrder(staffToken, 7000), productAmountCent: amountCent * 10 };
+}
+
+/** 门店扫码以后扣款：消费必须带着刚扫的会员码和收银小票的订单号。 */
 async function consumeWithCode(memberToken, staffToken, memberId, storeId, amountCent, remark = '演示') {
   const payCode = await scanFor(memberToken, staffToken, storeId);
-  return call(`/wallets/${memberId}/consume`, { method: 'POST', token: staffToken, body: { storeId, amountCent, remark, payCode, requestId: randomUUID() } });
+  const order = await orderFor(staffToken, amountCent);
+  return call(`/wallets/${memberId}/consume`, {
+    method: 'POST',
+    token: staffToken,
+    body: { storeId, amountCent, remark, payCode, ...order, requestId: randomUUID() },
+  });
 }
 
 /** 认出会员码页上画的二维码，和店员手机扫到的一样。 */
@@ -255,9 +273,13 @@ async function prepare() {
     staffScans: async (code) => {
       await call('/pay-codes/scan', { method: 'POST', token, body: { code, storeId: hubin.id } });
     },
-    /** 扫码后店员填好金额提交。 */
-    staffConsumes: (code, amountCent) =>
-      call(`/wallets/${payer.id}/consume`, { method: 'POST', token, body: { storeId: hubin.id, amountCent, remark: '演示', payCode: code, requestId: randomUUID() } }),
+    /** 扫码后店员扫订单码、填好金额提交。 */
+    staffConsumes: async (code, amountCent) =>
+      call(`/wallets/${payer.id}/consume`, {
+        method: 'POST',
+        token,
+        body: { storeId: hubin.id, amountCent, remark: '演示', payCode: code, ...(await orderFor(token, amountCent)), requestId: randomUUID() },
+      }),
     newMember: await memberSession(NEW_MEMBER_PHONE),
     signer: await memberSession(signerPhone),
     signerFlowId: signerFlow.id,
@@ -303,7 +325,7 @@ export default async function scenario() {
       },
       {
         name: '06-会员码-消费成功',
-        caption: '门店扣完款：会员码页马上显示扣了多少、在哪家店、还剩多少',
+        caption: '门店扣完款：会员码页马上显示扣了多少、在哪家店、哪张订单、还剩多少',
         route: 'pages/index/index',
         storage: { member_session: data.payer },
         steps: [
@@ -327,6 +349,7 @@ export default async function scenario() {
           { wait: 2600 },
           { expectText: '消费成功' },
           { expectText: '36.50' },
+          { expectText: '订单号' },
         ],
       },
       {

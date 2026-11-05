@@ -174,6 +174,18 @@ describe('review demo entry', () => {
     const ledger = await http().get('/ledger').set('Authorization', `Bearer ${demoStaffToken}`);
     expect(ledger.status).toBe(200);
     expect(ledger.body.total).toBe(8);
+    // 演示消费和正式的一样带着九讯云单号，单号也占住了：审核员再抵同一张会被拦下。
+    const consumes = (ledger.body.items as Array<{ type: string; orderNo: string | null }>).filter(
+      (item) => item.type === 'CONSUME',
+    );
+    expect(consumes).toHaveLength(4);
+    expect(consumes.every((item) => /^A100\d$/.test(item.orderNo ?? ''))).toBe(true);
+    const check = await http()
+      .get('/orders/check')
+      .query({ orderNo: '1003' })
+      .set('Authorization', `Bearer ${demoStaffToken}`);
+    expect(check.status).toBe(200);
+    expect(check.body.redeemed).toMatchObject({ storeName: '演示一店', amountCent: 26_800 });
 
     // 切到自己的会员卡：演示公司里预先开好了一张。
     const own = await http().post('/auth/staff/member-session').set('Authorization', `Bearer ${demoStaffToken}`);

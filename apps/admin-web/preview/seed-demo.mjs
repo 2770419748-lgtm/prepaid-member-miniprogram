@@ -3,7 +3,8 @@
 //   node apps/admin-web/preview/seed-demo.mjs
 //
 // 超级管理员用种子账号 13800000000，第一次会把初始密码 Init12345 改成 Admin12345。
-// 消费必须扫会员码（小程序工作台），接口不收不带码的扣款时，这里跳过消费那几笔，其余照常。
+// 消费按真机的顺序走：会员出示会员码 → 店员扫码 → 带着码和九讯云小票的订单号抵扣（最多商品金额的 10%）。
+// 会员登录要本机接口开着 WECHAT_PHONE_MOCK=true；没开时拿不到会员码，这里跳过消费那几笔，其余照常。
 
 const API = (process.env.API_BASE ?? 'http://localhost:3000').replace(/\/$/, '');
 let token = '';
@@ -106,25 +107,54 @@ let skippedConsume = 0;
 if ((await call('GET', '/ledger?pageSize=1')).total === 0) {
   const move = (kind, phone, storeId, amountCent, remark, tk) =>
     call('POST', `/wallets/${ids[phone]}/${kind}`, { storeId, amountCent, remark, requestId: crypto.randomUUID() }, tk);
-  const consume = async (...args) => {
+  let orderSeq = 8000;
+  /** 九讯云小票的单号：往后找第一张还没抵扣过的。 */
+  const freshOrder = async (tk) => {
+    for (;;) {
+      const checked = await call('GET', `/orders/check?orderNo=A${orderSeq++}`, undefined, tk);
+      if (!checked.redeemed) {
+        return checked.orderNo;
+      }
+    }
+  };
+  const consume = async (phone, storeId, amountCent, remark, tk, { productAmountCent = amountCent * 10, typed = false } = {}) => {
+    let payCode;
     try {
-      await move('consume', ...args);
+      const member = await call('POST', '/auth/member/wx-phone', { code: 'preview', phoneCode: 'preview', mockPhone: phone }, '');
+      payCode = (await call('POST', '/members/me/pay-code', undefined, member.accessToken)).code;
     } catch (error) {
-      if (error.status !== 400) {
+      if (error.status >= 500 || !error.status) {
         throw error;
       }
       skippedConsume += 1;
+      return;
     }
+    await call('POST', '/pay-codes/scan', { code: payCode, storeId }, tk);
+    await call(
+      'POST',
+      `/wallets/${ids[phone]}/consume`,
+      {
+        storeId,
+        amountCent,
+        remark: remark || undefined,
+        payCode,
+        orderNo: await freshOrder(tk),
+        ...(typed ? { orderNoTyped: true } : {}),
+        productAmountCent,
+        requestId: crypto.randomUUID(),
+      },
+      tk,
+    );
   };
   await move('recharge', '13912345678', flagship, 100000, '现金', clerk);
-  await consume('13912345678', flagship, 12800, '护理套餐', clerk);
-  await consume('13912345678', community.id, 6800, '单次项目', communityClerk);
+  await consume('13912345678', flagship, 12800, '买手机抵扣', clerk, { productAmountCent: 299900 });
+  await consume('13912345678', community.id, 6800, '买耳机抵扣', communityClerk, { productAmountCent: 69900, typed: true });
   await move('recharge', '13698765432', flagship, 50000, '刷卡', clerk);
   const wrong = await move('recharge', '13533334444', flagship, 300000, '转账', clerk);
   const manager = (await login('13800000001', 'Manager123')).accessToken;
   await call('POST', `/ledger/${wrong.entry.id}/reversal`, { remark: '金额录错，应为 3000 元', requestId: crypto.randomUUID() }, manager);
   await move('recharge', '13533334444', flagship, 300000, '转账（重新录入）', clerk);
-  await consume('13533334444', flagship, 25800, '年卡项目', clerk);
+  await consume('13533334444', flagship, 25800, '买平板抵扣', clerk, { productAmountCent: 399900 });
   await move('recharge', '13711112222', community.id, 20000, '现金', communityClerk);
   await consume('13711112222', community.id, 9900, '', communityClerk);
   await consume('13698765432', flagship, 4500, '', clerk);

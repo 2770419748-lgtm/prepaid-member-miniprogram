@@ -24,6 +24,13 @@
           <MoneyText :cent="-entry.changeCent" signed />
         </a-descriptions-item>
       </a-descriptions>
+      <a-alert
+        v-if="entry.type === 'CONSUME' && entry.orderNo"
+        class="desc"
+        type="info"
+        show-icon
+        :message="`冲正后九讯云订单 ${entry.orderNo} 会放开，可以重新抵扣。`"
+      />
       <a-form layout="vertical">
         <a-form-item label="冲正原因" required>
           <a-textarea v-model:value="remark" :maxlength="200" show-count :rows="2" placeholder="例如：金额录错，应为 100 元" />

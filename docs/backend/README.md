@@ -31,6 +31,7 @@ P2 提供操作记录查询、当日对账、余额日结与核对，见 `docs/b
 | M4 e签宝沙箱 | `docs/backend/m4-esign-sandbox.md` | 约 10 | M2；企业章正式能力等 M6 |
 | P2 审计对账 | `docs/backend/p2-audit.md` | 约 4 | M2 |
 | 扫码消费（会员码） | `docs/backend/pay-code.md` | — | M2 |
+| 扫订单码抵扣 10% | `docs/backend/order-offset.md` | — | 扫码消费 |
 
 ---
 

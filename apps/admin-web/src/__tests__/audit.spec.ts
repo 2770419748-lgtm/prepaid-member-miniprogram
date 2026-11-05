@@ -11,6 +11,18 @@ describe('操作记录翻成白话', () => {
     ).toEqual(['金额 1,000.00 元', '余额 0.00 → 1,000.00 元']);
   });
 
+  it('消费抵扣带上九讯云订单号和商品金额，手输的标出来', () => {
+    expect(
+      describeAuditPayload(
+        { amountCent: 12990, balanceBefore: 78650, balanceAfter: 65660, orderNo: 'A5982', productAmountCent: 129900 },
+        storeName,
+      ),
+    ).toEqual(['金额 129.90 元', '余额 786.50 → 656.60 元', '九讯云订单 A5982', '商品应付 1,299.00 元']);
+    expect(describeAuditPayload({ orderNo: 'A6021', orderNoTyped: true }, storeName)).toEqual([
+      '九讯云订单 A6021（手输单号）',
+    ]);
+  });
+
   it('员工角色显示门店名和中文角色', () => {
     expect(describeAuditPayload({ name: '李店员', phone: '13800000002', storeId: 's1', role: 'STAFF' }, storeName)).toEqual([
       '名称 李店员',

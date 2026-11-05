@@ -9,10 +9,13 @@ import { LedgerType, Prisma } from '@prisma/client';
 import { AuditAction, AuditLogWriter } from '../audit/audit-log.writer';
 import { AccessPrincipal } from '../auth/access-principal';
 import { assertStoreAccess, isSuperAdmin } from '../auth/staff-access';
+import { formatYuan } from '../common/money-words';
 import { PayCodeService } from '../pay-code/pay-code.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConsumeDto, MoneyMoveDto, RefundDto, ReversalDto } from './dto/ledger.dto';
 import { ledgerInclude, LedgerRecord, StaffLedgerView, toStaffLedgerView } from './ledger.view';
+import { maxOffsetCent, ORDER_OFFSET_PERCENT } from './order-no';
+import { OrderRedemptionService, redeemedMessage } from './order-redemption.service';
 
 /** 钱包余额是 Int（分）。再往上加会溢出。 */
 const MAX_BALANCE_CENT = 2_147_483_647;
@@ -47,6 +50,18 @@ interface Movement {
   payCodeId: string | null;
   /** 签完权益单后自动充值时，是哪一份权益单。写进操作记录。 */
   signFlowId: string | null;
+  /** 消费抵扣的收银订单。只有消费有，和流水同一事务占住这张单。 */
+  order: OrderOffset | null;
+}
+
+/** 一笔消费抵的是哪张收银订单。 */
+interface OrderOffset {
+  /** 规范写法 A+数字。 */
+  orderNo: string;
+  /** 商品应付金额（总计减优惠），分。 */
+  productAmountCent: number;
+  /** 店员手输的单号。 */
+  typed: boolean;
 }
 
 /** 签完一份带会员权益金额的权益单后要充的那笔。 */
@@ -83,7 +98,7 @@ function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
-/** 判断「同一请求号是不是同一笔」时比哪些字段：冲正比原流水，充值、扣款比金额和门店。 */
+/** 判断「同一请求号是不是同一笔」时比哪些字段：冲正比原流水，充值、扣款比金额和门店，扣款还比订单号。 */
 function requestShape(movement: Movement) {
   return {
     memberId: movement.memberId,
@@ -91,6 +106,7 @@ function requestShape(movement: Movement) {
     ...(movement.reversalOfId
       ? { reversalOfId: movement.reversalOfId }
       : { amountCent: movement.amountCent, storeId: movement.storeId }),
+    ...(movement.order ? { orderNo: movement.order.orderNo } : {}),
   };
 }
 
@@ -111,15 +127,30 @@ export class WalletService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogWriter,
     private readonly payCodes: PayCodeService,
+    private readonly orders: OrderRedemptionService,
   ) {}
 
   recharge(actor: AccessPrincipal, memberId: string, dto: MoneyMoveDto): Promise<MoveResult> {
-    return this.move(actor, memberId, dto, LedgerType.RECHARGE, 1, null);
+    return this.move(actor, memberId, dto, LedgerType.RECHARGE, 1, null, null);
   }
 
-  /** 消费扣款必须带上这位店员在这家门店刚扫到的会员码。码只能用一次。 */
-  consume(actor: AccessPrincipal, memberId: string, dto: ConsumeDto): Promise<MoveResult> {
-    return this.move(actor, memberId, dto, LedgerType.CONSUME, -1, dto.payCode);
+  /**
+   * 消费扣款必须带上这位店员在这家门店刚扫到的会员码（码只能用一次），
+   * 和这笔抵的收银订单：最多抵商品应付金额的 10%，同一张单全公司只能抵一次（冲正后放开）。
+   */
+  async consume(actor: AccessPrincipal, memberId: string, dto: ConsumeDto): Promise<MoveResult> {
+    const order: OrderOffset = {
+      orderNo: this.orders.normalize(dto.orderNo),
+      productAmountCent: dto.productAmountCent,
+      typed: dto.orderNoTyped ?? false,
+    };
+    const cap = maxOffsetCent(order.productAmountCent);
+    if (dto.amountCent > cap) {
+      throw new BadRequestException(
+        `这单最多只能抵 ${formatYuan(cap)} 元（商品金额 ${formatYuan(order.productAmountCent)} 元的 ${ORDER_OFFSET_PERCENT}%）`,
+      );
+    }
+    return this.move(actor, memberId, dto, LedgerType.CONSUME, -1, dto.payCode, order);
   }
 
   /**
@@ -152,6 +183,7 @@ export class WalletService {
       requestId,
       payCodeId: null,
       signFlowId: credit.signFlowId,
+      order: null,
     });
   }
 
@@ -206,6 +238,7 @@ export class WalletService {
       requestId: dto.requestId,
       payCodeId: null,
       signFlowId: null,
+      order: null,
     });
   }
 
@@ -255,6 +288,7 @@ export class WalletService {
       requestId: dto.requestId,
       payCodeId: null,
       signFlowId: null,
+      order: null,
     });
   }
 
@@ -265,9 +299,16 @@ export class WalletService {
     type: LedgerType,
     direction: 1 | -1,
     payCode: string | null,
+    order: OrderOffset | null,
   ): Promise<MoveResult> {
     assertStoreAccess(actor.roles, dto.storeId);
-    const sameRequest = { memberId, type, amountCent: dto.amountCent, storeId: dto.storeId };
+    const sameRequest = {
+      memberId,
+      type,
+      amountCent: dto.amountCent,
+      storeId: dto.storeId,
+      ...(order ? { orderNo: order.orderNo } : {}),
+    };
     const replay = await this.replay(actor.orgId, dto.requestId, sameRequest);
     if (replay) {
       return replay;
@@ -293,11 +334,17 @@ export class WalletService {
       throw new BadRequestException('会员还没开卡');
     }
     let payCodeId: string | null = null;
-    if (payCode != null) {
+    if (payCode != null || order != null) {
       try {
-        payCodeId = (await this.payCodes.assertUsable(actor, memberId, store.id, payCode)).id;
+        if (order) {
+          await this.orders.assertNotRedeemed(actor.orgId, order.orderNo);
+        }
+        if (payCode != null) {
+          payCodeId = (await this.payCodes.assertUsable(actor, memberId, store.id, payCode)).id;
+        }
       } catch (error) {
-        // 同一请求号的另一次提交（连点、网络重试）可能刚刚用掉了这张码：返回那一笔，不报「已经用过了」。
+        // 同一请求号的另一次提交（连点、网络重试）可能刚刚用掉了这张码、占了这张单：
+        // 返回那一笔，不报「已经用过了」「已经抵扣过了」。
         const replayed = await this.replay(actor.orgId, dto.requestId, sameRequest);
         if (replayed) {
           return replayed;
@@ -318,6 +365,7 @@ export class WalletService {
       requestId: dto.requestId,
       payCodeId,
       signFlowId: null,
+      order,
     });
   }
 
@@ -386,9 +434,20 @@ export class WalletService {
         remark: movement.remark,
         reversalOfId: movement.reversalOfId,
         requestId: movement.requestId,
+        orderNo: movement.order?.orderNo ?? null,
+        productAmountCent: movement.order?.productAmountCent ?? null,
+        orderNoTyped: movement.order?.typed ?? null,
       },
       include: ledgerInclude,
     });
+    // 占单和放开也在写流水之后，理由同下面的会员码：同一请求号并发提交时先撞流水的唯一约束。
+    // 两笔同时抵同一张单（不同请求号）时，第二笔在这里撞部分唯一索引，整笔回滚。
+    if (movement.order) {
+      await this.orders.occupy(tx, movement.orgId, movement.order.orderNo, entry.id);
+    }
+    if (movement.reversalOfId) {
+      await this.orders.release(tx, movement.reversalOfId, entry.id);
+    }
     // 放在写流水之后：同一请求号并发提交时先撞流水的唯一约束，走重放，而不是报码已用过。
     // 带码的只有店员扫码扣款，一定有操作人。
     if (movement.payCodeId) {
@@ -410,6 +469,13 @@ export class WalletService {
         ...(movement.reversalOfId ? { reversalOfId: movement.reversalOfId } : {}),
         ...(movement.payCodeId ? { payCodeId: movement.payCodeId } : {}),
         ...(movement.signFlowId ? { signFlowId: movement.signFlowId } : {}),
+        ...(movement.order
+          ? {
+              orderNo: movement.order.orderNo,
+              productAmountCent: movement.order.productAmountCent,
+              ...(movement.order.typed ? { orderNoTyped: true } : {}),
+            }
+          : {}),
         // 退余额的原因和退款方式要在操作记录里看得到。
         ...(movement.type === LedgerType.REFUND && movement.remark ? { remark: movement.remark } : {}),
       },
@@ -426,6 +492,12 @@ export class WalletService {
     if (movement.reversalOfId) {
       throw new ConflictException('这笔流水已经冲正过');
     }
+    if (movement.order) {
+      const redeemed = await this.orders.findActive(this.prisma, movement.orgId, movement.order.orderNo);
+      if (redeemed) {
+        throw new ConflictException(redeemedMessage(redeemed));
+      }
+    }
     throw new ConflictException('重复提交，请刷新后再试');
   }
 
@@ -436,7 +508,7 @@ export class WalletService {
   private async replay(
     orgId: string,
     requestId: string,
-    expected: Partial<Pick<LedgerRecord, 'memberId' | 'type' | 'amountCent' | 'storeId' | 'reversalOfId'>>,
+    expected: Partial<Pick<LedgerRecord, 'memberId' | 'type' | 'amountCent' | 'storeId' | 'reversalOfId' | 'orderNo'>>,
   ): Promise<MoveResult | null> {
     const entry = await this.prisma.ledgerEntry.findUnique({
       where: { orgId_requestId: { orgId, requestId } },

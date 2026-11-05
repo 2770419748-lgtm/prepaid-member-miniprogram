@@ -6,7 +6,7 @@
     :pagination="pagination"
     row-key="id"
     size="middle"
-    :scroll="{ x: showMember ? 1110 : 980 }"
+    :scroll="{ x: showMember ? 1120 : 990 }"
     @change="onChange"
   >
     <template #emptyText>
@@ -29,8 +29,19 @@
       <template v-else-if="column.key === 'change'">
         <MoneyText :cent="record.changeCent" signed class="change" />
       </template>
+      <template v-else-if="column.key === 'order'">
+        <template v-if="record.orderNo">
+          <span class="pm-num">{{ record.orderNo }}</span>
+          <a-tag v-if="record.orderNoTyped" color="orange" class="typed">手输</a-tag>
+          <div v-if="record.productAmountCent != null" class="muted">商品 {{ formatCent(record.productAmountCent) }}</div>
+        </template>
+      </template>
       <template v-else-if="column.key === 'balanceAfter'">
         <MoneyText :cent="record.balanceAfter" />
+      </template>
+      <template v-else-if="column.key === 'store'">
+        {{ record.storeName }}
+        <div class="muted">{{ record.operatorName || '系统' }}</div>
       </template>
       <template v-else-if="column.key === 'remark'">
         <span class="remark">{{ record.remark || '' }}</span>
@@ -54,6 +65,7 @@ import { computed } from 'vue';
 import type { LedgerEntry } from '../api/types';
 import { useSessionStore } from '../stores/session';
 import { formatDateTime } from '../utils/datetime';
+import { formatCent } from '../utils/money';
 import { maskPhone } from '../utils/phone';
 import { canReverse } from '../utils/roles';
 import LedgerTypeTag from './LedgerTypeTag.vue';
@@ -89,9 +101,10 @@ const columns = computed<ColumnsType<LedgerEntry>>(() => [
   ...(props.showMember ? [{ title: '会员', key: 'member', width: 130 }] : []),
   { title: '类型', key: 'type', width: 130 },
   { title: '金额（元）', key: 'change', align: 'right' as const, width: 110 },
-  { title: '变动后余额（元）', key: 'balanceAfter', align: 'right' as const, width: 140 },
-  { title: '门店', dataIndex: 'storeName', key: 'storeName', width: 110 },
-  { title: '操作人', dataIndex: 'operatorName', key: 'operatorName', width: 90 },
+  { title: '九讯云订单', key: 'order', width: 130 },
+  // 门店和操作人并成一列（操作人在下一行），给九讯云订单腾地方，1440 宽屏幕不用左右拖就能看到备注。
+  { title: '余额（元）', key: 'balanceAfter', align: 'right' as const, width: 110 },
+  { title: '门店 / 操作人', key: 'store', width: 120 },
   { title: '备注', key: 'remark', ellipsis: true },
   { title: '操作', key: 'actions', width: 120, fixed: 'right' as const },
 ]);
@@ -121,6 +134,10 @@ function onChange(p: TablePaginationConfig): void {
 
 .change {
   font-weight: 500;
+}
+
+.typed {
+  margin-left: 4px;
 }
 
 .reversed {

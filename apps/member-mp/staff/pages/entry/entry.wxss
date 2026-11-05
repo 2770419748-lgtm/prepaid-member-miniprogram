@@ -50,3 +50,70 @@
 .scan-need {
   margin-bottom: 32rpx;
 }
+
+/* 消费：九讯云订单 */
+.order-line {
+  display: flex;
+  align-items: center;
+  min-height: 64rpx;
+}
+
+.order-no {
+  font-size: 36rpx;
+  font-weight: 600;
+  margin-right: 16rpx;
+}
+
+.order-change {
+  margin-left: auto;
+  padding-left: 24rpx;
+  flex-shrink: 0;
+}
+
+.scan-order {
+  margin-top: 16rpx;
+}
+
+.order-switch {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 26rpx;
+}
+
+.order-type {
+  display: flex;
+  align-items: center;
+  border-bottom: 2rpx solid var(--line);
+}
+
+.order-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.order-ok {
+  width: 144rpx;
+  height: 64rpx;
+  font-size: 28rpx;
+  margin-left: 16rpx;
+  flex-shrink: 0;
+}
+
+.product-line {
+  padding: 8rpx 0 12rpx;
+  border-bottom: 2rpx solid var(--line);
+}
+
+.product-input {
+  font-size: 40rpx;
+  height: 72rpx;
+  font-weight: 600;
+}
+
+.cap {
+  margin-top: 12rpx;
+}
+
+.offset-label {
+  margin-top: 32rpx;
+}

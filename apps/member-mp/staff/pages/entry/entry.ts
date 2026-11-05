@@ -6,7 +6,8 @@ import { formatCent, formatChange, parseYuanToCent } from '../../utils/money';
 import { needsRescan, untilText, validUntilText } from '../../utils/paycode';
 import { maskPhone } from '../../utils/phone';
 import { newRequestId } from '../../utils/request-id';
-import { scanMemberCode } from '../../utils/scan';
+import { defaultOffsetCent, maxOffsetCent, OFFSET_PERCENT } from '../../utils/sale-order';
+import { scanMemberCode, scanSaleOrder, useTypedOrder } from '../../utils/scan';
 import { currentStore, rememberMember, requireSession } from '../../utils/session';
 import { formatDateTime } from '../../utils/time';
 import { goWorkbench } from '../../utils/nav';
@@ -18,6 +19,10 @@ interface Pending {
   requestId: string;
   amountCent: number;
   remark: string;
+  /** 消费：抵的哪张单、商品金额多少。重试时原样带上。 */
+  orderNo: string;
+  orderNoTyped: boolean;
+  productAmountCent: number;
 }
 
 interface Done {
@@ -29,6 +34,14 @@ interface Done {
   time: string;
   remark: string;
   replayed: boolean;
+  orderNo: string;
+  product: string;
+}
+
+/** 消费：校验通过的商品金额和抵扣金额。 */
+interface Valid {
+  amountCent: number;
+  productAmountCent: number;
 }
 
 Page({
@@ -57,9 +70,23 @@ Page({
     payCode: '',
     codeText: '',
     needCode: false,
+    /** 消费：九讯云订单号（A+数字）。没有订单不能扣款。 */
+    orderNo: '',
+    orderNoTyped: false,
+    /** 条码扫不出来，正在手输单号。 */
+    typingOrder: false,
+    orderInput: '',
+    orderError: '',
+    /** 消费：商品应付金额（元，店员输入）。 */
+    product: '',
+    productError: '',
+    /** 「最多可抵 239.90 元（商品金额的 10%）」。 */
+    capText: '',
   },
 
   pending: null as Pending | null,
+  /** 店员自己改过抵扣金额以后，改商品金额就不再自动填抵扣金额。 */
+  amountTouched: false,
 
   onLoad(query: Record<string, string | undefined>) {
     const kind: Kind = query.kind === 'RECHARGE' ? 'RECHARGE' : 'CONSUME';
@@ -70,7 +97,7 @@ Page({
       memberId: query.memberId ?? '',
       kind,
       kindLabel: label,
-      submitText: `确认${label}`,
+      submitText: kind === 'CONSUME' ? '确认抵扣' : `确认${label}`,
       remarkPlaceholder: kind === 'RECHARGE' ? '如：现金、转账' : '如：消费项目',
       payCode,
       codeText: payCode ? untilText(query.until) : '',
@@ -120,6 +147,7 @@ Page({
   },
 
   onAmountInput(event: WechatMiniprogram.Input) {
+    this.amountTouched = true;
     this.setData({ amount: event.detail.value });
     this.validate();
   },
@@ -128,9 +156,69 @@ Page({
     this.setData({ remark: event.detail.value });
   },
 
-  /** 校验金额并预览记账后余额。合法时返回分，否则返回空。 */
-  validate(): number | null {
-    const { amount, kind, kindLabel, balanceCent, balance } = this.data;
+  /** 改商品金额：店员没自己改过抵扣金额时，自动填上能抵的最多金额（余额不够就填余额）。 */
+  onProductInput(event: WechatMiniprogram.Input) {
+    const product = event.detail.value;
+    const parsed = parseYuanToCent(product);
+    const update: Record<string, string> = { product };
+    if (!this.amountTouched) {
+      update.amount = parsed.ok ? formatCent(defaultOffsetCent(parsed.cent, this.data.balanceCent)).replace(/,/g, '') : '';
+    }
+    this.setData(update);
+    this.validate();
+  },
+
+  /** 扫九讯云小票上的订单码。 */
+  async onScanOrder() {
+    const orderNo = await scanSaleOrder();
+    if (orderNo) {
+      this.setData({ orderNo, orderNoTyped: false, typingOrder: false, orderInput: '', orderError: '' });
+      this.validate();
+    }
+  },
+
+  onTypeOrder() {
+    this.setData({ typingOrder: true, orderError: '' });
+  },
+
+  onCancelTypeOrder() {
+    this.setData({ typingOrder: false, orderInput: '', orderError: '' });
+  },
+
+  onOrderInput(event: WechatMiniprogram.Input) {
+    this.setData({ orderInput: event.detail.value, orderError: '' });
+  },
+
+  async onConfirmTypedOrder() {
+    const result = await useTypedOrder(this.data.orderInput);
+    if (!result) {
+      return;
+    }
+    if ('reason' in result) {
+      this.setData({ orderError: result.reason });
+      return;
+    }
+    this.setData({ orderNo: result.orderNo, orderNoTyped: true, typingOrder: false, orderInput: '', orderError: '' });
+    this.validate();
+  },
+
+  /** 换一张单：清掉单号，重新扫。 */
+  onChangeOrder() {
+    if (this.data.uncertain || this.data.submitting) {
+      return;
+    }
+    this.setData({ orderNo: '', orderNoTyped: false });
+    this.validate();
+  },
+
+  /** 校验并预览记账后余额。合法时返回金额，否则返回空。 */
+  validate(): Valid | null {
+    const { kind } = this.data;
+    return kind === 'CONSUME' ? this.validateConsume() : this.validateRecharge();
+  },
+
+  validateRecharge(): Valid | null {
+    const { amount, kindLabel, balanceCent } = this.data;
     const reset = { amountError: '', afterText: '', canSubmit: false, submitText: `确认${kindLabel}` };
     if (!amount.trim()) {
       this.setData(reset);
@@ -141,43 +229,111 @@ Page({
       this.setData({ ...reset, amountError: parsed.reason });
       return null;
     }
-    const after = balanceCent + (kind === 'RECHARGE' ? parsed.cent : -parsed.cent);
-    if (after < 0) {
-      this.setData({ ...reset, amountError: `余额不足，当前余额 ${balance} 元` });
+    this.setData({
+      amountError: '',
+      afterText: `记账后余额 ${formatCent(balanceCent + parsed.cent)} 元`,
+      canSubmit: true,
+      submitText: `确认${kindLabel} ${formatCent(parsed.cent)} 元`,
+    });
+    return { amountCent: parsed.cent, productAmountCent: 0 };
+  },
+
+  /** 消费：先有订单、商品金额，抵扣金额不超过商品金额的 10%、不超过余额。 */
+  validateConsume(): Valid | null {
+    const { amount, product, balanceCent, balance, orderNo } = this.data;
+    const reset = {
+      amountError: '',
+      productError: '',
+      afterText: '',
+      capText: '',
+      canSubmit: false,
+      submitText: '确认抵扣',
+    };
+    if (!product.trim()) {
+      this.setData(reset);
+      return null;
+    }
+    const productParsed = parseYuanToCent(product);
+    if (!productParsed.ok) {
+      this.setData({ ...reset, productError: productParsed.reason });
+      return null;
+    }
+    const cap = maxOffsetCent(productParsed.cent);
+    const capText =
+      cap > balanceCent
+        ? `余额只有 ${balance} 元，最多抵 ${balance} 元`
+        : `最多可抵 ${formatCent(cap)} 元（商品金额的 ${OFFSET_PERCENT}%）`;
+    if (!amount.trim()) {
+      this.setData({ ...reset, capText });
+      return null;
+    }
+    const parsed = parseYuanToCent(amount);
+    if (!parsed.ok) {
+      this.setData({ ...reset, capText, amountError: parsed.reason });
+      return null;
+    }
+    if (parsed.cent > cap) {
+      this.setData({
+        ...reset,
+        capText,
+        amountError: `这单最多只能抵 ${formatCent(cap)} 元（商品金额的 ${OFFSET_PERCENT}%）`,
+      });
+      return null;
+    }
+    if (parsed.cent > balanceCent) {
+      this.setData({ ...reset, capText, amountError: `余额不足，当前余额 ${balance} 元` });
       return null;
     }
     this.setData({
       amountError: '',
-      afterText: `记账后余额 ${formatCent(after)} 元`,
-      canSubmit: true,
-      submitText: `确认${kindLabel} ${formatCent(parsed.cent)} 元`,
+      productError: '',
+      capText,
+      afterText: `抵扣后余额 ${formatCent(balanceCent - parsed.cent)} 元`,
+      canSubmit: !!orderNo,
+      submitText: orderNo ? `确认抵扣 ${formatCent(parsed.cent)} 元` : '先扫订单码',
     });
-    return parsed.cent;
+    return orderNo ? { amountCent: parsed.cent, productAmountCent: productParsed.cent } : null;
   },
 
   async onSubmit() {
     if (this.data.submitting || this.data.uncertain) {
       return;
     }
-    const cent = this.validate();
-    if (cent == null) {
-      if (!this.data.amount.trim()) {
+    const valid = this.validate();
+    if (valid == null) {
+      if (this.data.kind === 'CONSUME' && !this.data.orderNo) {
+        this.setData({ orderError: '请先扫九讯云小票上的订单码' });
+      } else if (this.data.kind === 'CONSUME' && !this.data.product.trim()) {
+        this.setData({ productError: '请填商品应付金额' });
+      } else if (!this.data.amount.trim()) {
         this.setData({ amountError: '请输入金额' });
       }
       return;
     }
-    const { kind, kindLabel, balanceCent } = this.data;
-    const after = balanceCent + (kind === 'RECHARGE' ? cent : -cent);
+    const { kind, kindLabel, balanceCent, orderNo } = this.data;
+    const cent = valid.amountCent;
+    const content =
+      kind === 'CONSUME'
+        ? `${this.data.memberLabel}\n订单 ${orderNo} · 商品 ${formatCent(valid.productAmountCent)} 元\n` +
+          `抵扣 ${formatCent(cent)} 元，抵扣后余额 ${formatCent(balanceCent - cent)} 元`
+        : `${this.data.memberLabel}\n${kindLabel} ${formatCent(cent)} 元\n记账后余额 ${formatCent(balanceCent + cent)} 元`;
     const { confirm } = await wx.showModal({
-      title: `确认${kindLabel}`,
-      content: `${this.data.memberLabel}\n${kindLabel} ${formatCent(cent)} 元\n记账后余额 ${formatCent(after)} 元`,
+      title: kind === 'CONSUME' ? '确认抵扣' : `确认${kindLabel}`,
+      content,
       confirmText: '确认',
       confirmColor: '#1677FF',
     });
     if (!confirm) {
       return;
     }
-    this.pending = { requestId: newRequestId(), amountCent: cent, remark: this.data.remark.trim() };
+    this.pending = {
+      requestId: newRequestId(),
+      amountCent: cent,
+      remark: this.data.remark.trim(),
+      orderNo,
+      orderNoTyped: this.data.orderNoTyped,
+      productAmountCent: valid.productAmountCent,
+    };
     await this.submit();
   },
 
@@ -192,6 +348,7 @@ Page({
     if (!pending) {
       return;
     }
+    const consume = this.data.kind === 'CONSUME';
     this.setData({ submitting: true });
     try {
       const result = await recordMove(this.data.memberId, this.data.kind, {
@@ -199,14 +356,21 @@ Page({
         amountCent: pending.amountCent,
         requestId: pending.requestId,
         ...(pending.remark ? { remark: pending.remark } : {}),
-        ...(this.data.kind === 'CONSUME' ? { payCode: this.data.payCode } : {}),
+        ...(consume
+          ? {
+              payCode: this.data.payCode,
+              orderNo: pending.orderNo,
+              orderNoTyped: pending.orderNoTyped,
+              productAmountCent: pending.productAmountCent,
+            }
+          : {}),
       });
       this.pending = null;
       const { entry } = result;
       this.setData({
         uncertain: false,
         done: {
-          title: `${this.data.kindLabel}成功`,
+          title: consume ? '抵扣成功' : `${this.data.kindLabel}成功`,
           change: formatChange(entry.changeCent),
           tone: entry.changeCent >= 0 ? 'plus' : 'minus',
           balance: formatCent(result.balanceCent),
@@ -214,11 +378,13 @@ Page({
           time: formatDateTime(entry.createdAt),
           remark: entry.remark ?? '',
           replayed: result.replayed,
+          orderNo: entry.orderNo ?? '',
+          product: entry.productAmountCent != null ? formatCent(entry.productAmountCent) : '',
         },
       });
     } catch (error) {
       if (error instanceof ApiError && error.uncertain) {
-        // 不知道服务端有没有记上：锁住金额，只能用同一个请求号重试。
+        // 不知道服务端有没有记上：锁住金额和订单，只能用同一个请求号重试。
         this.setData({ uncertain: true });
         return;
       }
@@ -240,6 +406,10 @@ Page({
           },
         });
         return;
+      }
+      if (consume && error instanceof ApiError && error.status === 409 && /这张单已经抵扣过/.test(error.message)) {
+        // 这张单刚被别人抵了：清掉单号，换一张再扫。
+        this.setData({ orderNo: '', orderNoTyped: false });
       }
       wx.showModal({ title: '没有记上', content: messageOf(error), showCancel: false, confirmText: '知道了' });
       this.load();

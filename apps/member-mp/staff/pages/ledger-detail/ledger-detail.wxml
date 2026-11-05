@@ -12,6 +12,8 @@
     <view class="card">
       <view class="kv"><text class="kv-key">会员</text><text class="kv-value">{{view.member}}</text></view>
       <view class="kv"><text class="kv-key">门店</text><text class="kv-value">{{view.storeName}}</text></view>
+      <view wx:if="{{view.order}}" class="kv"><text class="kv-key">九讯云订单</text><text class="kv-value">{{view.order}}</text></view>
+      <view wx:if="{{view.product}}" class="kv"><text class="kv-key">商品应付</text><text class="kv-value">{{view.product}}</text></view>
       <view class="kv"><text class="kv-key">经办人</text><text class="kv-value">{{view.operator}}</text></view>
       <view class="kv"><text class="kv-key">时间</text><text class="kv-value">{{view.time}}</text></view>
       <view class="kv"><text class="kv-key">记账前余额</text><text class="kv-value">{{view.before}} 元</text></view>
@@ -33,7 +35,7 @@
     </view>
 
     <block wx:if="{{canReverse}}">
-      <text class="hint reverse-hint">记错了账时使用：补记一笔金额相同、方向相反的流水，把这笔整笔抵掉。原记录保留，不能删除；每笔只能冲正一次。</text>
+      <text class="hint reverse-hint">记错了账时使用：补记一笔金额相同、方向相反的流水，把这笔整笔抵掉。原记录保留，不能删除；每笔只能冲正一次。{{view.order && !view.isReversal ? '冲正后这张九讯云订单可以重新抵扣。' : ''}}</text>
       <view class="btn btn-danger {{submitting ? 'is-disabled' : ''}}" hover-class="is-pressed" bindtap="onReverse">{{submitting ? '正在冲正…' : '冲正这笔'}}</view>
     </block>
     <text wx:elif="{{askManager}}" class="hint reverse-hint">记错了账？请联系店长冲正。</text>
