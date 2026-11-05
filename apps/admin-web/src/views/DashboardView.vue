@@ -9,7 +9,7 @@
       </div>
       <a-space wrap>
         <a-button type="primary" @click="router.push({ name: 'member-open' })"><PlusOutlined />开卡</a-button>
-        <a-button @click="router.push({ name: 'recharge' })">充值记账</a-button>
+        <a-button v-if="session.canRecharge" @click="router.push({ name: 'recharge' })">充值记账</a-button>
       </a-space>
     </div>
 

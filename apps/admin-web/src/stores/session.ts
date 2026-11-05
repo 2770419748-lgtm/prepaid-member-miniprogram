@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import { fetchMe, fetchMyStores, loginWithPassword } from '../api/auth';
 import { getToken, setToken } from '../api/http';
 import type { MyStore, RoleView, StaffRole, StaffSummary } from '../api/types';
-import { canManageStore, hasRoleAtLeast, highestRole, isSuperAdmin, managedStoreIds } from '../utils/roles';
+import { canManageStore, canRechargeAt, hasRoleAtLeast, highestRole, isSuperAdmin, managedStoreIds } from '../utils/roles';
 
 const STORE_KEY = 'pm-admin-store';
 
@@ -44,6 +44,9 @@ export const useSessionStore = defineStore('session', () => {
   const currentStore = computed(() => stores.value.find((s) => s.id === currentStoreId.value) ?? null);
   /** 能记账的门店：自己有权限且在营业。 */
   const activeStores = computed(() => stores.value.filter((s) => s.status === 'ACTIVE'));
+  /** 能直接充值（补录）的门店：在营，并且自己是超级管理员或这家店的店长。店员给会员充值走开单。 */
+  const rechargeStores = computed(() => activeStores.value.filter((s) => canRechargeAt(roles.value, s.id)));
+  const canRecharge = computed(() => rechargeStores.value.length > 0);
 
   function atLeast(role: StaffRole): boolean {
     return hasRoleAtLeast(roles.value, role);
@@ -127,6 +130,8 @@ export const useSessionStore = defineStore('session', () => {
     managed,
     currentStore,
     activeStores,
+    rechargeStores,
+    canRecharge,
     atLeast,
     canManage,
     setCurrentStore,

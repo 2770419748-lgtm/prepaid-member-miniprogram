@@ -49,10 +49,11 @@ describe('refund balance and member maintenance', () => {
     return response.body as { id: string; phone: string };
   }
 
+  /** 店长补录充值（店员不能直接充值）。 */
   async function recharge(memberId: string, amountCent: number, storeId = storeA) {
     const response = await http()
       .post(`/wallets/${memberId}/recharge`)
-      .set('Authorization', `Bearer ${tokens.clerkA}`)
+      .set('Authorization', `Bearer ${tokens.managerA}`)
       .send({ storeId, amountCent, requestId: randomUUID() });
     expect(response.status).toBe(201);
     return response.body.entry as { id: string };
@@ -418,7 +419,7 @@ describe('refund balance and member maintenance', () => {
       expect((await memberLogin('to-disable-again', phone)).status).toBe(403);
       const rechargeBlocked = await http()
         .post(`/wallets/${card.id}/recharge`)
-        .set('Authorization', `Bearer ${tokens.clerkA}`)
+        .set('Authorization', `Bearer ${tokens.managerA}`)
         .send({ storeId: storeA, amountCent: 100, requestId: randomUUID() });
       expect(rechargeBlocked.status).toBe(400);
       expect((await http().post(`/members/${card.id}/disable`).set('Authorization', `Bearer ${tokens.super}`).send({ reason: '再停' })).status).toBe(409);

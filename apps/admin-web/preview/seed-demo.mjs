@@ -87,6 +87,9 @@ await ensureStaff('13800000005', '陈店长', community.id, 'STORE_MANAGER', 'Ma
 
 const clerk = (await login('13800000002', 'Clerk12345')).accessToken;
 const communityClerk = (await login('13800000003', 'Clerk12345')).accessToken;
+// 直接充值只有店长和超级管理员能做（补录），店员给会员充值走开单。
+const flagshipManager = (await login('13800000001', 'Manager123')).accessToken;
+const communityManager = (await login('13800000005', 'Manager123')).accessToken;
 const members = [
   ['13912345678', '王女士', flagship, clerk],
   ['13698765432', '刘先生', flagship, clerk],
@@ -146,16 +149,15 @@ if ((await call('GET', '/ledger?pageSize=1')).total === 0) {
       tk,
     );
   };
-  await move('recharge', '13912345678', flagship, 100000, '现金', clerk);
+  await move('recharge', '13912345678', flagship, 100000, '现金', flagshipManager);
   await consume('13912345678', flagship, 12800, '买手机抵扣', clerk, { productAmountCent: 299900 });
   await consume('13912345678', community.id, 6800, '买耳机抵扣', communityClerk, { productAmountCent: 69900, typed: true });
-  await move('recharge', '13698765432', flagship, 50000, '刷卡', clerk);
-  const wrong = await move('recharge', '13533334444', flagship, 300000, '转账', clerk);
-  const manager = (await login('13800000001', 'Manager123')).accessToken;
-  await call('POST', `/ledger/${wrong.entry.id}/reversal`, { remark: '金额录错，应为 3000 元', requestId: crypto.randomUUID() }, manager);
-  await move('recharge', '13533334444', flagship, 300000, '转账（重新录入）', clerk);
+  await move('recharge', '13698765432', flagship, 50000, '刷卡', flagshipManager);
+  const wrong = await move('recharge', '13533334444', flagship, 300000, '转账', flagshipManager);
+  await call('POST', `/ledger/${wrong.entry.id}/reversal`, { remark: '金额录错，应为 3000 元', requestId: crypto.randomUUID() }, flagshipManager);
+  await move('recharge', '13533334444', flagship, 300000, '转账（重新录入）', flagshipManager);
   await consume('13533334444', flagship, 25800, '买平板抵扣', clerk, { productAmountCent: 399900 });
-  await move('recharge', '13711112222', community.id, 20000, '现金', communityClerk);
+  await move('recharge', '13711112222', community.id, 20000, '现金', communityManager);
   await consume('13711112222', community.id, 9900, '', communityClerk);
   await consume('13698765432', flagship, 4500, '', clerk);
 }

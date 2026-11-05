@@ -278,7 +278,7 @@ describe('M2 wallet and ledger', () => {
   describe('recharge and consume', () => {
     it('runs the acceptance case: open, recharge 100.00, spend 30.00, two entries, balance 70.00', async () => {
       const card = await openCard(tokens.clerkA, storeA);
-      const recharge = await move('recharge', tokens.clerkA, card.id, {
+      const recharge = await move('recharge', tokens.managerA, card.id, {
         storeId: storeA,
         amountCent: 10000,
         remark: '现金',
@@ -315,7 +315,7 @@ describe('M2 wallet and ledger', () => {
 
     it('refuses to spend more than the balance and leaves no entry behind', async () => {
       const card = await openCard(tokens.clerkA, storeA);
-      await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 500 });
+      await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 500 });
       const over = await move('consume', tokens.clerkA, card.id, { storeId: storeA, amountCent: 501 });
       expect(over.status).toBe(400);
       expect(messageOf(over.body)).toContain('余额不足');
@@ -326,12 +326,12 @@ describe('M2 wallet and ledger', () => {
     it('rejects zero, negative, fractional, text and oversized amounts, and balance overrides', async () => {
       const card = await openCard(tokens.clerkA, storeA);
       for (const amountCent of [0, -100, 10.5, '100', 100_000_001]) {
-        const response = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent });
+        const response = await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent });
         expect(response.status).toBe(400);
       }
       const sneaky = await http()
         .post(`/wallets/${card.id}/recharge`)
-        .set('Authorization', `Bearer ${tokens.clerkA}`)
+        .set('Authorization', `Bearer ${tokens.managerA}`)
         .send({ storeId: storeA, amountCent: 100, balanceCent: 99999999 });
       expect(sneaky.status).toBe(400);
       expect(await prisma.ledgerEntry.count({ where: { memberId: card.id } })).toBe(0);
@@ -339,7 +339,7 @@ describe('M2 wallet and ledger', () => {
 
     it('keeps the balance company-wide: a card opened at one store can be used at another', async () => {
       const card = await openCard(tokens.clerkA, storeA);
-      await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 8000 });
+      await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 8000 });
       const spendAtB = await move('consume', tokens.clerkB, card.id, { storeId: storeB, amountCent: 2500 });
       expect(spendAtB.status).toBe(201);
       expect(spendAtB.body.balanceCent).toBe(5500);
@@ -356,16 +356,35 @@ describe('M2 wallet and ledger', () => {
       expect(closed.status).toBe(400);
       const byMember = await move('recharge', tokens.member, card.id, { storeId: storeA, amountCent: 100 });
       expect(byMember.status).toBe(403);
-      const unknownMember = await move('recharge', tokens.clerkA, 'no-such-member', { storeId: storeA, amountCent: 100 });
+      const unknownMember = await move('recharge', tokens.managerA, 'no-such-member', { storeId: storeA, amountCent: 100 });
       expect(unknownMember.status).toBe(404);
       expect(await prisma.ledgerEntry.count({ where: { memberId: card.id } })).toBe(0);
+    });
+
+    it('lets only store managers and super admins recharge directly; clerks go through an order', async () => {
+      const card = await openCard(tokens.clerkA, storeA);
+      const byClerk = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 100 });
+      expect(byClerk.status).toBe(403);
+      expect(messageOf(byClerk.body)).toContain('开单');
+      // 店员给自己的卡记账也一样被拒。
+      const self = await openCard(tokens.clerkA, storeA, phones.clerkA);
+      const toSelf = await move('recharge', tokens.clerkA, self.id, { storeId: storeA, amountCent: 500_000 });
+      expect(toSelf.status).toBe(403);
+      expect(await prisma.ledgerEntry.count({ where: { memberId: { in: [card.id, self.id] } } })).toBe(0);
+      expect(await prisma.auditLog.count({ where: { orgId, action: 'WALLET_RECHARGE', targetId: card.id } })).toBe(0);
+
+      const byManager = await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 100 });
+      expect(byManager.status).toBe(201);
+      const bySuper = await move('recharge', tokens.super, card.id, { storeId: storeB, amountCent: 100 });
+      expect(bySuper.status).toBe(201);
+      expect((await walletOf(card.id)).balanceCent).toBe(200);
     });
 
     it('refuses to record for a member who has no card yet', async () => {
       const lonelyPhone = randomPhone();
       wechat.bind('lonely', lonelyPhone);
       const lonely = await memberLogin('lonely');
-      const response = await move('recharge', tokens.clerkA, lonely.id, { storeId: storeA, amountCent: 100 });
+      const response = await move('recharge', tokens.managerA, lonely.id, { storeId: storeA, amountCent: 100 });
       expect(response.status).toBe(400);
       expect(messageOf(response.body)).toContain('还没开卡');
     });
@@ -373,15 +392,15 @@ describe('M2 wallet and ledger', () => {
     it('records only once when the same request number is sent twice, even at the same moment', async () => {
       const card = await openCard(tokens.clerkA, storeA);
       const requestId = randomUUID();
-      const first = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 2000, requestId });
-      const second = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 2000, requestId });
+      const first = await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 2000, requestId });
+      const second = await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 2000, requestId });
       expect(first.status).toBe(201);
       expect(second.status).toBe(201);
       expect(second.body.replayed).toBe(true);
       expect(second.body.entry.id).toBe(first.body.entry.id);
       expect((await walletOf(card.id)).balanceCent).toBe(2000);
 
-      const reused = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 3000, requestId });
+      const reused = await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 3000, requestId });
       expect(reused.status).toBe(409);
 
       const burstId = randomUUID();
@@ -399,14 +418,14 @@ describe('M2 wallet and ledger', () => {
 
     it('refuses a recharge, deduction or reversal without a request number and records nothing', async () => {
       const card = await openCard(tokens.clerkA, storeA);
-      const noId = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 1000, requestId: undefined });
+      const noId = await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 1000, requestId: undefined });
       expect(noId.status).toBe(400);
       expect(noId.body.message).toEqual(['缺少防重复提交的请求号 requestId']);
-      const badId = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 1000, requestId: 'short' });
+      const badId = await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 1000, requestId: 'short' });
       expect(badId.status).toBe(400);
       expect(await prisma.ledgerEntry.count({ where: { memberId: card.id } })).toBe(0);
 
-      const funded = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 1000 });
+      const funded = await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 1000 });
       expect(funded.status).toBe(201);
       const spend = await move('consume', tokens.clerkA, card.id, { storeId: storeA, amountCent: 300, requestId: undefined });
       expect(spend.status).toBe(400);
@@ -420,7 +439,7 @@ describe('M2 wallet and ledger', () => {
 
     it('reverses only once when the same reversal is submitted twice', async () => {
       const card = await openCard(tokens.clerkA, storeA);
-      const funded = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 1000 });
+      const funded = await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 1000 });
       const requestId = randomUUID();
       const entryId = funded.body.entry.id as string;
       const [first, second] = await Promise.all([
@@ -439,7 +458,7 @@ describe('M2 wallet and ledger', () => {
   describe('concurrency', () => {
     it('lets at most one of several simultaneous over-drafting deductions through and never goes negative', async () => {
       const card = await openCard(tokens.clerkA, storeA);
-      await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 5000 });
+      await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 5000 });
       const cashiers: [string, string][] = [
         [tokens.clerkA, storeA],
         [tokens.clerkB, storeB],
@@ -467,7 +486,7 @@ describe('M2 wallet and ledger', () => {
 
     it('keeps every cent when many small deductions and top-ups land at the same time', async () => {
       const card = await openCard(tokens.clerkA, storeA);
-      await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 4000 });
+      await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 4000 });
       const cashier = (index: number): [string, string] =>
         index % 2 === 0 ? [tokens.clerkA, storeA] : [tokens.clerkB, storeB];
       const codes: string[] = [];
@@ -498,7 +517,7 @@ describe('M2 wallet and ledger', () => {
   describe('reversal', () => {
     it('lets the store manager undo a mistaken recharge once, and only once', async () => {
       const card = await openCard(tokens.clerkA, storeA);
-      const wrong = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 100000 });
+      const wrong = await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 100000 });
       const entryId = wrong.body.entry.id as string;
 
       const byClerk = await reverse(tokens.clerkA, entryId, { remark: '多打了一个零' });
@@ -533,14 +552,14 @@ describe('M2 wallet and ledger', () => {
       const original = await http().get(`/ledger/${entryId}`).set('Authorization', `Bearer ${tokens.managerA}`);
       expect(original.body.reversedById).toBe(undo.body.entry.id);
 
-      const right = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 10000 });
+      const right = await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 10000 });
       expect(right.body.balanceCent).toBe(10000);
       await expectChainConsistent(card.id);
     });
 
     it('gives back a mistaken deduction, and the super admin can reverse at any store', async () => {
       const card = await openCard(tokens.clerkA, storeA);
-      await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 5000 });
+      await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 5000 });
       const wrong = await move('consume', tokens.clerkB, card.id, { storeId: storeB, amountCent: 1200 });
       const undo = await reverse(tokens.super, wrong.body.entry.id as string, { remark: '扣错人了' });
       expect(undo.status).toBe(201);
@@ -550,7 +569,7 @@ describe('M2 wallet and ledger', () => {
 
     it('refuses to reverse a recharge that has already been spent', async () => {
       const card = await openCard(tokens.clerkA, storeA);
-      const recharge = await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 1000 });
+      const recharge = await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 1000 });
       await move('consume', tokens.clerkA, card.id, { storeId: storeA, amountCent: 800 });
       const undo = await reverse(tokens.managerA, recharge.body.entry.id as string, { remark: '撤销充值' });
       expect(undo.status).toBe(400);
@@ -560,7 +579,7 @@ describe('M2 wallet and ledger', () => {
 
     it('allows only one of two simultaneous reversals of the same entry', async () => {
       const card = await openCard(tokens.clerkA, storeA);
-      await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 3000 });
+      await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 3000 });
       const wrong = await move('consume', tokens.clerkA, card.id, { storeId: storeA, amountCent: 1000 });
       const entryId = wrong.body.entry.id as string;
       const results = await Promise.all([
@@ -582,7 +601,7 @@ describe('M2 wallet and ledger', () => {
     beforeAll(async () => {
       const card = await openCard(tokens.clerkA, storeA, phones.otherMember);
       memberCardId = card.id;
-      entryAtA = (await move('recharge', tokens.clerkA, card.id, { storeId: storeA, amountCent: 6000, remark: '店内备注' }))
+      entryAtA = (await move('recharge', tokens.managerA, card.id, { storeId: storeA, amountCent: 6000, remark: '店内备注' }))
         .body.entry.id as string;
       entryAtB = (await move('consume', tokens.clerkB, card.id, { storeId: storeB, amountCent: 1000 })).body.entry
         .id as string;

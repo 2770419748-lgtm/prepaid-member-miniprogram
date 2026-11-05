@@ -295,6 +295,7 @@ async function main(): Promise<void> {
   }
   const managerA = await login('/auth/staff/wx-phone', org.id, phone(1));
   const clerkA = await login('/auth/staff/wx-phone', org.id, phone(2));
+  const managerB = await login('/auth/staff/wx-phone', org.id, phone(3));
   const clerkB = await login('/auth/staff/wx-phone', org.id, phone(4));
   const superToken = await login('/auth/staff/wx-phone', org.id, phone(6));
 
@@ -330,12 +331,13 @@ async function main(): Promise<void> {
   const chen = await open(clerkB, community.id, phone(7), '陈先生');
   memberTokens.set(wang, await login('/auth/member/wx-phone', org.id, phone(5)));
   memberTokens.set(chen, await login('/auth/member/wx-phone', org.id, phone(7)));
-  await move('recharge', clerkA, wang, flagship.id, 100_000);
-  await move('recharge', clerkB, chen, community.id, 50_000);
+  // 直接充值只有店长和超级管理员能做（补录），店员走开单。
+  await move('recharge', managerA, wang, flagship.id, 100_000);
+  await move('recharge', managerB, chen, community.id, 50_000);
   await move('consume', clerkA, wang, flagship.id, 12_800);
   await move('consume', clerkB, wang, community.id, 6_600);
   await move('consume', clerkB, chen, community.id, 8_800);
-  const wrong = await move('recharge', clerkA, chen, flagship.id, 20_000);
+  const wrong = await move('recharge', managerA, chen, flagship.id, 20_000);
   const reversal = await api(`/ledger/${wrong}/reversal`, {
     token: managerA,
     body: { remark: '充错了人', requestId: randomUUID() },
@@ -345,7 +347,7 @@ async function main(): Promise<void> {
     tone: 'ok',
     title: '先在两家店做一天的账',
     detail:
-      '旗舰店给王女士开卡充 1000 元，社区店给陈先生开卡充 500 元；王女士在两家店各消费一次，陈先生在社区店消费一次；李店员把一笔 200 元充错了人，张店长补记一笔反方向的抵掉。',
+      '旗舰店给王女士开卡充 1000 元，社区店给陈先生开卡充 500 元；王女士在两家店各消费一次，陈先生在社区店消费一次；张店长把一笔 200 元充错了人，再补记一笔反方向的抵掉。',
   });
 
   const dailyResult = await api('/reconciliation/daily', { token: superToken });

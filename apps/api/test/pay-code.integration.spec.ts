@@ -36,7 +36,7 @@ describe('member pay code', () => {
     return response.body.accessToken as string;
   }
 
-  /** 店员开卡、充值，会员登录小程序。返回会员 id 和会员的登录凭证。 */
+  /** 店员开卡、店长补录充值（店员不能直接充值），会员登录小程序。返回会员 id 和会员的登录凭证。 */
   async function memberWithBalance(balanceCent: number): Promise<{ id: string; token: string }> {
     const phone = randomPhone();
     const opened = await http()
@@ -47,7 +47,7 @@ describe('member pay code', () => {
     if (balanceCent > 0) {
       const recharge = await http()
         .post(`/wallets/${opened.body.id}/recharge`)
-        .set('Authorization', `Bearer ${tokens.clerkA}`)
+        .set('Authorization', `Bearer ${tokens.managerA}`)
         .send({ storeId: storeA, amountCent: balanceCent, requestId: randomUUID() });
       expect(recharge.status).toBe(201);
     }

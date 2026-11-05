@@ -3,6 +3,7 @@ import { buildMenu } from '../menu';
 import {
   canEditStaff,
   canManageStore,
+  canRechargeAt,
   canRefundAt,
   canReverse,
   hasRoleAtLeast,
@@ -67,6 +68,15 @@ describe('退余额按钮', () => {
   });
 });
 
+describe('直接充值', () => {
+  it('超级管理员任一门店，店长只在自己当店长的门店，店员不行', () => {
+    expect(canRechargeAt(admin, 'any')).toBe(true);
+    expect(canRechargeAt(manager, 's1')).toBe(true);
+    expect(canRechargeAt(manager, 's2')).toBe(false);
+    expect(canRechargeAt(clerk, 's2')).toBe(false);
+  });
+});
+
 describe('员工编辑权限', () => {
   it('店长只能改本店普通店员，不能改自己和店长', () => {
     expect(canEditStaff(manager, 'me', { id: 'a', roles: [{ storeId: 's1', role: 'STAFF' }] })).toBe(true);
@@ -86,10 +96,16 @@ describe('菜单按角色隐藏', () => {
       g.children ? g.children.map((c) => c.key) : [g.key],
     );
 
-  it('店员看不到员工管理', () => {
+  it('店员看不到员工管理和充值记账（店员充值走权益单）', () => {
     expect(keys(clerk)).not.toContain('staff');
-    expect(keys(clerk)).toContain('recharge');
+    expect(keys(clerk)).not.toContain('recharge');
     expect(keys(clerk)).toContain('ledger');
+    expect(keys(clerk)).toContain('sign-flows');
+  });
+
+  it('店长和超级管理员能看到充值记账', () => {
+    expect(keys(manager)).toContain('recharge');
+    expect(keys(admin)).toContain('recharge');
   });
 
   it('店长和超级管理员能看到员工管理', () => {

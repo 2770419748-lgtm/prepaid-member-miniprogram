@@ -1,7 +1,7 @@
 import { fetchMember, recordMove } from '../../utils/api';
 import { ApiError, messageOf } from '../../utils/errors';
 import { LEDGER_TYPE_LABELS } from '../../utils/labels';
-import { memberLabel } from '../../utils/ledger';
+import { canRechargeAt, memberLabel } from '../../utils/ledger';
 import { formatCent, formatChange, parseYuanToCent } from '../../utils/money';
 import { needsRescan, untilText, validUntilText } from '../../utils/paycode';
 import { maskPhone } from '../../utils/phone';
@@ -117,6 +117,10 @@ Page({
     const store = currentStore(session);
     if (!store) {
       this.setData({ error: '你所在的门店都已停用，暂时不能记账。' });
+      return;
+    }
+    if (this.data.kind === 'RECHARGE' && !canRechargeAt(store.id, session.access)) {
+      this.setData({ error: '直接充值只有店长和超级管理员能做。给会员充值请回到会员页「办理权益单」。' });
       return;
     }
     try {

@@ -227,13 +227,13 @@ describe('P2 audit log and reconciliation', () => {
     expect(memberResponse.status).toBe(201);
     tokens.member = memberResponse.body.accessToken as string;
 
-    // 主流程：旗舰店开卡、充值；社区店消费后由社区店长冲正；旗舰店再充一笔由旗舰店长冲回。
+    // 主流程：旗舰店员开卡、店长补录充值（店员不能直接充值）；社区店消费后由社区店长冲正；旗舰店再充一笔由旗舰店长冲回。
     flow.memberPhone = randomPhone();
     flow.memberId = await openCard(tokens.clerkA, storeA, flow.memberPhone);
-    flow.rechargeId = await move('recharge', tokens.clerkA, flow.memberId, storeA, 10_000);
+    flow.rechargeId = await move('recharge', tokens.managerA, flow.memberId, storeA, 10_000);
     flow.consumeId = await move('consume', tokens.clerkB, flow.memberId, storeB, 3_000);
     flow.consumeReversalId = await reverse(tokens.managerB, flow.consumeId);
-    flow.secondRechargeId = await move('recharge', tokens.clerkA, flow.memberId, storeA, 5_000);
+    flow.secondRechargeId = await move('recharge', tokens.managerA, flow.memberId, storeA, 5_000);
     flow.rechargeReversalId = await reverse(tokens.managerA, flow.secondRechargeId);
   });
 
@@ -263,7 +263,7 @@ describe('P2 audit log and reconciliation', () => {
       expect(recharge).toMatchObject({
         action: 'WALLET_RECHARGE',
         actionLabel: '充值',
-        actorStaffId: ids.clerkA,
+        actorStaffId: ids.managerA,
         storeId: storeA,
         targetType: 'LedgerEntry',
         payload: { memberId: flow.memberId, storeId: storeA, amountCent: 10_000, balanceBefore: 0, balanceAfter: 10_000 },
@@ -296,7 +296,9 @@ describe('P2 audit log and reconciliation', () => {
       expect(atB.length).toBeGreaterThan(0);
       expect(atB.every((item) => item.storeId === storeB)).toBe(true);
       const byManagerA = await auditOf(tokens.super, `actorStaffId=${ids.managerA}`);
-      expect(byManagerA.map((item) => item.targetId)).toEqual([flow.rechargeReversalId]);
+      expect(byManagerA.map((item) => item.targetId).sort()).toEqual(
+        [flow.rechargeId, flow.secondRechargeId, flow.rechargeReversalId].sort(),
+      );
       const future = await auditOf(tokens.super, 'from=2099-01-01T00:00:00%2B08:00');
       expect(future).toHaveLength(0);
       const backwards = await get(tokens.super, '/audit-logs?from=2026-10-28T00:00:00Z&to=2026-10-27T00:00:00Z');
@@ -305,9 +307,10 @@ describe('P2 audit log and reconciliation', () => {
 
     it('lets a clerk see only their own actions', async () => {
       const items = await auditOf(tokens.clerkA, '');
-      expect(items.length).toBeGreaterThanOrEqual(3);
+      expect(items.map((item) => item.targetId)).toContain(flow.memberId);
       expect(items.every((item) => item.actorStaffId === ids.clerkA)).toBe(true);
-      // 同店店长的冲正不是自己做的，看不到。
+      // 同店店长的充值、冲正不是自己做的，看不到。
+      expect(items.some((item) => item.targetId === flow.rechargeId)).toBe(false);
       expect(items.some((item) => item.targetId === flow.rechargeReversalId)).toBe(false);
       const [others] = await auditOf(tokens.super, `targetId=${flow.consumeId}`);
       expect((await get(tokens.clerkA, `/audit-logs/${others.id}`)).status).toBe(404);
@@ -482,14 +485,14 @@ describe('P2 audit log and reconciliation', () => {
   describe('balance check', () => {
     it('finds every wallet consistent, including after concurrent bookings', async () => {
       const memberId = await openCard(tokens.clerkA, storeA);
-      await move('recharge', tokens.clerkA, memberId, storeA, 50_000);
+      await move('recharge', tokens.managerA, memberId, storeA, 50_000);
       const codes: string[] = [];
       for (let index = 0; index < 4; index += 1) {
         codes.push(await scanPayCode(app, orgId, tokens.clerkB, memberId, storeB));
       }
       await Promise.all([
         ...codes.map((code) => move('consume', tokens.clerkB, memberId, storeB, 1_000, code)),
-        ...Array.from({ length: 4 }, () => move('recharge', tokens.clerkA, memberId, storeA, 700)),
+        ...Array.from({ length: 4 }, () => move('recharge', tokens.managerA, memberId, storeA, 700)),
       ]);
       const response = await get(tokens.super, '/reconciliation/check');
       expect(response.status).toBe(200);
