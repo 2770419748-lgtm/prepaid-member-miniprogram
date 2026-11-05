@@ -9,6 +9,7 @@ import { configureApp } from '../src/configure-app';
 import { hashPayCode } from '../src/pay-code/pay-code';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { FakeWechat, messageOf, randomPhone } from './support/fake-wechat';
+import { testOrder } from './support/order';
 
 /**
  * 扫会员码消费：会员出示会员码 → 店员扫码 → 填金额扣款。
@@ -74,8 +75,9 @@ describe('member pay code', () => {
     memberId: string,
     body: { storeId: string; amountCent: number; payCode?: string; requestId?: string },
   ) {
-    // 请求号必填；没指定时每次给一个新的。
-    const payload = 'requestId' in body ? body : { ...body, requestId: randomUUID() };
+    // 请求号必填；没指定时每次给一个新的。消费还要带收银订单，同一请求号给同一张单。
+    const withId = 'requestId' in body ? body : { ...body, requestId: randomUUID() };
+    const payload = { ...testOrder(body.amountCent, withId.requestId), ...withId };
     return http().post(`/wallets/${memberId}/consume`).set('Authorization', `Bearer ${token}`).send(payload);
   }
 

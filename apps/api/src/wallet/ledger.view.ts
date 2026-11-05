@@ -5,7 +5,7 @@ export const ledgerInclude = {
   store: { select: { name: true } },
   operator: { select: { name: true } },
   reversedBy: { select: { id: true } },
-  reversalOf: { select: { type: true } },
+  reversalOf: { select: { type: true, orderNo: true } },
 } satisfies Prisma.LedgerEntryInclude;
 
 export type LedgerRecord = Prisma.LedgerEntryGetPayload<{ include: typeof ledgerInclude }>;
@@ -34,6 +34,15 @@ export interface StaffLedgerView {
   reversalOfType: LedgerType | null;
   /** 已被哪笔冲正。空表示没被冲正。 */
   reversedById: string | null;
+  /**
+   * 消费抵扣的收银订单号（A+数字）。冲正流水显示被冲那笔的订单号，方便对账；
+   * 2026-11-05 以前的消费、充值、退款为空。
+   */
+  orderNo: string | null;
+  /** 消费那张订单的商品应付金额，分。只有带订单号的消费有。 */
+  productAmountCent: number | null;
+  /** 订单号是店员手输的。只有带订单号的消费有。 */
+  orderNoTyped: boolean | null;
   createdAt: string;
 }
 
@@ -49,6 +58,10 @@ export interface MemberLedgerView {
   /** 撤销记录撤销的是哪一类（充值、消费或退款）。不是撤销记录为空。 */
   reversalOfType: LedgerType | null;
   reversed: boolean;
+  /** 消费抵扣的订单号；撤销记录显示被撤销那笔的订单号。 */
+  orderNo: string | null;
+  /** 消费那张订单的商品金额，分。 */
+  productAmountCent: number | null;
   createdAt: string;
 }
 
@@ -71,6 +84,9 @@ export function toStaffLedgerView(entry: LedgerRecord): StaffLedgerView {
     reversalOfId: entry.reversalOfId,
     reversalOfType: entry.reversalOf?.type ?? null,
     reversedById: entry.reversedBy?.id ?? null,
+    orderNo: entry.orderNo ?? entry.reversalOf?.orderNo ?? null,
+    productAmountCent: entry.productAmountCent,
+    orderNoTyped: entry.orderNoTyped,
     createdAt: entry.createdAt.toISOString(),
   };
 }
@@ -86,6 +102,8 @@ export function toMemberLedgerView(entry: LedgerRecord): MemberLedgerView {
     reversalOfId: entry.reversalOfId,
     reversalOfType: entry.reversalOf?.type ?? null,
     reversed: entry.reversedBy != null,
+    orderNo: entry.orderNo ?? entry.reversalOf?.orderNo ?? null,
+    productAmountCent: entry.productAmountCent,
     createdAt: entry.createdAt.toISOString(),
   };
 }

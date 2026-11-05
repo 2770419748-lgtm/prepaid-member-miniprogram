@@ -11,6 +11,7 @@ import { assertStoreAccess, isSuperAdmin } from '../auth/staff-access';
 import { PageResult } from '../common/page';
 import { PrismaService } from '../prisma/prisma.service';
 import { LedgerQueryDto } from './dto/ledger.dto';
+import { normalizeOrderNo, ORDER_NO_MESSAGE } from './order-no';
 import {
   ledgerInclude,
   LedgerRecord,
@@ -56,6 +57,14 @@ export class LedgerService {
 
     if (query.type) {
       where.type = query.type;
+    }
+    if (query.orderNo) {
+      const orderNo = normalizeOrderNo(query.orderNo);
+      if (!orderNo) {
+        throw new BadRequestException(ORDER_NO_MESSAGE);
+      }
+      // 抵这张单的消费，和冲掉它的那笔。
+      where.OR = [{ orderNo }, { reversalOf: { orderNo } }];
     }
     const range = this.range(query);
     if (range) {

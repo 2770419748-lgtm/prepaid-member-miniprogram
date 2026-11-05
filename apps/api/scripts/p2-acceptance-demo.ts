@@ -4,6 +4,13 @@ import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { PrismaClient, StaffRole } from '@prisma/client';
 
+/** 消费要带收银订单（2026-11-05 起）：每笔一张新单，商品金额是抵扣的 10 倍，正好能抵满。 */
+let orderSeq = 1000;
+function order(amountCent: number): { orderNo: string; productAmountCent: number } {
+  orderSeq += 1;
+  return { orderNo: `A${orderSeq}`, productAmountCent: amountCent * 10 };
+}
+
 /**
  * P2 审计与对账验收演示。对着正在运行的本地服务操作一天的账，再查对账和操作记录，把真实结果写成一页 HTML。
  * 需要本地服务以 WECHAT_PHONE_MOCK=true 启动（只在开发环境生效），用假手机号登录。
@@ -313,7 +320,7 @@ async function main(): Promise<void> {
     const payCode = kind === 'consume' ? await showAndScan(token, memberId, storeId) : undefined;
     const result = await api(`/wallets/${memberId}/${kind}`, {
       token,
-      body: { storeId, amountCent, requestId: randomUUID(), ...(payCode ? { payCode } : {}) },
+      body: { storeId, amountCent, requestId: randomUUID(), ...(payCode ? { payCode, ...order(amountCent) } : {}) },
     });
     expectStatus(result, 201, kind === 'recharge' ? '充值' : '消费');
     return (result.body as { entry: { id: string } }).entry.id;

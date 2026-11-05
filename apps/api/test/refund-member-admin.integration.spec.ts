@@ -8,6 +8,7 @@ import { WechatPhoneClient } from '../src/auth/wechat/wechat-phone.client';
 import { configureApp } from '../src/configure-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { FakeWechat, messageOf, randomPhone } from './support/fake-wechat';
+import { testOrder } from './support/order';
 import { scanPayCode } from './support/pay-code';
 
 /**
@@ -437,7 +438,7 @@ describe('refund balance and member maintenance', () => {
       const consume = await http()
         .post(`/wallets/${card.id}/consume`)
         .set('Authorization', `Bearer ${tokens.clerkA}`)
-        .send({ storeId: storeA, amountCent: 500, payCode: scanned, requestId: randomUUID() });
+        .send({ storeId: storeA, amountCent: 500, payCode: scanned, requestId: randomUUID(), ...testOrder(500) });
       expect(consume.status).toBe(201);
 
       const actions = (await prisma.auditLog.findMany({ where: { orgId, targetId: card.id }, orderBy: { createdAt: 'asc' } })).map(

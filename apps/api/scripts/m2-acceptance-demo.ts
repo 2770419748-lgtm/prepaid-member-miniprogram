@@ -4,6 +4,13 @@ import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { PrismaClient, StaffRole } from '@prisma/client';
 
+/** 消费要带收银订单（2026-11-05 起）：每笔一张新单，商品金额是抵扣的 10 倍，正好能抵满。 */
+let orderSeq = 1000;
+function order(amountCent: number): { orderNo: string; productAmountCent: number } {
+  orderSeq += 1;
+  return { orderNo: `A${orderSeq}`, productAmountCent: amountCent * 10 };
+}
+
 /**
  * M2 账本验收演示。对着正在运行的本地服务一步步操作，把真实结果写成一页 HTML。
  * 需要本地服务以 WECHAT_PHONE_MOCK=true 启动（只在开发环境生效），用假手机号登录。
@@ -291,7 +298,7 @@ async function main(): Promise<void> {
 
   const unscanned = await api(`/wallets/${memberId}/consume`, {
     token: clerkA,
-    body: { storeId: flagship.id, amountCent: 3000, requestId: randomUUID() },
+    body: { storeId: flagship.id, amountCent: 3000, requestId: randomUUID(), ...order(3000) },
   });
   expectStatus(unscanned, 400, '没扫码扣款');
   steps.push({
@@ -306,6 +313,7 @@ async function main(): Promise<void> {
       storeId: flagship.id,
       amountCent: 3000,
       requestId: randomUUID(),
+      ...order(3000),
       payCode: await showAndScan(clerkA, flagship.id),
     },
   });
@@ -322,6 +330,7 @@ async function main(): Promise<void> {
       storeId: community.id,
       amountCent: 2000,
       requestId: randomUUID(),
+      ...order(2000),
       payCode: await showAndScan(clerkB, community.id),
     },
   });
@@ -338,6 +347,7 @@ async function main(): Promise<void> {
       storeId: community.id,
       amountCent: 8000,
       requestId: randomUUID(),
+      ...order(8000),
       payCode: await showAndScan(clerkB, community.id),
     },
   });
@@ -353,11 +363,11 @@ async function main(): Promise<void> {
   const race = await Promise.all([
     api(`/wallets/${memberId}/consume`, {
       token: clerkA,
-      body: { storeId: flagship.id, amountCent: 4000, requestId: randomUUID(), payCode: codeAtA },
+      body: { storeId: flagship.id, amountCent: 4000, requestId: randomUUID(), payCode: codeAtA, ...order(4000) },
     }),
     api(`/wallets/${memberId}/consume`, {
       token: clerkB,
-      body: { storeId: community.id, amountCent: 4000, requestId: randomUUID(), payCode: codeAtB },
+      body: { storeId: community.id, amountCent: 4000, requestId: randomUUID(), payCode: codeAtB, ...order(4000) },
     }),
   ]);
   const winners = race.filter((result) => result.status === 201);

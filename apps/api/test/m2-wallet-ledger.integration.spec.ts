@@ -8,6 +8,7 @@ import { WechatPhoneClient } from '../src/auth/wechat/wechat-phone.client';
 import { configureApp } from '../src/configure-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { FakeWechat, messageOf, randomPhone } from './support/fake-wechat';
+import { testOrder } from './support/order';
 import { scanPayCode } from './support/pay-code';
 
 /**
@@ -77,10 +78,12 @@ describe('M2 wallet and ledger', () => {
     memberId: string,
     body: { storeId: string; amountCent: unknown; remark?: string; requestId?: string; payCode?: string },
   ) {
-    const payload =
+    const scanned =
       kind === 'consume' && body.payCode === undefined
         ? { ...body, payCode: await scan(token, memberId, body.storeId) }
         : body;
+    // 消费还要带收银订单；同一请求号给同一张单。
+    const payload = kind === 'consume' ? { ...testOrder(body.amountCent, body.requestId), ...scanned } : scanned;
     return http()
       .post(`/wallets/${memberId}/${kind}`)
       .set('Authorization', `Bearer ${token}`)

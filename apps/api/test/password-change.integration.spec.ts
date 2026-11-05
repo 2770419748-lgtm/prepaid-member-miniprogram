@@ -9,6 +9,7 @@ import { WechatPhoneClient } from '../src/auth/wechat/wechat-phone.client';
 import { configureApp } from '../src/configure-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { FakeWechat, randomPhone } from './support/fake-wechat';
+import { testOrder } from './support/order';
 import { scanPayCode } from './support/pay-code';
 
 /**
@@ -48,7 +49,7 @@ describe('forced password change on the server', () => {
     return http()
       .post(`/wallets/${memberId}/consume`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ storeId: storeA, amountCent, payCode, requestId: randomUUID() });
+      .send({ storeId: storeA, amountCent, payCode, requestId: randomUUID(), ...testOrder(amountCent) });
   }
 
   function reverse(token: string, entryId: string) {

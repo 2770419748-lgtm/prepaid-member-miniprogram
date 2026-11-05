@@ -8,6 +8,7 @@ import { WechatPhoneClient } from '../src/auth/wechat/wechat-phone.client';
 import { configureApp } from '../src/configure-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { FakeWechat, randomPhone } from './support/fake-wechat';
+import { testOrder } from './support/order';
 import { scanPayCode } from './support/pay-code';
 
 interface AuditItem {
@@ -159,7 +160,12 @@ describe('P2 audit log and reconciliation', () => {
     const response = await http()
       .post(`/wallets/${memberId}/${kind}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ storeId, amountCent, requestId: randomUUID(), ...(code ? { payCode: code } : {}) });
+      .send({
+        storeId,
+        amountCent,
+        requestId: randomUUID(),
+        ...(code ? { payCode: code, ...testOrder(amountCent) } : {}),
+      });
     expect(response.status).toBe(201);
     return response.body.entry.id as string;
   }
