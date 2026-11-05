@@ -242,7 +242,14 @@ describe('order offset', () => {
       orderNo: `A${digits}`,
       redeemed: { entryId: used.body.entry.id, storeName: '滨江店', amountCent: 1_000, productAmountCent: 10_000 },
     });
-    expect((await check(tokens.clerkB, freshOrder())).body).toMatchObject({ redeemed: null });
+    const blocked = await consume(tokens.clerkB, second, {
+      storeId: storeB,
+      amountCent: 500,
+      orderNo: digits,
+      productAmountCent: 10_000,
+    });
+    expect(checked.body.message).toBe(messageOf(blocked.body));
+    expect((await check(tokens.clerkB, freshOrder())).body).toMatchObject({ redeemed: null, message: null });
     expect((await check(tokens.clerkB, '860242083947116')).status).toBe(400);
   });
 

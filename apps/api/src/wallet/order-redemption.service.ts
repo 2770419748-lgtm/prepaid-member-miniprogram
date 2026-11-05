@@ -18,6 +18,8 @@ export interface OrderCheck {
   orderNo: string;
   /** 没抵过为空。 */
   redeemed: OrderRedeemed | null;
+  /** 抵过时给店员看的提示，和提交时被拦下的提示一样。没抵过为空。 */
+  message: string | null;
 }
 
 const OFFSET_MS = 8 * 60 * 60 * 1000;
@@ -57,7 +59,8 @@ export class OrderRedemptionService {
 
   async check(orgId: string, raw: string): Promise<OrderCheck> {
     const orderNo = this.normalize(raw);
-    return { orderNo, redeemed: await this.findActive(this.prisma, orgId, orderNo) };
+    const redeemed = await this.findActive(this.prisma, orgId, orderNo);
+    return { orderNo, redeemed, message: redeemed ? redeemedMessage(redeemed) : null };
   }
 
   async findActive(
