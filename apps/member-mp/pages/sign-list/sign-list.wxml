@@ -22,6 +22,7 @@
           <view class="flow-tags">
             <text class="tag tag-{{item.tone}}">{{item.statusText}}</text>
             <text wx:if="{{item.sandbox}}" class="tag tag-test">测试签署</text>
+            <text wx:if="{{item.paper}}" class="tag tag-muted">纸质</text>
             <text class="flow-date">{{item.dateText}}</text>
           </view>
         </view>

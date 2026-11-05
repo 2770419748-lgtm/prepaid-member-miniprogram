@@ -18,6 +18,7 @@
 //       location: { latitude, longitude } | 'deny',  // wx.getLocation 返回的位置
 //       phoneDeny: false,                // 手机号授权按钮是否模拟“拒绝”
 //       scanResult: '...' | ['...', '...'] | async () => '...',  // wx.scanCode 扫到的内容；数组按扫码先后各用一个；不给就当取消了扫码
+//       chooseMedia: ['preview/fixtures/a.jpg'],  // wx.chooseMedia 选中的照片（小程序目录里的路径）；不给就当取消了
 //       fullPage: false,                 // 截整页（按内容高度）
 //       before: async () => {},          // 可选：打开页面前在 Node 里做的准备（比如调接口改数据）
 //       after: async () => {},           // 可选：截完以后恢复
@@ -129,6 +130,7 @@ for (const shot of scenario.shots) {
     envVersion: shot.envVersion ?? 'develop',
     screen,
     scanResult: typeof shot.scanResult === 'function' ? await shot.scanResult() : (shot.scanResult ?? null),
+    chooseMedia: shot.chooseMedia ?? null,
   });
   const page = await context.newPage();
   const consoleErrors = [];

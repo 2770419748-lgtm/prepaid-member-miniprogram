@@ -32,6 +32,7 @@ P2 提供操作记录查询、当日对账、余额日结与核对，见 `docs/b
 | P2 审计对账 | `docs/backend/p2-audit.md` | 约 4 | M2 |
 | 扫码消费（会员码） | `docs/backend/pay-code.md` | — | M2 |
 | 扫订单码抵扣 10% | `docs/backend/order-offset.md` | — | 扫码消费 |
+| 开单上传纸质协议单 | `docs/backend/paper-agreement.md` | — | M4（2026-11-05 起默认代替电子签） |
 
 ---
 

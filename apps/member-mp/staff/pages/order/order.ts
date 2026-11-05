@@ -1,25 +1,35 @@
 import {
   cancelSignFlow,
+  createPaperAgreement,
   createSignFlow,
+  fetchActivePlans,
   fetchActiveTemplates,
   fetchBenefitPlan,
   fetchMember,
   fetchMemberAppCode,
+  fetchSignConfig,
   fetchSignFlows,
   findMemberByPhone,
   openCard,
   refreshSignFlow,
   renewSignUrl,
+  uploadAgreementPhoto,
 } from '../../utils/api';
 import { ApiError, messageOf } from '../../utils/errors';
 import { memberLabel } from '../../utils/ledger';
 import { formatCent, parseYuanToCent } from '../../utils/money';
 import {
   canCancelFlow,
+  DEFAULT_SIGN_CONFIG,
   DEMO_APP_CODE_TEXT,
+  ORDER_TEXT,
   OrderStep,
+  paperProgress,
+  photoProblem,
   POLL_LIMIT_MS,
   POLL_MS,
+  readSignMode,
+  SIGN_MODE_KEY,
   signProgress,
   stepDots,
 } from '../../utils/order';
@@ -27,7 +37,7 @@ import { isMainlandMobile, maskPhone, normalizePhone } from '../../utils/phone';
 import { drawQr, encodeText, QrContext } from '../../utils/qrcode';
 import { newRequestId } from '../../utils/request-id';
 import { currentStore, rememberMember, requireSession } from '../../utils/session';
-import type { BenefitItem, MemberCard, SignFlow } from '../../utils/types';
+import type { BenefitItem, BenefitPlan, MemberCard, SignConfig, SignFlow, SignMode } from '../../utils/types';
 import { goWorkbench } from '../../utils/nav';
 
 /** 这一单的顾客。还没开卡的在生成合同时才开，免得填到一半走了留下空卡。 */
@@ -52,16 +62,35 @@ interface BenefitPreview {
   rules: string | null;
 }
 
-/** 点了「生成合同」的这一次。没拿到结果前沿用同一个请求号，重试不会发出两份合同。 */
+/** 点了「生成合同」或「上传协议单并充值」的这一次。没拿到结果前沿用同一个请求号，重试不会发出两份、充两次。 */
 interface Pending {
   requestId: string;
   amountCent: number;
+  /** 电子签：模板；纸质协议单：权益方案（可为空）。 */
   templateId: string;
+  planId: string;
+}
+
+/** 纸质协议单：选的权益方案。 */
+interface PlanOption {
+  id: string;
+  title: string;
+}
+
+/** 拍好（选好）的一张协议单照片。传上去以后记下照片 id，重试时不再重传。 */
+interface LocalPhoto {
+  path: string;
+  size: number;
+  photoId: string;
 }
 
 interface CanvasHit {
   node?: { width: number; height: number; getContext(type: '2d'): QrContext };
   width: number;
+}
+
+function toPreview(plan: BenefitPlan): BenefitPreview {
+  return { title: plan.title, items: plan.items, rules: plan.rules };
 }
 
 function toOrderMember(card: MemberCard | null, phone: string, name: string | null): OrderMember {
@@ -78,6 +107,9 @@ function toOrderMember(card: MemberCard | null, phone: string, name: string | nu
 
 Page({
   data: {
+    /** 开单怎么签。先按本机记的显示，取到服务端设置后更新。 */
+    mode: 'PAPER' as SignMode,
+    text: ORDER_TEXT.PAPER,
     step: 'phone' as OrderStep,
     steps: stepDots('phone'),
     storeId: '',
@@ -92,14 +124,24 @@ Page({
     member: null as OrderMember | null,
     templates: [] as TemplateOption[],
     templateIndex: 0,
+    plans: [] as PlanOption[],
+    planIndex: 0,
+    plansLoaded: false,
     benefit: null as BenefitPreview | null,
     loadingTemplates: false,
     amount: '',
+    /** 上传协议单那一步显示的金额「1,000.00」。 */
+    amountText: '',
     amountError: '',
     amountHint: '',
     canCreate: false,
     submitting: false,
     uncertain: false,
+
+    photos: [] as LocalPhoto[],
+    maxPhotos: DEFAULT_SIGN_CONFIG.maxPhotos,
+    uploadText: '',
+    paperRecharging: false,
 
     flowId: '',
     flowTitle: '',
@@ -124,6 +166,7 @@ Page({
 
   pending: null as Pending | null,
   plans: {} as Record<string, BenefitPreview>,
+  config: DEFAULT_SIGN_CONFIG as SignConfig,
   pollTimer: 0 as number,
   pollSince: 0,
   drawnUrl: '',
@@ -131,12 +174,15 @@ Page({
 
   onLoad(query: Record<string, string | undefined>) {
     this.plans = {};
+    this.config = DEFAULT_SIGN_CONFIG;
+    this.useMode(readSignMode(wx.getStorageSync(SIGN_MODE_KEY)));
     this.setData({ phone: query.phone ?? '' });
     const session = requireSession();
     if (!session) {
       return;
     }
     this.useStore();
+    this.loadConfig();
     if (query.flowId) {
       this.resume(query.flowId);
     } else if (query.memberId) {
@@ -171,8 +217,28 @@ Page({
   },
 
   goStep(step: OrderStep) {
-    this.setData({ step, steps: stepDots(step) });
+    this.setData({ step, steps: stepDots(step, this.data.mode) });
     wx.pageScrollTo({ scrollTop: 0, duration: 0 });
+  },
+
+  useMode(mode: SignMode) {
+    this.setData({ mode, text: ORDER_TEXT[mode], steps: stepDots(this.data.step, mode) });
+  },
+
+  /** 现在开单走纸质协议单还是电子签。取不到就按本机记的（默认纸质协议单）。 */
+  async loadConfig() {
+    try {
+      const config = await fetchSignConfig();
+      this.config = config;
+      wx.setStorageSync(SIGN_MODE_KEY, config.mode);
+      this.setData({ maxPhotos: config.maxPhotos });
+      // 已经在填权益了就不换方式，免得填到一半页面变样；下次开单再用新的。
+      if (config.mode !== this.data.mode && this.data.step === 'phone') {
+        this.useMode(config.mode);
+      }
+    } catch {
+      // 网络不好时照本机记的走，服务端会再把一次关。
+    }
   },
 
   // ---- 第一步：手机号 ----
@@ -231,6 +297,10 @@ Page({
     this.pending = null;
     this.setData({ uncertain: false, amountError: '' });
     this.goStep('benefit');
+    if (this.data.mode === 'PAPER') {
+      await this.loadPlans();
+      return;
+    }
     if (this.data.templates.length) {
       return;
     }
@@ -254,6 +324,38 @@ Page({
     }
   },
 
+  /** 纸质协议单：选启用中的权益方案（可以不选）。 */
+  async loadPlans() {
+    if (this.data.plansLoaded) {
+      this.validate();
+      return;
+    }
+    this.setData({ loadingTemplates: true });
+    try {
+      const plans = await fetchActivePlans();
+      for (const plan of plans) {
+        this.plans[plan.id] = toPreview(plan);
+      }
+      this.setData({
+        plans: plans.map((plan) => ({ id: plan.id, title: plan.title })),
+        planIndex: 0,
+        plansLoaded: true,
+        benefit: plans[0] ? this.plans[plans[0].id] : null,
+      });
+    } catch (error) {
+      wx.showModal({ title: '没有取到权益方案', content: messageOf(error), showCancel: false, confirmText: '知道了' });
+    } finally {
+      this.setData({ loadingTemplates: false });
+      this.validate();
+    }
+  },
+
+  onPickPlan(event: WechatMiniprogram.BaseEvent<Record<string, never>, { index: number }>) {
+    const index = Number(event.currentTarget.dataset.index);
+    const plan = this.data.plans[index];
+    this.setData({ planIndex: index, benefit: plan ? this.plans[plan.id] ?? null : null });
+  },
+
   async showPlan() {
     const template = this.data.templates[this.data.templateIndex];
     if (!template || !template.planId) {
@@ -267,7 +369,7 @@ Page({
     }
     try {
       const plan = await fetchBenefitPlan(template.planId);
-      const preview = { title: plan.title, items: plan.items, rules: plan.rules };
+      const preview = toPreview(plan);
       this.plans[template.planId] = preview;
       if (this.data.templates[this.data.templateIndex]?.planId === template.planId) {
         this.setData({ benefit: preview });
@@ -303,7 +405,8 @@ Page({
 
   /** 校验会员权益金额。合法时返回分。 */
   validate(): number | null {
-    const hasTemplate = this.data.templates.length > 0;
+    // 纸质协议单可以不选权益方案；电子签必须有模板。
+    const ready = this.data.mode === 'PAPER' || this.data.templates.length > 0;
     if (!this.data.amount.trim()) {
       this.setData({ amountError: '', amountHint: '', canCreate: false });
       return null;
@@ -315,8 +418,11 @@ Page({
     }
     this.setData({
       amountError: '',
-      amountHint: `顾客签完合同后，${formatCent(parsed.cent)} 元自动充值到会员余额`,
-      canCreate: hasTemplate,
+      amountHint:
+        this.data.mode === 'PAPER'
+          ? `上传顾客签字的协议单后，${formatCent(parsed.cent)} 元立即充值到会员余额`
+          : `顾客签完合同后，${formatCent(parsed.cent)} 元自动充值到会员余额`,
+      canCreate: ready,
     });
     return parsed.cent;
   },
@@ -332,6 +438,11 @@ Page({
       }
       return;
     }
+    if (this.data.mode === 'PAPER') {
+      this.setData({ amountText: formatCent(cent) });
+      this.goStep('upload');
+      return;
+    }
     const template = this.data.templates[this.data.templateIndex];
     if (!template) {
       return;
@@ -345,7 +456,7 @@ Page({
     if (!confirm) {
       return;
     }
-    this.pending = { requestId: newRequestId(), amountCent: cent, templateId: template.id };
+    this.pending = { requestId: newRequestId(), amountCent: cent, templateId: template.id, planId: '' };
     await this.create();
   },
 
@@ -440,7 +551,185 @@ Page({
     });
   },
 
-  // ---- 第三步：签合同 ----
+  // ---- 第三步（纸质协议单）：拍照上传，上传即充值 ----
+
+  /** 拍照或从相册选。小程序压缩过的照片一般几百 KB。 */
+  onAddPhoto() {
+    if (this.data.submitting || this.data.uncertain) {
+      return;
+    }
+    const room = this.data.maxPhotos - this.data.photos.length;
+    if (room <= 0) {
+      wx.showToast({ title: `最多 ${this.data.maxPhotos} 张`, icon: 'none' });
+      return;
+    }
+    wx.chooseMedia({
+      count: room,
+      mediaType: ['image'],
+      sourceType: ['camera', 'album'],
+      sizeType: ['compressed'],
+      camera: 'back',
+      success: (res) => {
+        const picked: LocalPhoto[] = [];
+        let problem = '';
+        for (const file of res.tempFiles) {
+          const bad = photoProblem(file.size, this.config.maxPhotoBytes);
+          if (bad) {
+            problem = bad;
+          } else {
+            picked.push({ path: file.tempFilePath, size: file.size, photoId: '' });
+          }
+        }
+        if (problem) {
+          wx.showToast({ title: problem, icon: 'none' });
+        }
+        if (picked.length) {
+          this.setData({ photos: this.data.photos.concat(picked).slice(0, this.data.maxPhotos) });
+        }
+      },
+    });
+  },
+
+  onRemovePhoto(event: WechatMiniprogram.BaseEvent<Record<string, never>, { index: number }>) {
+    if (this.data.submitting || this.data.uncertain) {
+      return;
+    }
+    const index = Number(event.currentTarget.dataset.index);
+    this.setData({ photos: this.data.photos.filter((_, i) => i !== index) });
+  },
+
+  onPreviewPhoto(event: WechatMiniprogram.BaseEvent<Record<string, never>, { index: number }>) {
+    const urls = this.data.photos.map((photo) => photo.path);
+    const current = urls[Number(event.currentTarget.dataset.index)];
+    if (current) {
+      wx.previewImage({ urls, current });
+    }
+  },
+
+  /** 还没交上时可以回去改金额、换方案。 */
+  onBackToBenefit() {
+    if (this.data.submitting || this.data.uncertain) {
+      return;
+    }
+    this.pending = null;
+    this.goStep('benefit');
+  },
+
+  async onSubmitPaper() {
+    if (this.data.submitting || !this.data.member) {
+      return;
+    }
+    if (this.data.uncertain) {
+      await this.submitPaper();
+      return;
+    }
+    if (!this.data.photos.length) {
+      wx.showToast({ title: '请先拍照上传协议单', icon: 'none' });
+      return;
+    }
+    const cent = this.validate();
+    if (cent == null) {
+      this.goStep('benefit');
+      return;
+    }
+    const plan = this.data.plans[this.data.planIndex];
+    const lines = [
+      this.data.member.label,
+      plan ? plan.title : '',
+      `会员权益金额 ${formatCent(cent)} 元`,
+      `协议单照片 ${this.data.photos.length} 张`,
+      '上传后立即充值到账',
+    ].filter(Boolean);
+    const { confirm } = await wx.showModal({
+      title: '上传协议单并充值',
+      content: lines.join('\n'),
+      confirmText: '确认上传',
+      confirmColor: '#1677FF',
+    });
+    if (!confirm) {
+      return;
+    }
+    this.pending = { requestId: newRequestId(), amountCent: cent, templateId: '', planId: plan ? plan.id : '' };
+    await this.submitPaper();
+  },
+
+  /** 开卡（新顾客）→ 一张张传照片（传过的跳过）→ 交单。网络不好时用同一个请求号重试，只开一单、充一次。 */
+  async submitPaper() {
+    const pending = this.pending;
+    const member = this.data.member;
+    if (!pending || !member) {
+      return;
+    }
+    this.setData({ submitting: true, uploadText: '正在提交…' });
+    try {
+      const memberId = await this.ensureCard(member);
+      const photos = this.data.photos.slice();
+      for (let i = 0; i < photos.length; i += 1) {
+        if (photos[i].photoId) {
+          continue;
+        }
+        this.setData({ uploadText: `正在上传第 ${i + 1}/${photos.length} 张…` });
+        const uploaded = await uploadAgreementPhoto(photos[i].path);
+        photos[i] = { ...photos[i], photoId: uploaded.id };
+        this.setData({ [`photos[${i}].photoId`]: uploaded.id });
+      }
+      this.setData({ uploadText: '正在充值…' });
+      const flow = await createPaperAgreement({
+        memberId,
+        storeId: this.data.storeId,
+        rechargeAmountCent: pending.amountCent,
+        photoIds: photos.map((photo) => photo.photoId),
+        requestId: pending.requestId,
+        ...(pending.planId ? { benefitPlanId: pending.planId } : {}),
+      });
+      this.pending = null;
+      this.setData({ uncertain: false });
+      this.showPaper(flow);
+    } catch (error) {
+      if (error instanceof ApiError && error.uncertain) {
+        // 不知道交上没有：锁住照片和金额，只能用同一个请求号重试。照片传上去的不会再传。
+        this.setData({ uncertain: true });
+        return;
+      }
+      // 明确没交上：下次重新传照片（可能是照片过期或被用过了），重新拿请求号。
+      this.pending = null;
+      this.setData({ uncertain: false, photos: this.data.photos.map((photo) => ({ ...photo, photoId: '' })) });
+      wx.showModal({ title: '没有上传成功', content: messageOf(error), showCancel: false, confirmText: '知道了' });
+    } finally {
+      this.setData({ submitting: false, uploadText: '' });
+    }
+  },
+
+  showPaper(flow: SignFlow) {
+    this.setData({
+      flowId: flow.id,
+      flowTitle: flow.title,
+      flowAmount: flow.rechargeAmountCent != null ? formatCent(flow.rechargeAmountCent) : '',
+    });
+    if (paperProgress(flow) === 'recharging') {
+      // 单已经交上，充值那一步出了点问题：点刷新再补，同一张单不会多充。
+      this.setData({ paperRecharging: true });
+      return;
+    }
+    this.setData({ paperRecharging: false });
+    this.finish();
+  },
+
+  async onRefreshPaper() {
+    if (this.data.refreshing) {
+      return;
+    }
+    this.setData({ refreshing: true });
+    try {
+      this.showPaper(await refreshSignFlow(this.data.flowId));
+    } catch (error) {
+      wx.showToast({ title: messageOf(error), icon: 'none' });
+    } finally {
+      this.setData({ refreshing: false });
+    }
+  },
+
+  // ---- 第三步（电子签）：签合同 ----
 
   async resume(flowId: string) {
     try {

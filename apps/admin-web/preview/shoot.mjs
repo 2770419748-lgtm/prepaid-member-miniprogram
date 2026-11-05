@@ -1,14 +1,16 @@
 // 用真浏览器把商家后台走一遍并截图，连本机接口和真数据。只用于开发自查和给坤总看页面，不要部署。
 //
-//   node apps/admin-web/preview/shoot.mjs --out /tmp/admin-shots [--only login,firstlogin,admin,manager,esign,refund,review] [--size 1280x720]
+//   node apps/admin-web/preview/shoot.mjs --out /tmp/admin-shots [--only login,firstlogin,admin,manager,esign,paper,refund,review] [--size 1280x720]
 //
 // --size 换浏览器窗口大小（默认 1440x900），查笔记本小屏下的排版用。
 //
 // 前提：干净的本机库跑过 prisma:seed 和 preview/seed-demo.mjs；接口指向假电子签平台
 // （apps/member-mp/preview/fake-esign.mjs，3901，控制口 3902）；`pnpm dev:admin` 在 5173。
 // 场景会开卡、充值、冲正、建权益方案和发起签署，所以对同一个库只跑一次。
+// 开单方式：esign 组要接口带 SIGN_MODE=esign；paper 组（纸质协议单）要接口用默认的纸质协议单，两组分开跑。
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
@@ -26,6 +28,41 @@ const VIEWPORT = SIZE ? { width: Number(SIZE[1]), height: Number(SIZE[2]) } : { 
 const BASE = process.env.ADMIN_BASE ?? 'http://localhost:5173';
 const CONTROL = process.env.FAKE_ESIGN_CONTROL ?? 'http://127.0.0.1:3902';
 const TEMPLATE_ID = 'member-benefit-demo'; // 假电子签平台里登记的模板
+const API = (process.env.API_BASE ?? 'http://localhost:3000').replace(/\/$/, '');
+/** 演示用的协议单照片（脚本画的样张，满版水印，没有真实个人信息）。 */
+const AGREEMENT_PHOTOS = ['agreement-demo-1.jpg', 'agreement-demo-2.jpg'].map(
+  (name) => new URL(`../../member-mp/preview/fixtures/${name}`, import.meta.url),
+);
+
+async function apiCall(method, path, body, token) {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`${method} ${path} → ${res.status} ${text}`);
+  return text ? JSON.parse(text) : null;
+}
+
+/** 店员在工作台开单上传协议单（和小程序一样：先一张张传照片，再交单充值）。 */
+async function uploadPaperAgreement(token, phone, storeId, amountCent) {
+  const member = (await apiCall('GET', `/members?phone=${phone}&pageSize=1`, null, token)).items[0];
+  const photoIds = [];
+  for (const file of AGREEMENT_PHOTOS) {
+    const form = new FormData();
+    form.append('file', new Blob([readFileSync(file)], { type: 'image/jpeg' }), 'agreement.jpg');
+    const res = await fetch(`${API}/sign-flows/photos`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: form });
+    if (!res.ok) throw new Error(`上传协议单照片 → ${res.status} ${await res.text()}`);
+    photoIds.push((await res.json()).id);
+  }
+  return apiCall(
+    'POST',
+    '/sign-flows/paper',
+    { memberId: member.id, storeId, rechargeAmountCent: amountCent, photoIds, requestId: randomUUID() },
+    token,
+  );
+}
 
 mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch();
@@ -382,6 +419,56 @@ try {
     await admin.waitForSelector('.ant-drawer-content');
     await shot(admin, 'r13-退余额流水详情');
     await admin.context().close();
+  }
+
+  if (run('paper')) {
+    // 店员先在工作台给王女士开一单（接口直接调，相当于小程序里拍照上传）
+    const clerkToken = (await apiCall('POST', '/auth/staff/password/login', { phone: '13800000002', password: 'Clerk12345' })).accessToken;
+    const flagship = (await apiCall('GET', '/staff/me/stores', null, clerkToken)).stores.find((s) => s.name === '旗舰店');
+    await uploadPaperAgreement(clerkToken, '13912345678', flagship.id, 300000);
+
+    const admin = await newPage();
+    await login(admin, '13800000000', 'Admin12345');
+    await admin.goto(`${BASE}/benefits/sign-flows`);
+    await admin.waitForSelector('.ant-table-row:has-text("纸质协议单")');
+    await shot(admin, 'p01-权益单列表-纸质协议单');
+    await admin.click('.ant-table-row:has-text("纸质协议单") >> button:has-text("查看协议单")');
+    await admin.waitForSelector('.ant-drawer .ant-image-img');
+    await admin.waitForTimeout(600);
+    await shot(admin, 'p02-查看协议单照片');
+    await admin.locator('.ant-drawer .ant-image').first().click();
+    await admin.waitForSelector('.ant-image-preview-img');
+    await shot(admin, 'p03-放大看');
+    await admin.keyboard.press('Escape');
+    await admin.waitForTimeout(400);
+    await admin.locator('.ant-drawer input[type=file]').setInputFiles(AGREEMENT_PHOTOS[1].pathname);
+    await admin.waitForSelector('.ant-drawer .photos-title:has-text("3 张")');
+    await admin.waitForTimeout(800);
+    await shot(admin, 'p04-补传一张');
+    await admin.locator('.ant-drawer button:has-text("删除")').last().click();
+    await modal(admin).locator('textarea').fill('重复拍了一张');
+    await shot(admin, 'p05-删除要写原因');
+    await modal(admin).locator('.ant-btn-dangerous').click();
+    await admin.waitForSelector('.ant-drawer .photos-title:has-text("2 张")');
+    await admin.keyboard.press('Escape');
+
+    await admin.goto(`${BASE}/benefits/templates`);
+    await admin.waitForSelector('.ant-alert-info');
+    await shot(admin, 'p06-模板页提示不走电子签');
+    await admin.goto(`${BASE}/review-demo`);
+    await admin.waitForSelector('text=演示公司');
+    await shot(admin, 'p07-审核入口说明', true);
+    await admin.context().close();
+
+    // 店员：能看照片、能补传，没有删除
+    const clerk = await newPage();
+    await login(clerk, '13800000002', 'Clerk12345');
+    await clerk.goto(`${BASE}/benefits/sign-flows`);
+    await clerk.click('.ant-table-row:has-text("纸质协议单") >> button:has-text("查看协议单")');
+    await clerk.waitForSelector('.ant-drawer .ant-image-img');
+    await clerk.waitForTimeout(600);
+    await shot(clerk, 'p08-店员看协议单-没有删除');
+    await clerk.context().close();
   }
 
   if (run('review')) {

@@ -142,7 +142,8 @@ export function fetchStores(): Promise<StoreView[]> {
   return request<StoreView[]>('/members/stores');
 }
 
-// ---- 会员权益和权益单签署。字段和 docs/backend/m4-esign-sandbox.md 4.4 一致。
+// ---- 会员权益和权益单。字段和 docs/backend/m4-esign-sandbox.md 4.4、paper-agreement.md 一致。
+// 2026-11-05 起开单改为门店上传顾客签字的纸质协议单（kind=PAPER，照片在 photos 里），电子签（ESIGN）的老单照常显示。
 
 export type SignStatus = 'DRAFT' | 'PENDING' | 'SIGNED' | 'REJECTED' | 'EXPIRED' | 'CANCELED';
 
@@ -167,16 +168,22 @@ export interface MemberBenefit extends BenefitContent {
 export interface SignFlowView {
   id: string;
   title: string;
+  /** PAPER：在门店签的纸质协议单，门店拍照上传；ESIGN：电子签。 */
+  kind: 'ESIGN' | 'PAPER';
   status: SignStatus;
   env: 'SANDBOX' | 'PRODUCTION';
-  /** 测试环境签署，界面标「测试签署」。 */
+  /** 测试环境签署，界面标「测试签署」。纸质协议单永远是 false。 */
   sandbox: boolean;
   benefitPlan: ({ id: string; title: string } & BenefitContent) | null;
   /** 会员权益金额（分），签署后充值到余额。没有金额的权益单为空。 */
   rechargeAmountCent: number | null;
   /** 这笔钱已经充进余额。 */
   recharged: boolean;
+  /** 充进去的钱后来被门店撤回了。 */
+  rechargeReversed: boolean;
   hasPdf: boolean;
+  /** 纸质协议单的照片。 */
+  photos: { id: string; createdAt: string }[];
   signedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -208,6 +215,11 @@ export function refreshSignFlow(id: string): Promise<SignFlowView> {
 
 export function contractPdfPath(id: string): string {
   return `/members/me/sign-flows/${encodeURIComponent(id)}/pdf`;
+}
+
+/** 协议单照片要登录才能看，用 download 取到本机再显示。 */
+export function agreementPhotoPath(id: string, photoId: string): string {
+  return `/members/me/sign-flows/${encodeURIComponent(id)}/photos/${encodeURIComponent(photoId)}`;
 }
 
 /** 会员码：到店消费时出示，门店扫码后才能扣款。码只能用一次，隔一会儿就换新的。 */

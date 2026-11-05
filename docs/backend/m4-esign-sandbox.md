@@ -5,6 +5,7 @@
 > **协作：** 2026-10-27 起坤总授权 Claude 端到端推进开发，测试与 CI 通过后自行合并。不部署、不接微信支付、不打开电子签正式开关。  
 > **硬约束：** `ESIGN_PRODUCTION_ENABLED` 保持 `false`；密钥不进仓；合同 PDF 不进 Git。企业章正式能力属 M6。  
 > **前端配合：** [../esign-frontend.md](../esign-frontend.md)　**开关与切换：** [../esign-switch.md](../esign-switch.md)
+> **2026-11-05 坤总定：不签电子合同了，开单改为上传纸质协议单。** 本文的电子签代码全部保留，`SIGN_MODE=esign` 时照旧；默认 `paper` 见 [paper-agreement.md](./paper-agreement.md)。
 
 ---
 

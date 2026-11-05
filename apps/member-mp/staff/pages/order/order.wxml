@@ -44,7 +44,7 @@
         <text class="field-value">{{storeName}}</text>
       </view>
     </view>
-    <text class="hint rules">输入手机号后直接填写会员权益、生成合同。新顾客在生成合同时开卡；顾客签完合同，会员权益金额才充值到账。</text>
+    <text class="hint rules">{{text.phoneRules}}</text>
     <view class="btn btn-primary {{checking || noStore ? 'is-disabled' : ''}}" hover-class="is-pressed" bindtap="onNext">{{checking ? '正在查询…' : '下一步：填写权益'}}</view>
   </block>
 
@@ -59,7 +59,7 @@
         </view>
         <text wx:if="{{!uncertain && !submitting}}" class="link change" bindtap="onChangeMember">换一位</text>
       </view>
-      <text class="muted">{{member.hasCard ? '当前余额 ' + member.balance + ' 元' : '生成合同时开卡，余额从 0 开始'}}</text>
+      <text class="muted">{{member.hasCard ? '当前余额 ' + member.balance + ' 元' : (mode === 'PAPER' ? '上传协议单时开卡，余额从 0 开始' : '生成合同时开卡，余额从 0 开始')}}</text>
     </view>
 
     <view class="card">
@@ -84,7 +84,7 @@
           </view>
           <text wx:if="{{amountError}}" class="error">{{amountError}}</text>
           <text wx:elif="{{amountHint}}" class="hint">{{amountHint}}</text>
-          <text wx:else class="hint">写进合同，顾客签完后充值到会员余额</text>
+          <text wx:else class="hint">{{text.amountTip}}</text>
         </view>
       </view>
 
@@ -100,6 +100,34 @@
       <text wx:if="{{benefit && benefit.rules}}" class="hint benefit-rules">{{benefit.rules}}</text>
     </view>
 
+    <!-- 纸质协议单：选权益方案（可以不选）；电子签：选合同模板 -->
+    <block wx:if="{{mode === 'PAPER'}}">
+      <view wx:if="{{plans.length > 1}}" class="card">
+        <text class="card-title">选权益方案</text>
+        <view
+          wx:for="{{plans}}"
+          wx:key="id"
+          class="choice {{index === planIndex ? 'is-on' : ''}}"
+          hover-class="is-pressed"
+          data-index="{{index}}"
+          bindtap="onPickPlan"
+        >
+          <view class="choice-radio"></view>
+          <text class="choice-text">{{item.title}}</text>
+        </view>
+      </view>
+      <view wx:elif="{{plans.length === 1}}" class="kv plain-kv">
+        <text class="kv-key">权益方案</text>
+        <text class="kv-value">{{plans[0].title}}</text>
+      </view>
+      <text wx:elif="{{plansLoaded}}" class="hint rules">还没有启用的权益方案，协议单按「会员协议单」记。需要的话请超级管理员在商家后台添加。</text>
+      <view
+        class="btn btn-primary {{canCreate ? '' : 'is-disabled'}}"
+        hover-class="is-pressed"
+        bindtap="onCreate"
+      >下一步：上传协议单</view>
+    </block>
+    <block wx:else>
     <view wx:if="{{templates.length > 1}}" class="card">
       <text class="card-title">选权益单</text>
       <view
@@ -130,9 +158,62 @@
       hover-class="is-pressed"
       bindtap="onCreate"
     >{{submitting ? '正在生成合同…' : '生成合同，请顾客签署'}}</view>
+    </block>
   </block>
 
-  <!-- 第三步：顾客扫码签合同 -->
+  <!-- 第三步（纸质协议单）：拍照上传顾客签了字的协议单，上传即充值 -->
+  <block wx:elif="{{step === 'upload'}}">
+    <block wx:if="{{paperRecharging}}">
+      <view class="card sign-card">
+        <view class="done">
+          <view class="done-icon"><text>✓</text></view>
+          <text class="done-title">协议单已上传</text>
+          <text class="muted">正在充值会员权益金额，点「刷新状态」再看一次</text>
+        </view>
+      </view>
+      <view class="btn btn-primary {{refreshing ? 'is-disabled' : ''}}" hover-class="is-pressed" bindtap="onRefreshPaper">{{refreshing ? '正在核对…' : '刷新状态'}}</view>
+    </block>
+    <block wx:else>
+      <view class="card">
+        <text class="card-title">拍照上传协议单</text>
+        <text class="hint">请顾客在纸质协议单上签好字，再拍照上传，字和签名要看得清。两面都有内容的两面都拍，最多 {{maxPhotos}} 张。</text>
+        <view class="photo-grid">
+          <view wx:for="{{photos}}" wx:key="path" class="photo-cell">
+            <image class="photo" src="{{item.path}}" mode="aspectFill" data-index="{{index}}" bindtap="onPreviewPhoto"></image>
+            <view wx:if="{{!submitting && !uncertain}}" class="photo-del" hover-class="is-pressed" data-index="{{index}}" catchtap="onRemovePhoto"><text>×</text></view>
+          </view>
+          <view
+            wx:if="{{photos.length < maxPhotos && !submitting && !uncertain}}"
+            class="photo-cell photo-add"
+            hover-class="is-pressed"
+            bindtap="onAddPhoto"
+          >
+            <text class="photo-add-plus">+</text>
+            <text class="photo-add-text">拍照 / 相册</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="card">
+        <view class="kv"><text class="kv-key">顾客</text><text class="kv-value">{{member.label}}</text></view>
+        <view wx:if="{{plans.length}}" class="kv"><text class="kv-key">权益方案</text><text class="kv-value">{{plans[planIndex].title}}</text></view>
+        <view class="kv"><text class="kv-key">会员权益金额</text><text class="kv-value strong">{{amountText}} 元</text></view>
+        <view class="kv"><text class="kv-key">开单门店</text><text class="kv-value">{{storeName}}</text></view>
+        <view class="kv"><text class="kv-key">到账</text><text class="kv-value">上传后立即充值</text></view>
+      </view>
+
+      <text wx:if="{{uncertain}}" class="notice notice-warning">刚才没有收到结果，协议单可能已经交上了。点「重试」不会重复充值。</text>
+      <view
+        class="btn btn-primary {{(photos.length || uncertain) && !submitting ? '' : 'is-disabled'}}"
+        hover-class="is-pressed"
+        bindtap="onSubmitPaper"
+      >{{submitting ? uploadText : (uncertain ? '重试' : '上传协议单并充值')}}</view>
+      <view wx:if="{{!submitting && !uncertain}}" class="btn btn-quiet" hover-class="is-pressed" bindtap="onBackToBenefit">返回修改</view>
+      <text class="hint center">照片只有顾客本人、本店员工和管理员能看。</text>
+    </block>
+  </block>
+
+  <!-- 第三步（电子签）：顾客扫码签合同 -->
   <block wx:elif="{{step === 'sign'}}">
     <view class="card sign-card">
       <block wx:if="{{progress === 'waiting'}}">
@@ -192,13 +273,13 @@
   <view wx:else hidden="{{showCode}}">
     <view class="done">
       <view class="done-icon"><text>✓</text></view>
-      <text class="done-title">合同已签，已充值到账</text>
+      <text class="done-title">{{mode === 'PAPER' ? '协议单已上传，已充值到账' : '合同已签，已充值到账'}}</text>
       <text wx:if="{{flowAmount}}" class="done-change plus">+{{flowAmount}} 元</text>
     </view>
     <view class="card">
       <view class="kv"><text class="kv-key">会员</text><text class="kv-value">{{member.label}}</text></view>
       <view wx:if="{{balance}}" class="kv"><text class="kv-key">当前余额</text><text class="kv-value strong">{{balance}} 元</text></view>
-      <view class="kv"><text class="kv-key">权益单</text><text class="kv-value">{{flowTitle}}</text></view>
+      <view class="kv"><text class="kv-key">{{mode === 'PAPER' ? '协议单' : '权益单'}}</text><text class="kv-value">{{flowTitle}}</text></view>
       <view class="kv"><text class="kv-key">门店</text><text class="kv-value">{{storeName}}</text></view>
     </view>
     <view class="btn btn-primary" hover-class="is-pressed" bindtap="onShowCode">给顾客看小程序码</view>

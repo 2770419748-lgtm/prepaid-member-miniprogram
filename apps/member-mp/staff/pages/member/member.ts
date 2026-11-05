@@ -1,14 +1,14 @@
-import { fetchLedger, fetchMember, fetchSignFlows } from '../../utils/api';
+import { downloadAgreementPhoto, fetchLedger, fetchMember, fetchSignFlows } from '../../utils/api';
 import { messageOf } from '../../utils/errors';
 import { LedgerRow, toLedgerRow } from '../../utils/ledger';
 import { formatCent } from '../../utils/money';
-import { orderUrl } from '../../utils/order';
+import { ORDER_TEXT, orderUrl, readSignMode, SIGN_MODE_KEY } from '../../utils/order';
 import { consumeEntryUrl } from '../../utils/paycode';
 import { maskPhone } from '../../utils/phone';
 import { scanMemberCode } from '../../utils/scan';
 import { currentStore, rememberMember, requireSession } from '../../utils/session';
 import { dayKey, dayLabel } from '../../utils/time';
-import type { MemberCard } from '../../utils/types';
+import type { MemberCard, SignFlow } from '../../utils/types';
 
 interface MemberHeader {
   phone: string;
@@ -22,11 +22,35 @@ interface MemberHeader {
 
 const HISTORY_SIZE = 10;
 
-/** 在你的门店开过、顾客还没签的合同，点进去接着签。 */
+/** 在你的门店开过、顾客还没签的合同（电子签），点进去接着签。 */
 interface OpenOrder {
   id: string;
   title: string;
   amount: string;
+}
+
+/** 在你的门店上传过的纸质协议单，点开看照片。 */
+interface PaperRow {
+  id: string;
+  title: string;
+  sub: string;
+  photoIds: string[];
+  reversed: boolean;
+}
+
+function toPaperRow(flow: SignFlow): PaperRow {
+  const parts = [dayLabel(dayKey(flow.signedAt ?? flow.createdAt))];
+  if (flow.rechargeAmountCent != null) {
+    parts.push(`会员权益金额 ${formatCent(flow.rechargeAmountCent)} 元`);
+  }
+  parts.push(`${flow.photos.length} 张照片`);
+  return {
+    id: flow.id,
+    title: flow.title,
+    sub: parts.join(' · '),
+    photoIds: flow.photos.map((photo) => photo.id),
+    reversed: flow.rechargeReversed,
+  };
 }
 
 function header(member: MemberCard): MemberHeader {
@@ -53,6 +77,8 @@ Page({
     member: null as MemberHeader | null,
     rows: [] as (LedgerRow & { date: string })[],
     openOrders: [] as OpenOrder[],
+    papers: [] as PaperRow[],
+    text: ORDER_TEXT.PAPER,
     historyTitle: '本店记录',
     historyNote: '',
     historyEmpty: '',
@@ -63,6 +89,7 @@ Page({
   },
 
   onShow() {
+    this.setData({ text: ORDER_TEXT[readSignMode(wx.getStorageSync(SIGN_MODE_KEY))] });
     // 从记账页回来时余额已经变了，每次回到这页都重新取。
     this.load();
   },
@@ -84,11 +111,12 @@ Page({
       historyNote: unrestricted ? '全部门店' : '只显示在你门店办理的',
     });
     try {
-      const [member, ledger, pendingFlows] = await Promise.all([
+      const [member, ledger, flows] = await Promise.all([
         fetchMember(this.data.id),
         fetchLedger({ memberId: this.data.id, pageSize: HISTORY_SIZE }),
-        fetchSignFlows({ memberId: this.data.id, status: 'PENDING', pageSize: 5 }).catch(() => []),
+        fetchSignFlows({ memberId: this.data.id, pageSize: 10 }).catch(() => []),
       ]);
+      const pendingFlows = flows.filter((flow) => flow.status === 'PENDING');
       rememberMember(member);
       this.setData({
         error: '',
@@ -99,6 +127,7 @@ Page({
           date: dayLabel(dayKey(entry.createdAt)),
         })),
         historyEmpty: unrestricted ? '还没有记录' : '在你的门店还没有记录',
+        papers: flows.filter((flow) => flow.kind === 'PAPER').map(toPaperRow),
         openOrders: pendingFlows.map((flow) => ({
           id: flow.id,
           title: flow.title,
@@ -150,6 +179,23 @@ Page({
 
   onOpenOrder(event: WechatMiniprogram.BaseEvent<Record<string, never>, { id: string }>) {
     wx.navigateTo({ url: orderUrl({ flowId: event.currentTarget.dataset.id }) });
+  },
+
+  /** 看一份纸质协议单的照片：要登录才能取，先下载到本机再预览。 */
+  async onPaper(event: WechatMiniprogram.BaseEvent<Record<string, never>, { id: string }>) {
+    const row = this.data.papers.find((item) => item.id === event.currentTarget.dataset.id);
+    if (!row || !row.photoIds.length) {
+      return;
+    }
+    wx.showLoading({ title: '正在打开照片', mask: true });
+    try {
+      const urls = await Promise.all(row.photoIds.map((photoId) => downloadAgreementPhoto(row.id, photoId)));
+      wx.hideLoading();
+      wx.previewImage({ urls, current: urls[0] });
+    } catch (error) {
+      wx.hideLoading();
+      wx.showToast({ title: messageOf(error), icon: 'none' });
+    }
   },
 
   onEntry(event: WechatMiniprogram.BaseEvent<Record<string, never>, { id: string }>) {

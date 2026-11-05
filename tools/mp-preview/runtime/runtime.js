@@ -1291,16 +1291,75 @@
       return query;
     },
 
-    // 真的请求一次（走本机转发），状态码和真机一致；文件内容不落地。
+    // 真的请求一次（走本机转发），状态码和真机一致；文件内容放进浏览器的临时地址，<image> 能直接显示。
     downloadFile: asyncApi('downloadFile', async ({ url, header = {} }) => {
       pending += 1;
       try {
-        const reply = await fetch('/__request', { method: 'POST', body: JSON.stringify({ url, method: 'GET', header }) }).then((r) => r.json());
-        if (!reply.ok) throw new Error(reply.errMsg);
-        return { tempFilePath: `preview://${url}`, statusCode: reply.statusCode };
+        const reply = await fetch('/__download', { method: 'POST', body: JSON.stringify({ url, header }) });
+        if (!reply.ok) throw new Error(await reply.text());
+        const statusCode = Number(reply.headers.get('x-status'));
+        const blob = await reply.blob();
+        return { tempFilePath: URL.createObjectURL(blob), statusCode };
       } finally {
         pending -= 1;
       }
+    }),
+
+    // 选照片：由场景给（shot.chooseMedia：小程序目录里的图片路径数组），没给就当取消了。
+    chooseMedia: asyncApi('chooseMedia', async ({ count = 9 }) => {
+      const list = Array.isArray(preview.chooseMedia) ? preview.chooseMedia.slice(0, count) : [];
+      if (!list.length) throw new Error('cancel');
+      pending += 1;
+      try {
+        const tempFiles = [];
+        for (const path of list) {
+          const reply = await fetch(`${APP}${path}`);
+          if (!reply.ok) throw new Error(`找不到 ${path}`);
+          const blob = await reply.blob();
+          tempFiles.push({ tempFilePath: URL.createObjectURL(blob), size: blob.size, fileType: 'image', width: 0, height: 0, duration: 0 });
+        }
+        return { tempFiles, type: 'image' };
+      } finally {
+        pending -= 1;
+      }
+    }),
+
+    // 传文件：把临时地址里的内容拼成 multipart 表单，经本机转发给接口；data 和真机一样是字符串。
+    uploadFile: asyncApi('uploadFile', async ({ url, filePath, name = 'file', header = {}, formData = {} }) => {
+      pending += 1;
+      try {
+        const blob = await fetch(filePath).then((r) => r.blob());
+        const form = new FormData();
+        for (const [key, value] of Object.entries(formData)) form.append(key, String(value));
+        const type = blob.type || 'image/jpeg';
+        form.append(name, blob, `upload.${type.split('/')[1] || 'jpg'}`);
+        const reply = await fetch('/__upload', {
+          method: 'POST',
+          headers: { 'x-target-url': url, 'x-target-header': JSON.stringify(header) },
+          body: form,
+        }).then((r) => r.json());
+        if (!reply.ok) throw new Error(reply.errMsg);
+        return { statusCode: reply.statusCode, data: reply.data };
+      } finally {
+        pending -= 1;
+      }
+    }),
+
+    // 看大图：黑底铺满，点一下关掉。
+    previewImage: asyncApi('previewImage', ({ urls = [], current }) => {
+      const src = current || urls[0];
+      if (!src) throw new Error('no image');
+      const index = Math.max(0, urls.indexOf(src));
+      const root = layer(
+        `<div class="mp-image-preview">
+           <img src="${escapeHtml(src)}" alt="">
+           <div class="mp-image-preview-count">${index + 1} / ${Math.max(urls.length, 1)}</div>
+         </div>`,
+      );
+      root.style.position = 'absolute';
+      root.style.inset = '0';
+      root.addEventListener('click', () => root.remove());
+      return {};
     }),
     openDocument: asyncApi('openDocument', () => {
       openToast({ title: '预览：此处真机打开文件', icon: 'none' });

@@ -12,7 +12,10 @@
       <MemberCardPanel :member="member" full-phone>
         <template v-if="member.hasCard && member.status === 'ACTIVE'">
           <a-button type="primary" @click="router.push({ name: 'recharge', query: { memberId: member.id } })">充值</a-button>
-          <a-button @click="router.push({ name: 'sign-flows', query: { memberId: member.id, start: '1' } })">
+          <a-button v-if="paperMode" @click="router.push({ name: 'sign-flows', query: { memberId: member.id } })">
+            协议单
+          </a-button>
+          <a-button v-else @click="router.push({ name: 'sign-flows', query: { memberId: member.id, start: '1' } })">
             发起权益单
           </a-button>
         </template>
@@ -75,6 +78,7 @@
 import { message } from 'ant-design-vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { DEFAULT_SIGN_CONFIG, loadSignConfig } from '../../api/esign';
 import { errorMessage } from '../../api/http';
 import { getLedgerEntry, listLedger } from '../../api/ledger';
 import { getMember } from '../../api/members';
@@ -196,9 +200,15 @@ watch(
   },
 );
 
+// 纸质协议单模式（默认）下开单在手机工作台，这里只能查看协议单。
+const paperMode = ref(DEFAULT_SIGN_CONFIG.mode === 'PAPER');
+
 onMounted(() => {
   void loadMember();
   void loadLedger();
+  void loadSignConfig().then((config) => {
+    paperMode.value = config.mode === 'PAPER';
+  });
 });
 </script>
 

@@ -55,7 +55,7 @@ export const MENU: MenuGroup[] = [
     label: '权益单',
     icon: 'benefit',
     children: [
-      { key: 'sign-flows', label: '发起与签署' },
+      { key: 'sign-flows', label: '协议单与签署' },
       { key: 'benefit-templates', label: '模板配置', superAdminOnly: true },
     ],
   },

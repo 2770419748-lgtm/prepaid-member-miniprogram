@@ -21,6 +21,7 @@ const TYPES = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
   '.gif': 'image/gif',
 };
@@ -40,13 +41,17 @@ function send(res, status, body, type = 'text/plain; charset=utf-8') {
   res.end(body);
 }
 
-function readBody(req) {
+function readRaw(req) {
   return new Promise((done, fail) => {
     const chunks = [];
     req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => done(Buffer.concat(chunks).toString('utf8')));
+    req.on('end', () => done(Buffer.concat(chunks)));
     req.on('error', fail);
   });
+}
+
+async function readBody(req) {
+  return (await readRaw(req)).toString('utf8');
 }
 
 /** 转发 wx.request。返回结构对齐真机的 success 回调：statusCode、data、header。 */
@@ -72,6 +77,43 @@ async function forward(req, res) {
   }
 }
 
+/** 转发 wx.downloadFile：原样拿回文件内容（照片、PDF），状态码放在 x-status 里。 */
+async function forwardDownload(req, res) {
+  const { url, header = {} } = JSON.parse(await readBody(req));
+  try {
+    const reply = await fetch(url, { headers: header });
+    const bytes = Buffer.from(await reply.arrayBuffer());
+    res.writeHead(200, {
+      'content-type': reply.headers.get('content-type') ?? 'application/octet-stream',
+      'x-status': String(reply.status),
+      'cache-control': 'no-store',
+    });
+    res.end(bytes);
+  } catch (error) {
+    send(res, 502, `downloadFile:fail ${error.message}`);
+  }
+}
+
+/**
+ * 转发 wx.uploadFile：浏览器里拼好的 multipart 表单原样发给接口。
+ * 目标地址和请求头放在 x-target-url、x-target-header（JSON）里。返回结构对齐真机：statusCode、data（字符串）。
+ */
+async function forwardUpload(req, res) {
+  const url = req.headers['x-target-url'];
+  const header = JSON.parse(req.headers['x-target-header'] || '{}');
+  try {
+    const body = await readRaw(req);
+    const reply = await fetch(url, {
+      method: 'POST',
+      headers: { ...header, 'content-type': req.headers['content-type'] },
+      body,
+    });
+    send(res, 200, JSON.stringify({ ok: true, statusCode: reply.status, data: await reply.text() }), TYPES['.json']);
+  } catch (error) {
+    send(res, 200, JSON.stringify({ ok: false, errMsg: `uploadFile:fail ${error.message}` }), TYPES['.json']);
+  }
+}
+
 export function startServer({ appDir, port = 0 }) {
   const appRoot = resolve(appDir);
   const ts = createRequire(join(appRoot, 'package.json'))('typescript');
@@ -90,6 +132,14 @@ export function startServer({ appDir, port = 0 }) {
     try {
       if (req.method === 'POST' && path === '/__request') {
         await forward(req, res);
+        return;
+      }
+      if (req.method === 'POST' && path === '/__download') {
+        await forwardDownload(req, res);
+        return;
+      }
+      if (req.method === 'POST' && path === '/__upload') {
+        await forwardUpload(req, res);
         return;
       }
       if (path === '/' || path === '/index.html') {

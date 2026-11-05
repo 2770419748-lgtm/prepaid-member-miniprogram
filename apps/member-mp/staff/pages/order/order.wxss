@@ -1,6 +1,6 @@
 @import "../../staff.wxss";
 
-/* 步骤条：手机号 → 填权益 → 签合同 → 到账 */
+/* 步骤条：手机号 → 填权益 → 传协议单（电子签时是签合同）→ 到账 */
 .steps {
   display: flex;
   justify-content: space-between;
@@ -376,4 +376,69 @@
 .code-sheet .btn {
   align-self: stretch;
   margin-top: 32rpx;
+}
+
+/* 纸质协议单照片：一行三张，最后一格是「拍照 / 相册」 */
+.photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 24rpx -8rpx 0;
+}
+
+.photo-cell {
+  position: relative;
+  width: calc((100% - 48rpx) / 3);
+  margin: 0 8rpx 16rpx;
+  height: 250rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+.photo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.photo-del {
+  position: absolute;
+  right: 8rpx;
+  top: 8rpx;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 999rpx;
+  background: rgba(15, 23, 42, 0.6);
+  color: #ffffff;
+  font-size: 32rpx;
+  line-height: 44rpx;
+  text-align: center;
+}
+
+.photo-add {
+  border: 2rpx dashed #cbd5e1;
+  background: #f8fafc;
+  box-sizing: border-box;
+}
+
+.photo-add-plus,
+.photo-add-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: var(--text-3);
+}
+
+.photo-add-plus {
+  top: 30%;
+  font-size: 56rpx;
+  line-height: 1;
+}
+
+.photo-add-text {
+  top: 58%;
+  font-size: 22rpx;
 }

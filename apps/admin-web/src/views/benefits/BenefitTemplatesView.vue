@@ -4,7 +4,14 @@
     <p class="pm-page-sub">
       先写好「权益方案」（会员能享受什么），再把 e签宝里做好的合同模板绑上来。启用后，门店就能对会员发起线上签署。
     </p>
-    <a-alert class="gap" type="warning" show-icon message="当前是测试环境（沙箱），签出来的权益单不具法律效力。正式签署要等公司主体和企业章就绪后才打开。" />
+    <a-alert
+      v-if="paperMode"
+      class="gap"
+      type="info"
+      show-icon
+      message="现在开单改为上传顾客签字的纸质协议单，不走电子签，下面的合同模板暂时用不上。权益方案照常有用：店员开单时选的方案，会员在小程序里查看协议单时能看到。"
+    />
+    <a-alert v-else class="gap" type="warning" show-icon message="当前是测试环境（沙箱），签出来的权益单不具法律效力。正式签署要等公司主体和企业章就绪后才打开。" />
 
     <a-tabs v-model:active-key="tab">
       <a-tab-pane key="plans" tab="权益方案">
@@ -86,7 +93,7 @@
               <template v-else-if="column.key === 'actions'">
                 <a-space :size="4">
                   <a-button
-                    v-if="record.status === 'ACTIVE'"
+                    v-if="record.status === 'ACTIVE' && !paperMode"
                     type="link"
                     size="small"
                     @click="router.push({ name: 'sign-flows', query: { templateId: record.id, start: '1' } })"
@@ -214,8 +221,10 @@ import { useRouter } from 'vue-router';
 import {
   createPlan,
   createTemplate,
+  DEFAULT_SIGN_CONFIG,
   listPlans,
   listTemplates,
+  loadSignConfig,
   updatePlan,
   updateTemplate,
   type BenefitPlan,
@@ -458,7 +467,13 @@ async function setTemplateStatus(template: ContractTemplate, status: TemplateSta
   }
 }
 
+// 纸质协议单模式（默认）下不发起电子签。
+const paperMode = ref(DEFAULT_SIGN_CONFIG.mode === 'PAPER');
+
 onMounted(() => {
+  void loadSignConfig().then((config) => {
+    paperMode.value = config.mode === 'PAPER';
+  });
   void loadPlans(1);
   void loadAllPlans();
   void loadTemplates(1);

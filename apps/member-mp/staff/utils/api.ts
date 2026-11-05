@@ -1,4 +1,4 @@
-import { request } from './http';
+import { download, request, uploadFile } from './http';
 import type {
   BenefitPlan,
   ContractTemplate,
@@ -12,14 +12,16 @@ import type {
   OwnMemberSession,
   PageResult,
   ScannedPayCode,
+  SignConfig,
   SignFlow,
   SignFlowStatus,
   StaffLoginResult,
+  UploadedPhoto,
 } from './types';
 
 /**
  * 工作台用到的接口。说明见 docs/backend/m1-auth-stores.md、m2-ledger.md，
- * 开单（权益单签署、签完充值）见 m4-esign-sandbox.md。
+ * 开单：上传纸质协议单、上传即充值见 paper-agreement.md（2026-11-05 起默认）；电子签见 m4-esign-sandbox.md。
  * 登录在小程序的登录页（pages/login/login）统一做，在职员工的手机号直接得到员工登录。
  */
 
@@ -142,7 +144,7 @@ export function cancelSignFlow(id: string, reason: string) {
   return request<SignFlow>('POST', `/sign-flows/${encodeURIComponent(id)}/cancel`, { body: { reason } });
 }
 
-/** 在你的门店发起的权益单。 */
+/** 在你的门店开的权益单（纸质协议单和电子签）。 */
 export async function fetchSignFlows(query: {
   memberId?: string;
   templateId?: string;
@@ -151,6 +153,44 @@ export async function fetchSignFlows(query: {
 }): Promise<SignFlow[]> {
   const page = await request<PageResult<SignFlow>>('GET', '/sign-flows', { query: { ...query } });
   return page.items;
+}
+
+/** 现在开单怎么签。只在开单页和首页文案用，取不到时按纸质协议单。 */
+export function fetchSignConfig() {
+  return request<SignConfig>('GET', '/sign-flows/config');
+}
+
+/** 开单可选的权益方案（纸质协议单直接挂方案）：只要启用的。 */
+export async function fetchActivePlans(): Promise<BenefitPlan[]> {
+  const page = await request<PageResult<BenefitPlan>>('GET', '/benefit-plans', {
+    query: { status: 'ACTIVE', pageSize: 50 },
+  });
+  return page.items;
+}
+
+/** 传一张协议单照片（本机临时文件），返回照片 id。 */
+export function uploadAgreementPhoto(filePath: string) {
+  return uploadFile<UploadedPhoto>('/sign-flows/photos', filePath);
+}
+
+export interface NewPaperAgreement {
+  memberId: string;
+  storeId: string;
+  benefitPlanId?: string;
+  /** 会员权益金额（分），交单后立即充值到余额。 */
+  rechargeAmountCent: number;
+  photoIds: string[];
+  requestId: string;
+}
+
+/** 交单：上传顾客签字的纸质协议单，同时充值会员权益金额。同一请求号重试只开一单、充一次。 */
+export function createPaperAgreement(body: NewPaperAgreement) {
+  return request<SignFlow>('POST', '/sign-flows/paper', { body });
+}
+
+/** 下载一张协议单照片到本机临时文件（要登录才能看，不能直接用网址）。 */
+export function downloadAgreementPhoto(flowId: string, photoId: string) {
+  return download(`/sign-flows/${encodeURIComponent(flowId)}/photos/${encodeURIComponent(photoId)}`);
 }
 
 export function fetchMemberAppCode() {

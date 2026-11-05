@@ -52,7 +52,7 @@
     <view class="entry-icon"><text>＋</text></view>
     <view class="row-main">
       <text class="row-title">开单</text>
-      <text class="row-sub">输入顾客手机号，填会员权益金额，顾客签完合同自动充值</text>
+      <text class="row-sub">{{orderText}}</text>
     </view>
     <text class="row-arrow">›</text>
   </view>

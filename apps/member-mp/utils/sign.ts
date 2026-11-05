@@ -123,6 +123,8 @@ export interface SignRow {
   statusText: string;
   tone: Tone;
   sandbox: boolean;
+  /** 在门店签的纸质协议单，列表里标「纸质」。 */
+  paper: boolean;
   dateText: string;
 }
 
@@ -133,6 +135,7 @@ export function toSignRow(flow: SignFlowView): SignRow {
     statusText: STATUS_TEXT[flow.status],
     tone: statusTone(flow.status),
     sandbox: flow.sandbox,
+    paper: flow.kind === 'PAPER',
     dateText: flow.signedAt ? `签署于 ${dateText(flow.signedAt)}` : `发起于 ${dateText(flow.createdAt)}`,
   };
 }
@@ -160,10 +163,17 @@ export interface SignDetail {
   amountText: string;
   /** 这笔钱到没到余额。 */
   amountNote: string;
+  /** 在门店签的纸质协议单：显示照片，没有签署按钮和合同 PDF。 */
+  paper: boolean;
+  /** 协议单照片，按上传先后。 */
+  photoIds: string[];
 }
 
 /** 签署后才充值：签之前说「签署后充值」，签完说「已充值」，没签成说「没有充值」。 */
-export function amountNote(flow: Pick<SignFlowView, 'status' | 'recharged'>): string {
+export function amountNote(flow: Pick<SignFlowView, 'status' | 'recharged' | 'rechargeReversed'>): string {
+  if (flow.rechargeReversed) {
+    return '这笔金额已由门店撤回，不在您的余额里';
+  }
   if (flow.status === 'SIGNED') {
     return flow.recharged ? '已充值到您的余额' : '签署完成，正在充值到您的余额';
   }
@@ -175,8 +185,11 @@ export function amountNote(flow: Pick<SignFlowView, 'status' | 'recharged'>): st
 
 export function toSignDetail(flow: SignFlowView): SignDetail {
   const plan = flow.benefitPlan;
+  const paper = flow.kind === 'PAPER';
   let note = statusNote(flow.status);
-  if (flow.status === 'SIGNED' && !flow.hasPdf) {
+  if (paper && flow.status === 'SIGNED') {
+    note = '这是您在门店签字的协议单，会员权益已生效。';
+  } else if (flow.status === 'SIGNED' && !flow.hasPdf) {
     note = '已签署，会员权益已生效。合同正在归档，稍后可以在这里查看。';
   }
   return {
@@ -191,13 +204,15 @@ export function toSignDetail(flow: SignFlowView): SignDetail {
     items: plan ? plan.items : [],
     ruleLines: ruleLines(plan ? plan.rules : null),
     hasPlan: plan != null,
-    canSign: flow.status === 'PENDING',
-    hasPdf: flow.status === 'SIGNED' && flow.hasPdf,
+    canSign: !paper && flow.status === 'PENDING',
+    hasPdf: !paper && flow.status === 'SIGNED' && flow.hasPdf,
     timeLabel: flow.signedAt ? '签署时间' : '发起时间',
     timeText: dateTime(flow.signedAt ?? flow.createdAt),
     note,
     amountText: flow.rechargeAmountCent != null ? formatYuan(flow.rechargeAmountCent) : '',
     amountNote: flow.rechargeAmountCent != null ? amountNote(flow) : '',
+    paper,
+    photoIds: paper ? flow.photos.map((photo) => photo.id) : [],
   };
 }
 

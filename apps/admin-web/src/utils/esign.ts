@@ -1,4 +1,4 @@
-import type { PlanStatus, SignFlowStatus, TemplateStatus } from '../api/esign';
+import type { PlanStatus, SignFlowStatus, SignKind, TemplateStatus } from '../api/esign';
 
 export const SIGN_STATUS: Record<SignFlowStatus, { label: string; color: string }> = {
   DRAFT: { label: '发起中', color: 'default' },
@@ -25,10 +25,21 @@ export const SIGN_STATUS_OPTIONS = (Object.keys(SIGN_STATUS) as SignFlowStatus[]
   .filter((s) => s !== 'DRAFT')
   .map((value) => ({ value, label: SIGN_STATUS[value].label }));
 
-/** 开单带的会员权益金额：签完才充值到余额。 */
-export function rechargeText(flow: { status: SignFlowStatus; rechargeEntryId: string | null }): string {
+/** 开单带的会员权益金额：电子签签完才充值；纸质协议单上传后就充值。充值后被冲正的说清楚钱已撤回。 */
+export function rechargeText(flow: {
+  status: SignFlowStatus;
+  rechargeEntryId: string | null;
+  kind?: SignKind;
+  rechargeReversed?: boolean;
+}): string {
+  if (flow.rechargeReversed) {
+    return '充值已冲正，金额已撤回';
+  }
   if (flow.status === 'SIGNED') {
-    return flow.rechargeEntryId ? '已充值到账' : '签完正在充值';
+    if (flow.rechargeEntryId) {
+      return '已充值到账';
+    }
+    return flow.kind === 'PAPER' ? '正在充值，点「刷新状态」补上' : '签完正在充值';
   }
   return flow.status === 'PENDING' || flow.status === 'DRAFT' ? '签完后充值' : '未签成，没有充值';
 }

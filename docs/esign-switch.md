@@ -1,5 +1,7 @@
 # 电子签开关 `esign.production.enabled`
 
+> **2026-11-05 起开单默认上传纸质协议单（`SIGN_MODE=paper`），不发起电子签。** 要回到电子签把 `SIGN_MODE` 改成 `esign`，下面的开关规则照旧。见 [backend/paper-agreement.md](./backend/paper-agreement.md)。
+
 电子签供应商为 e签宝。M4 已接入沙箱签署（见 [backend/m4-esign-sandbox.md](./backend/m4-esign-sandbox.md)），正式签署保持关闭。
 
 ## 沙箱与正式

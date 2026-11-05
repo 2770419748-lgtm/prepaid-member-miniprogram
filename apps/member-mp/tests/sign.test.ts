@@ -33,13 +33,16 @@ function flow(overrides: Partial<SignFlowView> = {}): SignFlowView {
   return {
     id: 'flow-1',
     title: '储值会员权益确认单',
+    kind: 'ESIGN',
     status: 'PENDING',
     env: 'SANDBOX',
     sandbox: true,
     benefitPlan: { id: 'plan-1', title: '储值会员权益', summary: null, items: [{ title: '全部门店通用', detail: null }], rules: '不可提现' },
     rechargeAmountCent: null,
     recharged: false,
+    rechargeReversed: false,
     hasPdf: false,
+    photos: [],
     signedAt: null,
     // 北京时间 2026-10-27 18:30
     createdAt: '2026-10-27T10:30:00.000Z',
@@ -171,9 +174,41 @@ test('会员权益金额：签之前说签署后充值，签完说已充值，�
   const pending = toSignDetail(flow({ rechargeAmountCent: 100000 }));
   assert.equal(pending.amountText, '1,000.00');
   assert.equal(pending.amountNote, '签署完成后充值到您的余额');
-  assert.equal(amountNote({ status: 'SIGNED', recharged: true }), '已充值到您的余额');
-  assert.equal(amountNote({ status: 'SIGNED', recharged: false }), '签署完成，正在充值到您的余额');
+  assert.equal(amountNote({ status: 'SIGNED', recharged: true, rechargeReversed: false }), '已充值到您的余额');
+  assert.equal(amountNote({ status: 'SIGNED', recharged: false, rechargeReversed: false }), '签署完成，正在充值到您的余额');
   for (const status of ['REJECTED', 'EXPIRED', 'CANCELED'] as SignStatus[]) {
-    assert.match(amountNote({ status, recharged: false }), /没有充值/);
+    assert.match(amountNote({ status, recharged: false, rechargeReversed: false }), /没有充值/);
   }
+});
+
+test('充值后被门店冲正：金额说明改成已撤回', () => {
+  assert.match(amountNote({ status: 'SIGNED', recharged: true, rechargeReversed: true }), /已由门店撤回/);
+});
+
+test('纸质协议单：显示照片，不能在线签，没有合同 PDF，列表标纸质', () => {
+  const paper = flow({
+    kind: 'PAPER',
+    title: '会员协议单',
+    status: 'SIGNED',
+    env: 'PRODUCTION',
+    sandbox: false,
+    rechargeAmountCent: 100000,
+    recharged: true,
+    hasPdf: true,
+    signedAt: '2026-11-05T02:00:00.000Z',
+    photos: [
+      { id: 'p1', createdAt: '2026-11-05T02:00:00.000Z' },
+      { id: 'p2', createdAt: '2026-11-05T02:01:00.000Z' },
+    ],
+  });
+  const detail = toSignDetail(paper);
+  assert.equal(detail.paper, true);
+  assert.deepEqual(detail.photoIds, ['p1', 'p2']);
+  assert.equal(detail.canSign, false);
+  assert.equal(detail.hasPdf, false);
+  assert.match(detail.note, /门店签字的协议单/);
+  assert.equal(detail.amountNote, '已充值到您的余额');
+  assert.equal(toSignRow(paper).paper, true);
+  assert.equal(toSignRow(flow()).paper, false);
+  assert.deepEqual(toSignDetail(flow()).photoIds, []);
 });

@@ -1,9 +1,12 @@
 <template>
   <div>
-    <h1 class="pm-page-title">权益单签署</h1>
+    <h1 class="pm-page-title">会员权益单</h1>
     <p class="pm-page-sub">
-      给会员发起线上签署，会员用手机微信扫码，阅读后签字。
-      {{ session.superAdmin ? '' : '只显示在你的门店发起的签署。' }}
+      <template v-if="paperMode">
+        门店在手机工作台开单：拍照上传顾客签了字的纸质协议单，上传后会员权益金额立即充值到账。这里可以查看协议单照片、补传漏拍的照片。
+      </template>
+      <template v-else>给会员发起线上签署，会员用手机微信扫码，阅读后签字。</template>
+      {{ session.superAdmin ? '' : '只显示你的门店开的单。' }}
     </p>
 
     <a-card :bordered="false" class="block">
@@ -26,7 +29,7 @@
         />
         <a-tag v-if="memberFilter" closable @close="clearMemberFilter">只看：{{ memberFilter }}</a-tag>
         <span class="pm-spacer" />
-        <a-button type="primary" @click="openStart()">发起签署</a-button>
+        <a-button v-if="!paperMode" type="primary" @click="openStart()">发起签署</a-button>
       </div>
       <a-table
         :columns="columns"
@@ -37,7 +40,7 @@
         :scroll="{ x: 1120 }"
         @change="(p: TablePaginationConfig) => reload(p.current ?? 1)"
       >
-        <template #emptyText><a-empty description="还没有发起过签署" /></template>
+        <template #emptyText><a-empty description="还没有权益单" /></template>
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'member'">
             <router-link :to="{ name: 'member-detail', params: { id: record.member.id } }">
@@ -46,8 +49,8 @@
             <div class="muted">{{ maskPhone(record.member.phone) }}</div>
           </template>
           <template v-else-if="column.key === 'title'">
-            <div>{{ record.title || record.template.name }}</div>
-            <div class="muted">{{ record.benefitPlan?.title ?? record.template.name }}</div>
+            <div>{{ record.title || record.template?.name || '权益单' }}</div>
+            <div class="muted">{{ record.benefitPlan?.title ?? record.template?.name ?? '未选权益方案' }}</div>
             <div v-if="record.rechargeAmountCent != null" class="muted pm-num">
               会员权益金额 {{ formatCent(record.rechargeAmountCent) }} 元 · {{ rechargeText(record) }}
             </div>
@@ -56,20 +59,27 @@
             <a-tag :color="SIGN_STATUS[record.status as SignFlowStatus].color" class="tag">
               {{ SIGN_STATUS[record.status as SignFlowStatus].label }}
             </a-tag>
-            <a-tag v-if="record.env === 'SANDBOX'" class="tag">测试签署</a-tag>
+            <a-tag v-if="record.kind === 'PAPER'" color="blue" class="tag">纸质协议单</a-tag>
+            <a-tag v-if="record.sandbox" class="tag">测试签署</a-tag>
           </template>
           <template v-else-if="column.key === 'store'">{{ record.store?.name ?? '—' }}</template>
           <template v-else-if="column.key === 'initiator'">{{ record.initiator?.name ?? '—' }}</template>
           <template v-else-if="column.key === 'time'">
-            <div class="pm-num nowrap">{{ formatDateTime(record.createdAt) }} 发起</div>
-            <div v-if="record.signedAt" class="pm-num nowrap muted">{{ formatDateTime(record.signedAt) }} 签署</div>
+            <template v-if="record.kind === 'PAPER'">
+              <div class="pm-num nowrap">{{ formatDateTime(record.createdAt) }} 上传</div>
+            </template>
+            <template v-else>
+              <div class="pm-num nowrap">{{ formatDateTime(record.createdAt) }} 发起</div>
+              <div v-if="record.signedAt" class="pm-num nowrap muted">{{ formatDateTime(record.signedAt) }} 签署</div>
+            </template>
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space :size="4" wrap>
+              <a-button v-if="record.kind === 'PAPER'" type="link" size="small" @click="viewing = record">查看协议单</a-button>
               <a-button v-if="record.signUrl" type="link" size="small" @click="showQr(record)">签署码</a-button>
-              <!-- 签完但合同还没归档时也要能再刷新，后端会重试归档。 -->
+              <!-- 电子签签完但合同还没归档、纸质协议单的钱没充上，都要能再刷新，后端会补。 -->
               <a-button
-                v-if="record.status === 'PENDING' || record.status === 'DRAFT' || (record.status === 'SIGNED' && !record.hasPdf)"
+                v-if="needsRefresh(record)"
                 type="link"
                 size="small"
                 :loading="refreshing === record.id"
@@ -97,7 +107,7 @@
       <template v-if="created">
         <a-result status="success" title="已发起，请会员扫码签署" class="result">
           <template #subTitle>
-            {{ created.member.name || '未填称呼' }} · {{ maskPhone(created.member.phone) }} · {{ created.template.name }}
+            {{ created.member.name || '未填称呼' }} · {{ maskPhone(created.member.phone) }} · {{ created.template?.name }}
           </template>
         </a-result>
         <SignQr :flow="created" />
@@ -128,6 +138,9 @@
       </template>
     </a-modal>
 
+    <!-- 纸质协议单：看照片、补传、删除 -->
+    <AgreementPhotosDrawer :flow="viewing" :max-photos="maxPhotos" @close="viewing = null" @updated="onUpdated" />
+
     <!-- 签署码 -->
     <a-modal :open="!!qrFlow" title="签署码" :footer="null" @cancel="qrFlow = null">
       <SignQr v-if="qrFlow" :flow="qrFlow" />
@@ -157,9 +170,11 @@ import { useRoute, useRouter } from 'vue-router';
 import {
   cancelSignFlow,
   createSignFlow,
+  DEFAULT_SIGN_CONFIG,
   downloadSignedPdf,
   listSignFlows,
   listTemplates,
+  loadSignConfig,
   refreshSignFlow,
   type ContractTemplate,
   type SignFlow,
@@ -169,6 +184,7 @@ import {
 import { errorMessage, errorStatus, isNetworkError, isNotFound } from '../../api/http';
 import { getMember } from '../../api/members';
 import type { MemberCard } from '../../api/types';
+import AgreementPhotosDrawer from '../../components/AgreementPhotosDrawer.vue';
 import MemberCardPanel from '../../components/MemberCardPanel.vue';
 import MemberLookup from '../../components/MemberLookup.vue';
 import SignQr from '../../components/SignQr.vue';
@@ -199,7 +215,7 @@ const columns: ColumnsType<SignFlow> = [
   { title: '权益单', key: 'title' },
   { title: '状态', key: 'status', width: 170 },
   { title: '门店', key: 'store', width: 110 },
-  { title: '发起人', key: 'initiator', width: 120 },
+  { title: '经办人', key: 'initiator', width: 120 },
   { title: '时间', key: 'time', width: 200 },
   { title: '操作', key: 'actions', width: 200, fixed: 'right' },
 ];
@@ -243,6 +259,28 @@ function clearMemberFilter(): void {
   memberFilter.value = '';
   void router.replace({ query: {} });
   void reload(1);
+}
+
+// 开单方式：默认纸质协议单，电子签开关打开时才能在这里发起签署。
+const paperMode = ref(DEFAULT_SIGN_CONFIG.mode === 'PAPER');
+const maxPhotos = ref(DEFAULT_SIGN_CONFIG.maxPhotos);
+
+function needsRefresh(flow: SignFlow): boolean {
+  if (flow.kind === 'PAPER') {
+    return flow.rechargeAmountCent != null && !flow.rechargeEntryId;
+  }
+  return flow.status === 'PENDING' || flow.status === 'DRAFT' || (flow.status === 'SIGNED' && !flow.hasPdf);
+}
+
+// 查看纸质协议单
+const viewing = ref<SignFlow | null>(null);
+
+function onUpdated(flow: SignFlow): void {
+  viewing.value = flow;
+  const index = rows.value.findIndex((r) => r.id === flow.id);
+  if (index >= 0) {
+    rows.value[index] = flow;
+  }
 }
 
 function canCancel(flow: SignFlow): boolean {
@@ -380,14 +418,18 @@ async function submitCancel(): Promise<void> {
 }
 
 onMounted(async () => {
-  await reload(1);
+  const [config] = await Promise.all([loadSignConfig(), reload(1)]);
+  paperMode.value = config.mode === 'PAPER';
+  maxPhotos.value = config.maxPhotos;
+  // 纸质协议单模式下后台不发起签署（开单在手机工作台），带过来的「发起」参数不理。
+  const wantStart = !paperMode.value && route.query.start === '1';
   if (filters.memberId) {
     const member = await getMember(filters.memberId).catch(() => null);
     memberFilter.value = member ? `${member.name || '未填称呼'} ${maskPhone(member.phone)}` : '这位会员';
-    if (route.query.start === '1') {
+    if (wantStart) {
       void openStart(member);
     }
-  } else if (route.query.start === '1') {
+  } else if (wantStart) {
     void openStart();
   }
 });

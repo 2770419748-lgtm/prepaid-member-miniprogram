@@ -102,7 +102,7 @@ const routes: RouteRecordRaw[] = [
         path: 'benefits/sign-flows',
         name: 'sign-flows',
         component: () => import('../views/benefits/SignFlowsView.vue'),
-        meta: { title: '权益单签署' },
+        meta: { title: '会员权益单' },
       },
       {
         path: 'reconciliation',
