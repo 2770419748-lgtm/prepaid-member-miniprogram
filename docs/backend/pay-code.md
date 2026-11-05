@@ -12,9 +12,11 @@
 ```
 会员小程序「会员码」 POST /members/me/pay-code        → 18 位数字，画成二维码，每 30 秒换一张
 员工小程序「扫码消费」 wx.scanCode → POST /pay-codes/scan → 认出是哪位会员，码锁给这位店员和这家门店
-店员填金额            POST /wallets/:memberId/consume（带 payCode）→ 扣款和「码已用」在同一个事务里
+店员扫订单码、填金额  POST /wallets/:memberId/consume（带 payCode、orderNo、productAmountCent）→ 扣款、「码已用」、占住订单在同一个事务里
 会员小程序每 2 秒查一次 GET /members/me/pay-code/:id   → 显示「门店已扫码」，扣完显示金额、门店、剩余余额
 ```
+
+2026-11-05 起扫完会员码还要扫九讯云小票上的订单码、填商品应付金额，最多抵 10%，同一张单只能抵一次，见 [order-offset.md](./order-offset.md)。
 
 充值、开卡、查会员、冲正都不变，不需要会员码。商家网页后台没有扣款入口（见 `docs/frontend/admin-web.md`）。
 
@@ -36,7 +38,7 @@
 | POST | `/members/me/pay-code` | 会员 | — | `{ id, code, expiresAt, refreshAfterSeconds }`。没开卡或卡已停用 400 |
 | GET | `/members/me/pay-code/:id` | 会员 | — | `{ id, status, expiresAt, storeName, entry }`。`status`：`ACTIVE` 等着扫、`SCANNED` 门店已扫、`USED` 已扣款（`entry` 是那一笔，会员视角）、`EXPIRED` 过期。不是自己的码 404 |
 | POST | `/pay-codes/scan` | 店员及以上 | `code`（扫到的原文）, `storeId` | `{ member, expiresAt }`：会员卡（同 `GET /members/:id`）和扫码锁定的到期时间 |
-| POST | `/wallets/:memberId/consume` | 店员及以上 | `storeId`, `amountCent`, `payCode`, `remark?`, `requestId`（必填） | 同 M2。`payCode` 必填 |
+| POST | `/wallets/:memberId/consume` | 店员及以上 | `storeId`, `amountCent`, `payCode`, `orderNo`, `productAmountCent`, `orderNoTyped?`, `remark?`, `requestId`（必填） | 同 M2。`payCode` 必填；订单相关的规则和报错见 [order-offset.md](./order-offset.md) |
 
 扫码和扣款的报错都是白话，员工小程序直接显示：
 

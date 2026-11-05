@@ -13,7 +13,7 @@
 | --- | --- |
 | 开卡 | 店员登记手机号（可带称呼），同一事务里建会员和余额为 0 的钱包。会员先在小程序登录过也可以，补开钱包即可 |
 | 线下充值 | 只记账，不收款。钱在门店线下收 |
-| 消费扣款 | 必须先扫顾客的会员码（见 [pay-code.md](./pay-code.md)）；余额不足拒绝；同一张卡被同时扣款也不会扣成负数 |
+| 消费扣款 | 必须先扫顾客的会员码（见 [pay-code.md](./pay-code.md)），再扫九讯云订单码、填商品应付金额，最多抵 10%、一张单只能抵一次（见 [order-offset.md](./order-offset.md)）；余额不足拒绝；同一张卡被同时扣款也不会扣成负数 |
 | 冲正 | 记错了账，补记一笔反方向的把原流水整笔抵掉 |
 | 退余额 | 2026-11-04 起：店长或超管把没用完的储值退给顾客（`REFUND`），见 [refund-member-admin.md](./refund-member-admin.md) |
 | 流水查询 | 店员按门店范围查；会员只看自己的 |
@@ -63,19 +63,19 @@
 | GET | `/members/:id` | 店员及以上 | — | 会员卡，含总余额 |
 | GET | `/members/me/wallet` | 会员 | — | `{ hasCard, balanceCent, openedAt, updatedAt }` |
 | POST | `/wallets/:memberId/recharge` | 店员及以上 | `storeId`, `amountCent`, `remark?`, `requestId`（必填） | `{ entry, balanceCent, replayed }` |
-| POST | `/wallets/:memberId/consume` | 店员及以上 | 同上，另加必填 `payCode`（刚扫到的会员码） | 同上。余额不足 400；码的问题见 [pay-code.md](./pay-code.md) |
+| POST | `/wallets/:memberId/consume` | 店员及以上 | 同上，另加必填 `payCode`（刚扫到的会员码）、`orderNo`（九讯云订单号）、`productAmountCent`（商品应付金额），选填 `orderNoTyped` | 同上。余额不足 400；码的问题见 [pay-code.md](./pay-code.md)，订单的问题见 [order-offset.md](./order-offset.md) |
 | POST | `/wallets/:memberId/refund` | 超管或本店店长 | `storeId`, `amountCent`, `remark`（必填，原因和退款方式）, `requestId`（必填） | 同上。超过余额 400。见 [refund-member-admin.md](./refund-member-admin.md) |
 | POST | `/ledger/:id/reversal` | 超管或原门店店长 | `remark`, `requestId`（必填） | 同上。已冲过 409 |
 | PATCH | `/members/:id` | 超管 | `phone?`, `name?`, `reason?`（换号必填） | 会员卡。换号后会员旧登录作废 |
 | POST | `/members/:id/disable`、`/members/:id/enable` | 超管 | `reason` | 会员卡 |
-| GET | `/ledger` | 店员按范围；会员只看自己 | `memberId?`, `storeId?`, `type?`, `from?`, `to?`, `page`, `pageSize` | 分页流水 |
+| GET | `/ledger` | 店员按范围；会员只看自己 | `memberId?`, `storeId?`, `type?`, `orderNo?`, `from?`, `to?`, `page`, `pageSize` | 分页流水 |
 | GET | `/ledger/:id` | 同上 | — | 一条流水 |
 
 会员卡（店员视角）字段：`id`, `phone`, `name`, `status`, `hasCard`, `openStoreId`, `openStoreName`, `balanceCent`, `openedAt`, `wechatBound`, `createdAt`。
 
-流水（店员视角）字段：`id`, `memberId`, `memberPhone`, `memberName`, `storeId`, `storeName`, `operatorStaffId`, `operatorName`, `type`, `amountCent`（绝对值）, `changeCent`（对余额的实际影响，加为正、减为负）, `balanceBefore`, `balanceAfter`, `remark`, `reversalOfId`（冲正指向的原流水）, `reversalOfType`（冲正抵掉的原流水类型）, `reversedById`（被哪笔冲正）, `createdAt`。
+流水（店员视角）字段：`id`, `memberId`, `memberPhone`, `memberName`, `storeId`, `storeName`, `operatorStaffId`, `operatorName`, `type`, `amountCent`（绝对值）, `changeCent`（对余额的实际影响，加为正、减为负）, `balanceBefore`, `balanceAfter`, `remark`, `reversalOfId`（冲正指向的原流水）, `reversalOfType`（冲正抵掉的原流水类型）, `reversedById`（被哪笔冲正）, `orderNo`、`productAmountCent`、`orderNoTyped`（消费抵扣的九讯云订单，见 [order-offset.md](./order-offset.md)）, `createdAt`。
 
-流水（会员视角）只有：`id`, `type`, `amountCent`, `changeCent`, `balanceAfter`, `storeName`, `reversalOfId`, `reversalOfType`, `reversed`, `createdAt`。
+流水（会员视角）只有：`id`, `type`, `amountCent`, `changeCent`, `balanceAfter`, `storeName`, `reversalOfId`, `reversalOfType`, `reversed`, `orderNo`, `productAmountCent`, `createdAt`。
 
 `from` 含、`to` 不含，ISO 时间，例如 `2026-10-01T00:00:00+08:00`。
 
