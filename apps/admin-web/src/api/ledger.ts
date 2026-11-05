@@ -34,6 +34,8 @@ export interface LedgerQuery extends PageQuery {
   memberId?: string;
   storeId?: string;
   type?: LedgerType;
+  /** 九讯云订单号：查抵这张单的消费和冲掉它的那笔。 */
+  orderNo?: string;
   from?: string;
   to?: string;
 }

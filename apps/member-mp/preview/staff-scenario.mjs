@@ -7,7 +7,8 @@
 //
 // 只连本机接口（API_BASE，默认 http://localhost:3000），会往本机数据库写演示门店、员工、会员、权益单和流水。
 // 演示用的超级管理员是 prisma/seed.ts 建的 13800000000。不要对着任何正式环境跑。
-// 消费都按真机的顺序走：会员在会员小程序出示会员码 → 店员扫码 → 带着会员码扣款。截图里「扫到」的码也是这样现拿的。
+// 消费都按真机的顺序走：会员在会员小程序出示会员码 → 店员扫码 → 再扫九讯云小票的订单码、填商品应付金额 → 带着会员码和单号抵扣（最多 10%）。
+// 截图里「扫到」的会员码也是这样现拿的；订单号从一个起点往后找还没抵过的，同一个库重复跑也不会撞。
 // 开单按真机的顺序走：输手机号 → 填会员权益金额 → 生成合同 → 顾客签完（让假电子签平台标成签好）→ 自动充值、弹小程序码。
 
 import { randomUUID } from 'node:crypto';
@@ -98,7 +99,7 @@ async function ensureMember(token, storeId, { phone, name }) {
   return { member: await call('POST', '/members/open', { token, body: { phone, name, storeId } }), fresh: true };
 }
 
-function move(token, memberId, kind, storeId, yuan, remark, payCode) {
+function move(token, memberId, kind, storeId, yuan, remark, extra = {}) {
   return call('POST', `/wallets/${memberId}/${kind}`, {
     token,
     body: {
@@ -106,9 +107,19 @@ function move(token, memberId, kind, storeId, yuan, remark, payCode) {
       amountCent: Math.round(yuan * 100),
       requestId: randomUUID(),
       ...(remark ? { remark } : {}),
-      ...(payCode ? { payCode } : {}),
+      ...extra,
     },
   });
+}
+
+/** 九讯云小票的单号（A + 数字）：从 start 往后找第一张还没抵扣过的。 */
+async function freshOrder(token, start) {
+  for (let n = start; ; n += 1) {
+    const checked = await call('GET', `/orders/check?orderNo=A${n}`, { token });
+    if (!checked.redeemed) {
+      return checked.orderNo;
+    }
+  }
 }
 
 /** 顾客在会员小程序里点「会员码」，二维码里就是这串数字。 */
@@ -146,11 +157,13 @@ async function ensureTemplate(admin) {
   );
 }
 
-/** 店员扫顾客的会员码，再带着这张码扣款。返回记账结果和用掉的码。 */
-async function consume(token, member, storeId, yuan, remark) {
+/** 店员扫顾客的会员码，再扫小票的订单码、填商品应付金额，带着码和单号抵扣。返回记账结果、用掉的码和单号。 */
+async function consume(token, member, storeId, yuan, productYuan, remark) {
   const code = await showCode(member.phone);
   await call('POST', '/pay-codes/scan', { token, body: { code, storeId } });
-  return { ...(await move(token, member.id, 'consume', storeId, yuan, remark, code)), code };
+  const orderNo = await freshOrder(token, 3000);
+  const extra = { payCode: code, orderNo, productAmountCent: Math.round(productYuan * 100) };
+  return { ...(await move(token, member.id, 'consume', storeId, yuan, remark, extra)), code, orderNo };
 }
 
 async function setup() {
@@ -199,13 +212,13 @@ async function setup() {
   const wang = await ensureMember(token, binjiang, MEMBERS.wang);
   if (wang.fresh) {
     await move(token, wang.member.id, 'recharge', binjiang, 1000, '现金');
-    await consume(token, { ...wang.member, ...MEMBERS.wang }, binjiang, 168, '洗护套餐');
-    await consume(token, { ...wang.member, ...MEMBERS.wang }, binjiang, 45.5);
+    await consume(token, { ...wang.member, ...MEMBERS.wang }, binjiang, 168, 1999, '买手机抵扣');
+    await consume(token, { ...wang.member, ...MEMBERS.wang }, binjiang, 45.5, 499);
   }
   const zhang = await ensureMember(token, xihu, MEMBERS.zhang);
   if (zhang.fresh) {
     await move(token, zhang.member.id, 'recharge', xihu, 500, '转账');
-    await consume(token, { ...zhang.member, ...MEMBERS.zhang }, binjiang, 120);
+    await consume(token, { ...zhang.member, ...MEMBERS.zhang }, binjiang, 120, 1299);
   }
   const liu = await ensureMember(token, binjiang, MEMBERS.liu);
   if (liu.fresh) {
@@ -226,7 +239,9 @@ async function setup() {
     });
   }
   // 每次都补一笔记错的消费，留给店长现场冲正。
-  const mistake = await consume(token, { ...liu.member, ...MEMBERS.liu }, binjiang, 388, '本来是 38 元，多按了一个 8');
+  const mistake = await consume(token, { ...liu.member, ...MEMBERS.liu }, binjiang, 388, 3999, '本来是 38 元，多按了一个 8');
+  // 一张已经抵过的单：店员再扫它应该被拦下。冲正那笔会放开单号，所以另抵一笔不冲正的。
+  const redeemed = await consume(token, { ...zhang.member, ...MEMBERS.zhang }, xihu, 20, 999, '买耳机抵扣');
 
   // 在会员小程序登录过、还没开卡的人。
   await call('POST', '/auth/member/wx-phone', {
@@ -245,6 +260,12 @@ async function setup() {
   }
 
   const wangBalance = (await call('GET', `/members/${wang.member.id}`, { token })).balanceCent;
+  // 截图里店员要扫的单：抵扣那张现找，其余几张（不提交）各从不同的起点找，互不相撞。
+  const orders = {
+    over: await freshOrder(token, 6100),
+    typed: await freshOrder(token, 6200),
+    short: await freshOrder(token, 6300),
+  };
 
   return {
     binjiang,
@@ -254,6 +275,10 @@ async function setup() {
     mistakeId: mistake.entry.id,
     /** 已经扣过款的会员码：顾客拿截图再来扫，应该被拦下。 */
     usedCode: mistake.code,
+    /** 已经抵过的九讯云订单号。 */
+    redeemedOrder: redeemed.orderNo,
+    orders,
+    token,
     newPhone,
     zhangId: zhang.member.id,
     recent: [
@@ -272,6 +297,9 @@ export default async function scenario() {
   };
   const asManager = { 'staff.session': sessionFor(demo.manager, demo.binjiang), app_mode: 'staff' };
   const wangShowsCode = () => showCode(MEMBERS.wang.phone);
+  /** 先扫会员码、再扫订单码：扫码结果按先后各用一个。 */
+  const wangShowsCodeThen = (order) => async () => [await showCode(MEMBERS.wang.phone), order];
+  const scanBoth = [{ tap: '.scan-card' }, { wait: 400 }, { tap: '.scan-order' }, { wait: 400 }];
 
   return {
     app: '..',
@@ -304,48 +332,100 @@ export default async function scenario() {
         ],
       },
       {
-        name: '04-扫码后填金额',
-        caption: '4. 点「扫码消费」用手机扫顾客的会员码，扫到才进入填金额，马上看到扣款后余额',
+        name: '04-扫完会员码',
+        caption: '4. 点「扫码消费」扫顾客的会员码，扫到后先扫九讯云小票上的订单码',
         route: 'staff/pages/index/index',
         storage: asClerk,
         scanResult: wangShowsCode,
+        steps: [{ tap: '.scan-card' }, { wait: 400 }, { expectText: '已扫码' }, { expectText: '扫订单码' }],
+      },
+      {
+        name: '05-扫订单填金额',
+        caption: '5. 扫到订单号后填商品应付金额，自动算出最多抵 10%（余额不够就抵余额），马上看到抵扣后余额',
+        route: 'staff/pages/index/index',
+        storage: asClerk,
+        scanResult: async () => wangShowsCodeThen(await freshOrder(demo.token, 5982))(),
         steps: [
-          { tap: '.scan-card' },
-          { wait: 400 },
+          ...scanBoth,
           { expectText: '已扫码' },
-          { fill: ['.amount-input', '58'] },
-          { fill: ['.remark input', '剪发'] },
-          { expectText: `记账后余额 ${yuan(demo.wangBalance - 5800)} 元` },
-          { shot: '04-扫码后填金额', caption: '4. 点「扫码消费」用手机扫顾客的会员码，扫到才进入填金额，马上看到扣款后余额' },
+          { fill: ['.product-input', '1299'] },
+          { fill: ['.remark input', '买耳机'] },
+          { expectText: '最多可抵 129.90 元（商品金额的 10%）' },
+          { expectText: `抵扣后余额 ${yuan(demo.wangBalance - 12990)} 元` },
+          { shot: '05-扫订单填金额', caption: '5. 扫到订单号后填商品应付金额，自动算出最多抵 10%（余额不够就抵余额），马上看到抵扣后余额' },
           { tap: '.page > .btn-primary' },
-          { expectText: '确认消费' },
-          { shot: '05-二次确认', caption: '5. 提交前再确认一次：给谁、多少钱、记完剩多少' },
+          { expectText: '确认抵扣' },
+          { shot: '06-二次确认', caption: '6. 提交前再确认一次：给谁、哪张单、商品多少钱、抵多少、剩多少' },
           { tap: '.mp-modal-confirm' },
           { wait: 400 },
-          { expectText: '消费成功' },
-          { shot: '06-消费成功', caption: '6. 扣款成功：显示扣了多少、现在余额多少；这张会员码就作废了' },
+          { expectText: '抵扣成功' },
+          { shot: '07-抵扣成功', caption: '7. 抵扣成功：显示抵了多少、余额、订单号；这张会员码作废，这张单也不能再抵' },
         ],
         capture: false,
       },
       {
-        name: '07-码已用过',
-        caption: '7. 拿用过的会员码（比如截图）再扫：直接拦下，请顾客刷新会员码',
+        name: '08-码已用过',
+        caption: '8. 拿用过的会员码（比如截图）再扫：直接拦下，请顾客刷新会员码',
         route: 'staff/pages/index/index',
         storage: asClerk,
         scanResult: demo.usedCode,
         steps: [{ tap: '.scan-card' }, { wait: 400 }, { expectText: '这张会员码已经用过了' }],
       },
       {
-        name: '08-余额不足',
-        caption: '8. 余额不够时当场拦住，不会扣成负数',
+        name: '09-单已抵过',
+        caption: '9. 同一张小票再扫（换了会员、换了门店也一样）：说清楚哪天在哪家店抵了多少，不让再抵',
+        route: 'staff/pages/index/index',
+        storage: asClerk,
+        scanResult: wangShowsCodeThen(demo.redeemedOrder),
+        steps: [...scanBoth, { expectText: '这张单已经抵扣过了' }, { expectText: '在西湖店抵了 20.00 元' }],
+      },
+      {
+        name: '10-超过10%',
+        caption: '10. 手动改的抵扣金额超过商品金额的 10%：当场拦住',
+        route: 'staff/pages/index/index',
+        storage: asClerk,
+        scanResult: wangShowsCodeThen(demo.orders.over),
+        steps: [
+          ...scanBoth,
+          { fill: ['.product-input', '300'] },
+          { fill: ['.amount-input', '58'] },
+          { expectText: '这单最多只能抵 30.00 元（商品金额的 10%）' },
+        ],
+      },
+      {
+        name: '11-手输单号',
+        caption: '11. 条码扫不出来时照小票手输单号（只输数字就行），记录上会标「手输单号」方便对账',
         route: 'staff/pages/index/index',
         storage: asClerk,
         scanResult: wangShowsCode,
-        steps: [{ tap: '.scan-card' }, { wait: 400 }, { fill: ['.amount-input', '5000'] }, { expectText: '余额不足' }],
+        steps: [
+          { tap: '.scan-card' },
+          { wait: 400 },
+          { tap: '.type-order' },
+          { fill: ['.order-input', demo.orders.typed.slice(1)] },
+          { tap: '.order-ok' },
+          { wait: 400 },
+          { expectText: '手输单号' },
+          { fill: ['.product-input', '899'] },
+          { expectText: '最多可抵 89.90 元' },
+        ],
       },
       {
-        name: '09-查无此卡',
-        caption: '9. 查不到卡：直接为这个手机号开单',
+        name: '12-余额不足',
+        caption: '12. 抵扣金额超过余额时当场拦住，不会扣成负数',
+        route: 'staff/pages/index/index',
+        storage: asClerk,
+        scanResult: wangShowsCodeThen(demo.orders.short),
+        steps: [
+          ...scanBoth,
+          { fill: ['.product-input', '60000'] },
+          { fill: ['.amount-input', '5000'] },
+          { expectText: '余额不足' },
+        ],
+      },
+      {
+        name: '13-查无此卡',
+        caption: '13. 查不到卡：直接为这个手机号开单',
         route: 'staff/pages/index/index',
         storage: asClerk,
         steps: [
@@ -353,92 +433,93 @@ export default async function scenario() {
           { tap: '.search-btn' },
           { wait: 300 },
           { expectText: '没有找到' },
-          { shot: '09-查无此卡', caption: '9. 查不到卡：直接为这个手机号开单' },
+          { shot: '13-查无此卡', caption: '13. 查不到卡：直接为这个手机号开单' },
           { tap: '.result .btn-plain' },
           { wait: 300 },
           { fill: ['.field:nth-child(2) input', '赵女士'] },
           { expectText: '开单门店' },
-          { shot: '10-开单-输手机号', caption: '10. 开单第 1 步：手机号已带好，称呼选填，点「下一步」直接填权益' },
+          { shot: '14-开单-输手机号', caption: '14. 开单第 1 步：手机号已带好，称呼选填，点「下一步」直接填权益' },
           { tap: '.page > .btn-primary' },
           { wait: 400 },
           { expectText: '会员权益金额' },
           { expectText: '全场护理 9 折' },
           { fill: ['.amount-input', '1000'] },
           { expectText: '顾客签完合同后，1,000.00 元自动充值到会员余额' },
-          { shot: '11-开单-填权益', caption: '11. 第 2 步：权益第一项填「会员权益金额」，下面是这份权益单的其他权益' },
+          { shot: '15-开单-填权益', caption: '15. 第 2 步：权益第一项填「会员权益金额」，下面是这份权益单的其他权益' },
           { tap: '.page > .btn-primary' },
           { expectText: '顾客签完合同后才充值到账' },
-          { shot: '12-生成合同确认', caption: '12. 生成合同前再确认一次：给谁、哪份权益单、多少钱，签完才到账' },
+          { shot: '16-生成合同确认', caption: '16. 生成合同前再确认一次：给谁、哪份权益单、多少钱，签完才到账' },
           { tap: '.mp-modal-confirm' },
           { wait: 800 },
           { expectText: '请顾客用微信扫码签署合同' },
-          { shot: '13-请顾客扫码签', caption: '13. 第 3 步：弹出签署二维码，顾客用自己的微信扫码签合同；这时余额还没变' },
+          { shot: '17-请顾客扫码签', caption: '17. 第 3 步：弹出签署二维码，顾客用自己的微信扫码签合同；这时余额还没变' },
           { run: () => completeSigning(demo.newPhone) },
           { wait: 5000 },
           { expectText: '请顾客扫码登录小程序' },
-          { shot: '14-签完弹小程序码', caption: '14. 顾客一签完，自动充值到账，并弹出小程序码让顾客扫码登录（本机是演示码）' },
+          { shot: '18-签完弹小程序码', caption: '18. 顾客一签完，自动充值到账，并弹出小程序码让顾客扫码登录（本机是演示码）' },
           { tap: '.code-sheet .btn-primary' },
           { wait: 300 },
           { expectText: '合同已签，已充值到账' },
           { expectText: '1,000.00 元' },
-          { shot: '15-到账', caption: '15. 第 4 步：显示充了多少、现在余额多少；码关了还能再打开' },
+          { shot: '19-到账', caption: '19. 第 4 步：显示充了多少、现在余额多少；码关了还能再打开' },
         ],
         capture: false,
       },
       {
-        name: '16-会员页待签署',
-        caption: '16. 顾客当时没签也没关系：会员页能看到没签完的权益单，点「接着签」回到签署码',
+        name: '20-会员页待签署',
+        caption: '20. 顾客当时没签也没关系：会员页能看到没签完的权益单，点「接着签」回到签署码',
         route: `staff/pages/member/member?id=${demo.zhangId}`,
         storage: asClerk,
         steps: [{ wait: 400 }, { expectText: '待签署的权益单' }, { expectText: '会员权益金额 500.00 元' }],
       },
       {
-        name: '17-本店流水',
-        caption: '17. 本店流水：按天分组，可按时间和类型筛选',
+        name: '21-本店流水',
+        caption: '21. 本店流水：按天分组，可按时间和类型筛选，每笔抵扣带单号',
         route: 'staff/pages/ledger/ledger',
         storage: asClerk,
         steps: [{ wait: 300 }, { expectText: '今天共' }],
       },
       {
-        name: '18-店员看详情',
-        caption: '18. 店员看流水详情；记错了账要找店长冲正',
+        name: '22-店员看详情',
+        caption: '22. 店员看流水详情：带着九讯云订单号和商品金额；记错了账要找店长冲正',
         route: `staff/pages/ledger-detail/ledger-detail?id=${demo.mistakeId}`,
         storage: asClerk,
-        steps: [{ wait: 300 }, { expectText: '请联系店长冲正' }],
+        steps: [{ wait: 300 }, { expectText: '请联系店长冲正' }, { expectText: '九讯云订单' }, { expectText: '3,999.00' }],
       },
       {
-        name: '19-店长冲正',
-        caption: '19. 店长打开同一笔：可以冲正（补记一笔反方向的抵掉）',
+        name: '23-店长冲正',
+        caption: '23. 店长打开同一笔：可以冲正（补记一笔反方向的抵掉），冲正后这张单可以重新抵',
         route: `staff/pages/ledger-detail/ledger-detail?id=${demo.mistakeId}`,
         storage: asManager,
         steps: [
           { wait: 300 },
           { expectText: '冲正这笔' },
-          { shot: '19-店长冲正', caption: '19. 店长打开同一笔：可以冲正（补记一笔反方向的抵掉）' },
+          { expectText: '冲正后这张九讯云订单可以重新抵扣' },
+          { shot: '23-店长冲正', caption: '23. 店长打开同一笔：可以冲正（补记一笔反方向的抵掉），冲正后这张单可以重新抵' },
           { tap: '.btn-danger' },
           { fill: ['.mp-modal textarea', '多按了一个 8，实际消费 38 元'] },
-          { shot: '20-填写原因', caption: '20. 冲正必须写原因' },
+          { shot: '24-填写原因', caption: '24. 冲正必须写原因' },
           { tap: '.mp-modal-confirm' },
           { wait: 2000 },
           { expectText: '这笔已被冲正' },
-          { shot: '21-冲正完成', caption: '21. 冲正完成：原记录保留，标上「已冲正」' },
+          { shot: '25-冲正完成', caption: '25. 冲正完成：原记录保留，标上「已冲正」' },
           { tap: '.jump .row' },
           { wait: 400 },
           { expectText: '冲正 · 抵掉消费' },
-          { shot: '22-冲正记录', caption: '22. 补记的冲正记录：388 元退回余额' },
+          { shot: '26-冲正记录', caption: '26. 补记的冲正记录：388 元退回余额' },
         ],
         capture: false,
       },
       {
-        name: '23-我的',
-        caption: '23. 我的：当前门店、角色、切到我的会员卡、退出登录',
+        name: '27-我的',
+        caption: '27. 我的：当前门店、角色、切到我的会员卡、退出登录',
         route: 'staff/pages/mine/mine',
         storage: asClerk,
         steps: [{ wait: 300 }, { expectText: '李晓' }],
       },
       {
-        name: '24-切换门店',
-        caption: '24. 一人管多家店时切换门店，余额不受影响',
+        name: '28-切换门店',
+        caption: '28. 一人管多家店时切换门店，余额不受影响',
         route: 'staff/pages/mine/mine',
         storage: asClerk,
         steps: [{ wait: 300 }, { tap: '.list .row' }, { wait: 300 }, { expectText: '西湖店' }],

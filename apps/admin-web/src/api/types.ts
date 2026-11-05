@@ -123,6 +123,12 @@ export interface LedgerEntry {
   /** 冲正抵掉的是哪一类。不是冲正为空。 */
   reversalOfType: LedgerType | null;
   reversedById: string | null;
+  /** 消费抵扣的九讯云订单号（如 A5982）；冲正记录带的是原消费的单号。其他流水为空。 */
+  orderNo: string | null;
+  /** 这张单的商品应付金额（分），抵扣最多它的 10%。只有消费有。 */
+  productAmountCent: number | null;
+  /** 单号是店员手输的（条码扫不出来时）。只有消费有。 */
+  orderNoTyped: boolean | null;
   createdAt: string;
 }
 

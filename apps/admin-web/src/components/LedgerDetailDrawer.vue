@@ -15,6 +15,15 @@
         </a-descriptions-item>
         <a-descriptions-item label="时间">{{ formatDateTime(entry.createdAt) }}</a-descriptions-item>
         <a-descriptions-item label="门店">{{ entry.storeName }}</a-descriptions-item>
+        <a-descriptions-item v-if="entry.orderNo" label="九讯云订单">
+          <span class="order">{{ entry.orderNo }}</span>
+          <a-tag v-if="entry.orderNoTyped" color="orange" class="typed">手输单号</a-tag>
+          <div v-if="entry.type === 'REVERSAL'" class="muted">冲正后这张单已放开，可以重新抵扣</div>
+          <div v-else-if="entry.reversedById" class="muted">这笔已冲正，这张单可以重新抵扣</div>
+        </a-descriptions-item>
+        <a-descriptions-item v-if="entry.productAmountCent != null" label="商品应付">
+          <MoneyText :cent="entry.productAmountCent" /> 元（最多抵 {{ ORDER_OFFSET_PERCENT }}%）
+        </a-descriptions-item>
         <a-descriptions-item label="操作人">{{ entry.operatorName || '系统' }}</a-descriptions-item>
         <a-descriptions-item label="变动前余额"><MoneyText :cent="entry.balanceBefore" /> 元</a-descriptions-item>
         <a-descriptions-item label="变动后余额"><MoneyText :cent="entry.balanceAfter" /> 元</a-descriptions-item>
@@ -39,6 +48,7 @@ import { computed } from 'vue';
 import type { LedgerEntry } from '../api/types';
 import { useSessionStore } from '../stores/session';
 import { formatDateTime } from '../utils/datetime';
+import { ORDER_OFFSET_PERCENT } from '../utils/ledger';
 import { maskPhone } from '../utils/phone';
 import { canReverse } from '../utils/roles';
 import LedgerTypeTag from './LedgerTypeTag.vue';
@@ -69,6 +79,19 @@ const reversible = computed(() => (props.entry ? canReverse(session.roles, props
   font-size: 14px;
   font-weight: 400;
   color: #64748b;
+}
+
+.order {
+  font-variant-numeric: tabular-nums;
+}
+
+.typed {
+  margin-left: 6px;
+}
+
+.muted {
+  color: #64748b;
+  font-size: 12px;
 }
 
 .id {

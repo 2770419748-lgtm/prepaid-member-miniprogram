@@ -10,6 +10,8 @@ interface DemoMove {
   store: 0 | 1;
   daysAgo: number;
   remark: string;
+  /** 消费对应的九讯云订单（演示单号）和商品应付金额，抵扣不超过 10%。 */
+  order?: { no: string; productCent: number };
 }
 
 interface DemoMember {
@@ -26,8 +28,22 @@ const DEMO_MEMBERS: DemoMember[] = [
     name: '审核体验员',
     moves: [
       { type: 'RECHARGE', amountCent: 50000, store: 0, daysAgo: 6, remark: '演示数据：现金充值' },
-      { type: 'CONSUME', amountCent: 3800, store: 0, daysAgo: 3, remark: '演示数据：贴膜' },
-      { type: 'CONSUME', amountCent: 12900, store: 1, daysAgo: 1, remark: '演示数据：手机壳和数据线' },
+      {
+        type: 'CONSUME',
+        amountCent: 3800,
+        store: 0,
+        daysAgo: 3,
+        remark: '演示数据：买耳机抵扣',
+        order: { no: 'A1001', productCent: 39900 },
+      },
+      {
+        type: 'CONSUME',
+        amountCent: 12900,
+        store: 1,
+        daysAgo: 1,
+        remark: '演示数据：买平板抵扣',
+        order: { no: 'A1002', productCent: 129900 },
+      },
     ],
   },
   {
@@ -35,7 +51,14 @@ const DEMO_MEMBERS: DemoMember[] = [
     name: '王女士（演示）',
     moves: [
       { type: 'RECHARGE', amountCent: 100000, store: 0, daysAgo: 5, remark: '演示数据：转账充值' },
-      { type: 'CONSUME', amountCent: 26800, store: 0, daysAgo: 2, remark: '演示数据：蓝牙耳机' },
+      {
+        type: 'CONSUME',
+        amountCent: 26800,
+        store: 0,
+        daysAgo: 2,
+        remark: '演示数据：买手机抵扣',
+        order: { no: 'A1003', productCent: 299900 },
+      },
     ],
   },
   {
@@ -43,7 +66,14 @@ const DEMO_MEMBERS: DemoMember[] = [
     name: '李先生（演示）',
     moves: [
       { type: 'RECHARGE', amountCent: 30000, store: 1, daysAgo: 4, remark: '演示数据：现金充值' },
-      { type: 'CONSUME', amountCent: 4500, store: 1, daysAgo: 1, remark: '演示数据：钢化膜' },
+      {
+        type: 'CONSUME',
+        amountCent: 4500,
+        store: 1,
+        daysAgo: 1,
+        remark: '演示数据：买手表抵扣',
+        order: { no: 'A1004', productCent: 49900 },
+      },
     ],
   },
   {
@@ -107,7 +137,7 @@ export async function createReviewDemoOrg(tx: Tx, realOrgId: string, now: Date):
     for (const move of demo.moves) {
       const before = balance;
       balance = move.type === 'RECHARGE' ? balance + move.amountCent : balance - move.amountCent;
-      await tx.ledgerEntry.create({
+      const entry = await tx.ledgerEntry.create({
         data: {
           orgId: org.id,
           memberId: member.id,
@@ -119,9 +149,16 @@ export async function createReviewDemoOrg(tx: Tx, realOrgId: string, now: Date):
           balanceBefore: before,
           balanceAfter: balance,
           remark: move.remark,
+          ...(move.order
+            ? { orderNo: move.order.no, productAmountCent: move.order.productCent, orderNoTyped: false }
+            : {}),
           createdAt: new Date(now.getTime() - move.daysAgo * DAY_MS),
         },
       });
+      if (move.order) {
+        // 和正式扣款一样占住这张单：审核员拿同一个单号再抵会被拦下。
+        await tx.orderRedemption.create({ data: { orgId: org.id, orderNo: move.order.no, consumeEntryId: entry.id } });
+      }
     }
     await tx.wallet.update({
       where: { id: wallet.id },

@@ -39,6 +39,13 @@ export function describeAuditPayload(payload: Record<string, unknown> | null, st
   if (typeof p.balanceBefore === 'number' && typeof p.balanceAfter === 'number') {
     lines.push(`余额 ${formatCent(p.balanceBefore)} → ${formatCent(p.balanceAfter)} 元`);
   }
+  // 消费抵扣的收银订单：单号、商品应付金额，手输的标出来。
+  if (typeof p.orderNo === 'string') {
+    lines.push(`九讯云订单 ${p.orderNo}${p.orderNoTyped === true ? '（手输单号）' : ''}`);
+  }
+  if (typeof p.productAmountCent === 'number') {
+    lines.push(`商品应付 ${formatCent(p.productAmountCent)} 元`);
+  }
   // 改会员资料时新旧都记了：称呼、手机号写成「旧 → 新」。
   const renamed = 'previousName' in p;
   if (renamed) {
