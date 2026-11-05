@@ -11,8 +11,18 @@
     <template v-else-if="member">
       <MemberCardPanel :member="member" full-phone>
         <template v-if="member.hasCard && member.status === 'ACTIVE'">
-          <a-button type="primary" @click="router.push({ name: 'recharge', query: { memberId: member.id } })">充值</a-button>
-          <a-button @click="router.push({ name: 'sign-flows', query: { memberId: member.id, start: '1' } })">
+          <!-- 直接充值只给店长和超级管理员补录；店员给会员充值就是发起权益单。 -->
+          <a-button
+            v-if="session.canRecharge"
+            type="primary"
+            @click="router.push({ name: 'recharge', query: { memberId: member.id } })"
+          >
+            充值
+          </a-button>
+          <a-button
+            :type="session.canRecharge ? 'default' : 'primary'"
+            @click="router.push({ name: 'sign-flows', query: { memberId: member.id, start: '1' } })"
+          >
             发起权益单
           </a-button>
         </template>

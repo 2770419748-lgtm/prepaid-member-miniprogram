@@ -10,8 +10,19 @@
           <div>会员用这个手机号登录小程序，就能看到余额和明细。</div>
         </template>
         <template #extra>
-          <a-button type="primary" @click="router.push({ name: 'recharge', query: { memberId: created.id } })">
+          <a-button
+            v-if="session.canRecharge"
+            type="primary"
+            @click="router.push({ name: 'recharge', query: { memberId: created.id } })"
+          >
             去充值
+          </a-button>
+          <a-button
+            v-else
+            type="primary"
+            @click="router.push({ name: 'sign-flows', query: { memberId: created.id, start: '1' } })"
+          >
+            发起权益单
           </a-button>
           <a-button @click="router.push({ name: 'member-detail', params: { id: created.id } })">查看会员</a-button>
           <a-button @click="reset">继续开卡</a-button>
@@ -41,7 +52,8 @@
           <template v-if="existing" #description>
             <router-link :to="{ name: 'member-detail', params: { id: existing.id } }">查看这位会员</router-link>
             ，或直接
-            <router-link :to="{ name: 'recharge', query: { memberId: existing.id } }">给他充值</router-link>
+            <router-link v-if="session.canRecharge" :to="{ name: 'recharge', query: { memberId: existing.id } }">给他充值</router-link>
+            <router-link v-else :to="{ name: 'sign-flows', query: { memberId: existing.id, start: '1' } }">给他发起权益单</router-link>
           </template>
         </a-alert>
         <a-button type="primary" size="large" html-type="submit">开卡</a-button>

@@ -52,6 +52,11 @@ export function canRefundAt(roles: readonly RoleClaim[], storeId: string): boole
   return canManageStore(roles, storeId);
 }
 
+/** 直接充值（不经开单，补录线下已收的款）：超级管理员在任一门店，店长只在自己管的门店。店员只能走开单。和后端一致。 */
+export function canRechargeAt(roles: readonly RoleClaim[], storeId: string): boolean {
+  return canManageStore(roles, storeId);
+}
+
 /** 冲正：超级管理员，或流水所在门店的店长。冲正流水本身和已冲正过的不能再冲。 */
 export function canReverse(
   roles: readonly RoleClaim[],

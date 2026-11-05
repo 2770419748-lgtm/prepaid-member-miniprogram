@@ -109,6 +109,15 @@ function requestShape(movement: Movement) {
   };
 }
 
+const DIRECT_RECHARGE_FORBIDDEN = '直接充值只有店长和超级管理员能做，店员给会员充值请走开单';
+
+/** 直接充值、退余额：超级管理员在任一门店，店长只在自己管的门店。 */
+function canManageMoneyAt(actor: AccessPrincipal, storeId: string): boolean {
+  return (
+    isSuperAdmin(actor.roles) || actor.roles.some((role) => role.storeId === storeId && role.role === 'STORE_MANAGER')
+  );
+}
+
 function pause(attempt: number): Promise<void> {
   const ms = Math.floor(Math.random() * 15 * attempt) + 1;
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -129,7 +138,15 @@ export class WalletService {
     private readonly orders: OrderRedemptionService,
   ) {}
 
-  recharge(actor: AccessPrincipal, memberId: string, dto: MoneyMoveDto): Promise<MoveResult> {
+  /**
+   * 直接充值（不经开单）：只给超级管理员（任一门店）和这家门店的店长，用来补录线下已收款的充值。
+   * 店员给会员充值只能走开单，顾客签完协议才到账（见 creditSignedContract），免得店员随手给任何人、包括自己的卡记账。
+   */
+  async recharge(actor: AccessPrincipal, memberId: string, dto: MoneyMoveDto): Promise<MoveResult> {
+    assertStoreAccess(actor.roles, dto.storeId);
+    if (!canManageMoneyAt(actor, dto.storeId)) {
+      throw new ForbiddenException(DIRECT_RECHARGE_FORBIDDEN);
+    }
     return this.move(actor, memberId, dto, LedgerType.RECHARGE, 1, null, null);
   }
 
@@ -189,10 +206,7 @@ export class WalletService {
    * 停用的会员也能退（先停用、再退余额是常见做法）；门店要在营。记错了可以冲正，钱加回余额。
    */
   async refund(actor: AccessPrincipal, memberId: string, dto: RefundDto): Promise<MoveResult> {
-    const canRefund =
-      isSuperAdmin(actor.roles) ||
-      actor.roles.some((role) => role.storeId === dto.storeId && role.role === 'STORE_MANAGER');
-    if (!canRefund) {
+    if (!canManageMoneyAt(actor, dto.storeId)) {
       throw new ForbiddenException('只有超级管理员或本店店长可以退余额');
     }
     const sameRequest = { memberId, type: LedgerType.REFUND, amountCent: dto.amountCent, storeId: dto.storeId };

@@ -25,8 +25,9 @@
     </block>
     <text wx:elif="{{noStore}}" class="notice notice-warning">你所在的门店都已停用，暂时不能记账。</text>
     <block wx:else>
+      <!-- 直接充值只给店长和超级管理员补录；店员给会员充值走下面的「办理权益单」。 -->
       <view class="btn-row">
-        <view class="btn btn-plain" hover-class="is-pressed" bindtap="onRecharge">充值</view>
+        <view wx:if="{{canRecharge}}" class="btn btn-plain" hover-class="is-pressed" bindtap="onRecharge">充值</view>
         <view class="btn btn-primary" hover-class="is-pressed" bindtap="onConsume">扫码消费</view>
       </view>
       <text class="hint consume-hint">消费要先扫顾客小程序里的会员码</text>

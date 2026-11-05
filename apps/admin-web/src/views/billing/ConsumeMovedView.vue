@@ -8,7 +8,7 @@
         </template>
         <template #extra>
           <a-button type="primary" @click="router.push({ name: 'ledger', query: { type: 'CONSUME' } })">查看消费流水</a-button>
-          <a-button @click="router.push({ name: 'recharge' })">去充值记账</a-button>
+          <a-button v-if="session.canRecharge" @click="router.push({ name: 'recharge' })">去充值记账</a-button>
         </template>
       </a-result>
     </a-card>
@@ -17,8 +17,10 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
+import { useSessionStore } from '../../stores/session';
 
 const router = useRouter();
+const session = useSessionStore();
 </script>
 
 <style scoped>

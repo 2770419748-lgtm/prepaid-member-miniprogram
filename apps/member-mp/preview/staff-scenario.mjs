@@ -209,20 +209,22 @@ async function setup() {
   const manager = await staffLogin(MANAGER.phone);
   const token = clerk.login.accessToken;
 
+  // 直接充值只有店长和超级管理员能做（补录）；店员给会员充值走开单。
+  const managerToken = manager.login.accessToken;
   const wang = await ensureMember(token, binjiang, MEMBERS.wang);
   if (wang.fresh) {
-    await move(token, wang.member.id, 'recharge', binjiang, 1000, '现金');
+    await move(managerToken, wang.member.id, 'recharge', binjiang, 1000, '现金');
     await consume(token, { ...wang.member, ...MEMBERS.wang }, binjiang, 168, 1999, '买手机抵扣');
     await consume(token, { ...wang.member, ...MEMBERS.wang }, binjiang, 45.5, 499);
   }
   const zhang = await ensureMember(token, xihu, MEMBERS.zhang);
   if (zhang.fresh) {
-    await move(token, zhang.member.id, 'recharge', xihu, 500, '转账');
+    await move(admin, zhang.member.id, 'recharge', xihu, 500, '转账');
     await consume(token, { ...zhang.member, ...MEMBERS.zhang }, binjiang, 120, 1299);
   }
   const liu = await ensureMember(token, binjiang, MEMBERS.liu);
   if (liu.fresh) {
-    await move(token, liu.member.id, 'recharge', binjiang, 2000, '现金');
+    await move(managerToken, liu.member.id, 'recharge', binjiang, 2000, '现金');
   }
   // 张先生有一份还没签的权益单：店员在会员页能接着打开。
   const zhangPending = await call('GET', `/sign-flows?memberId=${zhang.member.id}&status=PENDING&pageSize=1`, { token });
@@ -320,7 +322,7 @@ export default async function scenario() {
       },
       {
         name: '03-会员余额',
-        caption: '3. 查到会员：能看余额、能充值；消费按钮是「扫码消费」，不扫顾客的会员码扣不了款',
+        caption: '3. 查到会员：能看余额；消费按钮是「扫码消费」，不扫顾客的会员码扣不了款；店员充值走「办理权益单」',
         route: 'staff/pages/index/index',
         storage: asClerk,
         steps: [

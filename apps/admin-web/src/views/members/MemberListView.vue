@@ -56,7 +56,7 @@
               <a-button type="link" size="small" @click="router.push({ name: 'member-detail', params: { id: record.id } })">
                 详情
               </a-button>
-              <template v-if="record.hasCard && record.status === 'ACTIVE'">
+              <template v-if="session.canRecharge && record.hasCard && record.status === 'ACTIVE'">
                 <a-button type="link" size="small" @click="router.push({ name: 'recharge', query: { memberId: record.id } })">
                   充值
                 </a-button>
