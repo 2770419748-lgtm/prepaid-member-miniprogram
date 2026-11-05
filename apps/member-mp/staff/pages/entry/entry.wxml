@@ -88,7 +88,7 @@
         </view>
         <text wx:if="{{productError}}" class="error">{{productError}}</text>
         <text wx:elif="{{capText}}" class="hint cap">{{capText}}</text>
-        <text wx:else class="hint cap">只算能用储值抵扣的商品，最多抵 10%</text>
+        <text wx:else class="hint cap">只算能抵扣的商品；最多抵 10%，一单最多 1000 元</text>
         <text class="field-label offset-label">本次抵扣（元）</text>
       </block>
       <text wx:else class="field-label">{{kindLabel}}金额（元）</text>

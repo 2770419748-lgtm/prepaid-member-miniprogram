@@ -1,3 +1,5 @@
+import { formatYuan } from '../common/money-words';
+
 /**
  * 收银系统（九讯云）订单号。小票上印「单号：5982」，订单条码（Code 128）里是「A5982」。
  * 店员扫码读到的、手输的（带不带 A、带不带前导 0、大小写）都整理成同一种写法，同一张单才认得出是同一张。
@@ -25,6 +27,18 @@ export function normalizeOrderNo(raw: string): string | null {
 /** 一笔消费最多能抵商品应付金额的 10%，向下取整到分。 */
 export const ORDER_OFFSET_PERCENT = 10;
 
+/** 一张订单最多抵 1000 元（坤总 2026-11-05）。和迁移里的 CHECK 约束一致，改它要连迁移一起改。 */
+export const ORDER_OFFSET_MAX_CENT = 100_000;
+
+/** 这张单最多能抵多少：商品应付金额的 10%（向下取整到分），且不超过 1000 元。 */
 export function maxOffsetCent(productAmountCent: number): number {
-  return Math.floor((productAmountCent * ORDER_OFFSET_PERCENT) / 100);
+  return Math.min(Math.floor((productAmountCent * ORDER_OFFSET_PERCENT) / 100), ORDER_OFFSET_MAX_CENT);
+}
+
+/** 抵扣超过上限时给店员看的提示：说清楚是被 10% 还是被 1000 元卡住。 */
+export function offsetCapMessage(productAmountCent: number): string {
+  const cap = maxOffsetCent(productAmountCent);
+  return cap >= ORDER_OFFSET_MAX_CENT
+    ? `这单最多只能抵 ${formatYuan(cap)} 元（一张单最多抵 ${formatYuan(ORDER_OFFSET_MAX_CENT)} 元）`
+    : `这单最多只能抵 ${formatYuan(cap)} 元（商品金额 ${formatYuan(productAmountCent)} 元的 ${ORDER_OFFSET_PERCENT}%）`;
 }

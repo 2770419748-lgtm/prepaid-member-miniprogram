@@ -37,7 +37,7 @@
       </view>
       <view wx:if="{{detail.productText}}" class="row">
         <text class="row-label">商品金额</text>
-        <text class="row-value">{{detail.productText}} 元（最多抵 10%）</text>
+        <text class="row-value">{{detail.productText}} 元（最多抵 10%，一单最多 1,000 元）</text>
       </view>
       <view class="row">
         <text class="row-label">时间</text>

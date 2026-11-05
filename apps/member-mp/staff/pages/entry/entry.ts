@@ -6,7 +6,7 @@ import { formatCent, formatChange, parseYuanToCent } from '../../utils/money';
 import { needsRescan, untilText, validUntilText } from '../../utils/paycode';
 import { maskPhone } from '../../utils/phone';
 import { newRequestId } from '../../utils/request-id';
-import { defaultOffsetCent, maxOffsetCent, OFFSET_PERCENT } from '../../utils/sale-order';
+import { defaultOffsetCent, maxOffsetCent, offsetCapReason } from '../../utils/sale-order';
 import { scanMemberCode, scanSaleOrder, useTypedOrder } from '../../utils/scan';
 import { currentStore, rememberMember, requireSession } from '../../utils/session';
 import { formatDateTime } from '../../utils/time';
@@ -262,7 +262,7 @@ Page({
     const capText =
       cap > balanceCent
         ? `余额只有 ${balance} 元，最多抵 ${balance} 元`
-        : `最多可抵 ${formatCent(cap)} 元（商品金额的 ${OFFSET_PERCENT}%）`;
+        : `最多可抵 ${formatCent(cap)} 元（${offsetCapReason(productParsed.cent)}）`;
     if (!amount.trim()) {
       this.setData({ ...reset, capText });
       return null;
@@ -276,7 +276,7 @@ Page({
       this.setData({
         ...reset,
         capText,
-        amountError: `这单最多只能抵 ${formatCent(cap)} 元（商品金额的 ${OFFSET_PERCENT}%）`,
+        amountError: `这单最多只能抵 ${formatCent(cap)} 元（${offsetCapReason(productParsed.cent)}）`,
       });
       return null;
     }

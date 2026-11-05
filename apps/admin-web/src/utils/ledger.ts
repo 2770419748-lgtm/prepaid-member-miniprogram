@@ -18,6 +18,9 @@ export const LEDGER_TYPE_OPTIONS = (Object.keys(LEDGER_TYPE_LABEL) as LedgerType
 /** 消费最多抵商品应付金额的 10%，和服务端一致。 */
 export const ORDER_OFFSET_PERCENT = 10;
 
+/** 一张单最多抵 1000 元（坤总 2026-11-05），和服务端一致。 */
+export const ORDER_OFFSET_MAX_CENT = 100_000;
+
 /**
  * 九讯云订单号整理成和服务端一样的写法：A + 不以 0 开头的数字。
  * 小票上印「单号：5982」，条码里是「A5982」，两种都认。不是单号返回 null。

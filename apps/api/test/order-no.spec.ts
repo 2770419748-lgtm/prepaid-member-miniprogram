@@ -1,4 +1,10 @@
-import { maxOffsetCent, normalizeOrderNo, ORDER_NO_INPUT_PATTERN, ORDER_NO_PATTERN } from '../src/wallet/order-no';
+import {
+  maxOffsetCent,
+  normalizeOrderNo,
+  offsetCapMessage,
+  ORDER_NO_INPUT_PATTERN,
+  ORDER_NO_PATTERN,
+} from '../src/wallet/order-no';
 
 describe('order number', () => {
   it('reads the receipt barcode and the number typed from the receipt as the same order', () => {
@@ -27,6 +33,14 @@ describe('order number', () => {
     expect(maxOffsetCent(239_900)).toBe(23_990);
     expect(maxOffsetCent(239_909)).toBe(23_990);
     expect(maxOffsetCent(9)).toBe(0);
-    expect(maxOffsetCent(100_000_000)).toBe(10_000_000);
+  });
+
+  it('caps one order at 1000 yuan, and says which limit was hit', () => {
+    expect(maxOffsetCent(999_999)).toBe(99_999);
+    expect(maxOffsetCent(1_000_000)).toBe(100_000);
+    expect(maxOffsetCent(1_599_900)).toBe(100_000);
+    expect(maxOffsetCent(100_000_000)).toBe(100_000);
+    expect(offsetCapMessage(239_900)).toBe('这单最多只能抵 239.90 元（商品金额 2,399.00 元的 10%）');
+    expect(offsetCapMessage(1_599_900)).toBe('这单最多只能抵 1,000.00 元（一张单最多抵 1,000.00 元）');
   });
 });

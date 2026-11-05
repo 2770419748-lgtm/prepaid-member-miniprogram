@@ -1,6 +1,6 @@
 /**
  * 消费抵扣对应的收银订单（九讯云小票）。坤总 2026-11-05：店员扫完会员码再扫订单码，
- * 填商品应付金额，最多抵 10%；同一张单全公司只能抵一次。规则见 docs/backend/order-offset.md。
+ * 填商品应付金额，最多抵 10%、一张单最多 1000 元；同一张单全公司只能抵一次。规则见 docs/backend/order-offset.md。
  *
  * 小票上印「单号：5982」，上方订单条码（Code 128）里是「A5982」。
  * 扫码只认 A 开头的条码；手输可以只输数字。整理成和服务端一样的写法（A + 不以 0 开头的数字）。
@@ -44,9 +44,17 @@ export function readTypedOrder(input: string): ReadOrder {
   return orderNo ? { ok: true, orderNo } : { ok: false, reason: '单号只能是数字，照小票上「单号」那一行输入' };
 }
 
-/** 最多能抵多少：商品应付金额的 10%，向下取整到分。 */
+/** 一张单最多抵 1000 元（坤总 2026-11-05），和服务端一致。 */
+export const OFFSET_MAX_CENT = 100_000;
+
+/** 最多能抵多少：商品应付金额的 10%（向下取整到分），且不超过 1000 元。 */
 export function maxOffsetCent(productAmountCent: number): number {
-  return Math.floor((productAmountCent * OFFSET_PERCENT) / 100);
+  return Math.min(Math.floor((productAmountCent * OFFSET_PERCENT) / 100), OFFSET_MAX_CENT);
+}
+
+/** 上限是被哪条卡住的，写在「最多可抵」后面的括号里。 */
+export function offsetCapReason(productAmountCent: number): string {
+  return maxOffsetCent(productAmountCent) >= OFFSET_MAX_CENT ? '一张单最多抵 1,000 元' : `商品金额的 ${OFFSET_PERCENT}%`;
 }
 
 /** 默认抵多少：能抵满就抵满，余额不够就抵余额。 */

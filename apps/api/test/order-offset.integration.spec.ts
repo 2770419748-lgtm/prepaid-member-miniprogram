@@ -189,6 +189,21 @@ describe('order offset', () => {
     expect(ok.status).toBe(201);
   });
 
+  it('caps one order at 1000 yuan even when 10% of it is more', async () => {
+    const memberId = await memberWithBalance(300_000);
+    const payCode = await scanPayCode(app, orgId, tokens.clerkA, memberId, storeA);
+    const orderNo = freshOrder();
+    // 15,999 元的单，10% 是 1,599.90 元，只能抵 1,000 元。
+    const order = { storeId: storeA, orderNo, productAmountCent: 1_599_900, payCode };
+    const over = await consume(tokens.clerkA, memberId, { ...order, amountCent: 100_001 });
+    expect(over.status).toBe(400);
+    expect(messageOf(over.body)).toBe('这单最多只能抵 1,000.00 元（一张单最多抵 1,000.00 元）');
+    expect(await balanceOf(memberId)).toBe(300_000);
+    const ok = await consume(tokens.clerkA, memberId, { ...order, amountCent: 100_000 });
+    expect(ok.status).toBe(201);
+    expect(await balanceOf(memberId)).toBe(200_000);
+  });
+
   it('requires an order number and a product amount, and only accepts order numbers', async () => {
     const memberId = await memberWithBalance(10_000);
     const missing = await consume(tokens.clerkA, memberId, { storeId: storeA, amountCent: 100 });
@@ -349,7 +364,7 @@ describe('order offset', () => {
     expect(await balanceOf(memberId)).toBe(9_700);
   });
 
-  it('keeps the database honest: no order on recharges, no deducting over 10%, no deleting or rewriting redemptions', async () => {
+  it('keeps the database honest: no order on recharges, no deducting over 10% or 1000 yuan, no deleting or rewriting redemptions', async () => {
     const memberId = await memberWithBalance(10_000);
     const orderNo = freshOrder();
     const spent = await consume(tokens.clerkA, memberId, { storeId: storeA, amountCent: 100, orderNo, productAmountCent: 1_000 });
@@ -388,6 +403,21 @@ describe('order offset', () => {
         },
       }),
     ).rejects.toThrow(/ledger_entries_order_fields/);
+    // 10% 够了，但一张单最多 1000 元。
+    await expect(
+      prisma.ledgerEntry.create({
+        data: {
+          ...base,
+          type: 'CONSUME',
+          amountCent: 100_001,
+          balanceBefore: 200_000,
+          balanceAfter: 99_999,
+          orderNo: freshOrder(),
+          productAmountCent: 2_000_000,
+          orderNoTyped: false,
+        },
+      }),
+    ).rejects.toThrow(/ledger_entries_order_offset_cap/);
 
     const row = await prisma.orderRedemption.findFirstOrThrow({ where: { orgId, orderNo } });
     await expect(prisma.orderRedemption.delete({ where: { id: row.id } })).rejects.toThrow(/not allowed/);
