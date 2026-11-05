@@ -35,6 +35,7 @@
       <view class="sign-tags">
         <text class="tag tag-{{detail.tone}}">{{detail.statusText}}</text>
         <text wx:if="{{detail.sandbox}}" class="tag tag-test">测试签署</text>
+        <text wx:if="{{detail.paper}}" class="tag tag-muted">纸质协议单</text>
       </view>
       <view class="sign-time">{{detail.timeLabel}} {{detail.timeText}}</view>
     </view>
@@ -48,6 +49,21 @@
       <view class="amount-note">{{detail.amountNote}}</view>
     </view>
 
+    <view wx:if="{{detail.paper}}" class="card">
+      <view class="card-title">协议单照片</view>
+      <view wx:if="{{photoError}}" class="photo-error">
+        <text>{{photoError}}</text>
+        <text class="retry" bindtap="retryPhotos">重新加载</text>
+      </view>
+      <view wx:else class="photo-grid">
+        <view wx:for="{{detail.photoIds}}" wx:key="*this" class="photo-cell">
+          <image wx:if="{{photoPaths[index]}}" class="photo" src="{{photoPaths[index]}}" mode="aspectFill" data-index="{{index}}" bindtap="previewPhoto"></image>
+          <view wx:else class="photo photo-wait"></view>
+        </view>
+      </view>
+      <view class="photo-hint">点照片可以放大看。照片只有您本人和办理的门店能看到。</view>
+    </view>
+
     <view wx:if="{{detail.hasPlan}}" class="card">
       <view class="card-title">{{detail.planTitle}}</view>
       <view wx:if="{{detail.summary}}" class="plan-summary">{{detail.summary}}</view>
@@ -59,7 +75,7 @@
         </view>
       </view>
     </view>
-    <view wx:else class="card plan-missing">这份权益单的具体内容，以签署页面上的为准。</view>
+    <view wx:else class="card plan-missing">{{detail.paper ? '具体权益以您签字的协议单为准。' : '这份权益单的具体内容，以签署页面上的为准。'}}</view>
 
     <view wx:if="{{detail.ruleLines.length > 0}}" class="card">
       <view class="card-title">使用规则</view>

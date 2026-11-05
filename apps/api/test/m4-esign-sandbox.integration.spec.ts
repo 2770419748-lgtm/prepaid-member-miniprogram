@@ -111,6 +111,8 @@ describe('M4 esign sandbox', () => {
     process.env.WECHAT_STAFF_SECRET = 'test-staff-secret';
     process.env.WECHAT_PHONE_MOCK = 'false';
     process.env.ESIGN_PRODUCTION_ENABLED = 'false';
+    // 2026-11-05 起开单默认上传纸质协议单；这里测的是保留下来的电子签。
+    process.env.SIGN_MODE = 'esign';
     process.env.ESIGN_API_HOST = fake.baseUrl;
     process.env.ESIGN_APP_ID = fake.appId;
     process.env.ESIGN_APP_SECRET = fake.secret;

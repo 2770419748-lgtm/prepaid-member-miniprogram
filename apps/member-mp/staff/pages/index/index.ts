@@ -1,8 +1,8 @@
-import { fetchMyStores, findMemberByPhone } from '../../utils/api';
+import { fetchMyStores, fetchSignConfig, findMemberByPhone } from '../../utils/api';
 import { messageOf } from '../../utils/errors';
 import { ROLE_LABELS } from '../../utils/labels';
 import { memberLabel } from '../../utils/ledger';
-import { orderUrl } from '../../utils/order';
+import { ORDER_TEXT, orderUrl, readSignMode, SIGN_MODE_KEY } from '../../utils/order';
 import { consumeEntryUrl } from '../../utils/paycode';
 import { isMainlandMobile, maskPhone, normalizePhone } from '../../utils/phone';
 import { scanMemberCode } from '../../utils/scan';
@@ -35,6 +35,7 @@ Page({
     result: null as SearchResult | null,
     recent: [] as { id: string; label: string }[],
     switching: false,
+    orderText: ORDER_TEXT.PAPER.entry,
   },
 
   onShow() {
@@ -44,6 +45,14 @@ Page({
       return;
     }
     this.render(session);
+    this.showOrderText(readSignMode(wx.getStorageSync(SIGN_MODE_KEY)));
+    // 开单方式（纸质协议单 / 电子签）由服务端开关决定，顺手取一次记在本机。
+    fetchSignConfig()
+      .then((config) => {
+        wx.setStorageSync(SIGN_MODE_KEY, config.mode);
+        this.showOrderText(config.mode);
+      })
+      .catch(() => undefined);
     // 门店可能被停用或调整过角色，回到工作台时顺手刷新，失败不打扰。
     fetchMyStores()
       .then((access) => {
@@ -53,6 +62,10 @@ Page({
         }
       })
       .catch(() => undefined);
+  },
+
+  showOrderText(mode: 'PAPER' | 'ESIGN') {
+    this.setData({ orderText: ORDER_TEXT[mode].entry });
   },
 
   onHide() {
@@ -124,7 +137,7 @@ Page({
     }
   },
 
-  /** 开单：输手机号、填会员权益金额、顾客签合同，签完自动充值。 */
+  /** 开单：输手机号、填会员权益金额、上传顾客签字的协议单（电子签开关打开时是顾客扫码签合同），然后充值到账。 */
   onOrder() {
     wx.navigateTo({ url: orderUrl() });
   },

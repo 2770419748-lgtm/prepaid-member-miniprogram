@@ -154,3 +154,49 @@
   font-size: 26rpx;
   color: #1677ff;
 }
+
+/* 纸质协议单照片：一行三张 */
+.photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 8rpx -8rpx 0;
+}
+
+.photo-cell {
+  width: calc((100% - 48rpx) / 3);
+  height: 250rpx;
+  margin: 0 8rpx 16rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+.photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.photo-wait {
+  background: #f1f5f9;
+}
+
+.photo-hint {
+  font-size: 24rpx;
+  color: var(--text-3, #94a3b8);
+  line-height: 1.6;
+}
+
+.photo-error {
+  display: flex;
+  justify-content: space-between;
+  font-size: 26rpx;
+  color: var(--text-2, #475569);
+  padding: 16rpx 0;
+}
+
+.photo-error .retry {
+  flex: none;
+  margin-left: 24rpx;
+  color: #1677ff;
+}

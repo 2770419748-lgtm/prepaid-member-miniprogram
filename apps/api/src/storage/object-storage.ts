@@ -1,12 +1,12 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
-import { mkdir, readFile, rename, writeFile } from 'fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'path';
 
 /**
- * 对象存储：只放合同 PDF 这类文件，库里只记 key。
+ * 对象存储：放合同 PDF、纸质协议单照片这类文件，库里只记 key。Bucket 必须是私有的，文件只经接口（带登录）读取。
  * 配了 S3_ENDPOINT + S3_BUCKET 走 S3 / MinIO；没配就落本机目录（只用于开发和测试）。
  */
 export abstract class ObjectStorage {
@@ -14,6 +14,8 @@ export abstract class ObjectStorage {
   abstract put(key: string, body: Buffer, contentType: string): Promise<void>;
   /** 不存在返回 null。 */
   abstract get(key: string): Promise<Buffer | null>;
+  /** 删掉一个文件。本来就不存在也算成功。 */
+  abstract delete(key: string): Promise<void>;
 }
 
 const KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9/_.-]{0,255}$/;
@@ -51,6 +53,10 @@ export class LocalObjectStorage extends ObjectStorage {
       }
       throw error;
     }
+  }
+
+  async delete(key: string): Promise<void> {
+    await rm(this.pathOf(key), { force: true });
   }
 
   private pathOf(key: string): string {
@@ -96,6 +102,12 @@ export class S3ObjectStorage extends ObjectStorage {
       }
       throw error;
     }
+  }
+
+  async delete(key: string): Promise<void> {
+    assertObjectKey(key);
+    // S3 删不存在的对象也返回成功。
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 }
 

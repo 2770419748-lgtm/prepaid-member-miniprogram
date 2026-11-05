@@ -148,15 +148,39 @@ export interface ContractTemplate {
   benefitPlan: { id: string; title: string } | null;
 }
 
-/** 一份权益单（合同）的签署。字段与 docs/backend/m4-esign-sandbox.md 一致。 */
+/** 开单怎么签：PAPER 上传顾客签字的纸质协议单（2026-11-05 起默认），ESIGN 电子签。 */
+export type SignMode = 'PAPER' | 'ESIGN';
+
+export interface SignConfig {
+  mode: SignMode;
+  /** 一份协议单最多几张照片。 */
+  maxPhotos: number;
+  /** 一张照片最大多少字节。 */
+  maxPhotoBytes: number;
+}
+
+/** 刚传上去、还没交单的一张协议单照片。 */
+export interface UploadedPhoto {
+  id: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+/**
+ * 一份权益单。kind=PAPER 是纸质协议单（照片在 photos 里，交单即已签署并充值），ESIGN 是电子签。
+ * 字段与 docs/backend/paper-agreement.md、m4-esign-sandbox.md 一致。
+ */
 export interface SignFlow {
   id: string;
   title: string;
+  kind: 'ESIGN' | 'PAPER';
   status: SignFlowStatus;
-  /** SANDBOX 是测试签署。 */
   env: 'SANDBOX' | 'PRODUCTION';
+  /** 电子签沙箱，界面标「测试签署」。纸质协议单永远是 false。 */
+  sandbox: boolean;
   member: { id: string; phone: string; name: string | null };
-  template: { id: string; name: string };
+  /** 电子签模板。纸质协议单为空。 */
+  template: { id: string; name: string } | null;
   benefitPlan: { id: string; title: string } | null;
   store: { id: string; name: string } | null;
   initiator: { id: string; name: string } | null;
@@ -166,7 +190,11 @@ export interface SignFlow {
   rechargeAmountCent: number | null;
   /** 签完后自动记的那笔充值。签了还没充上时为空。 */
   rechargeEntryId: string | null;
+  /** 那笔充值后来被冲正了。 */
+  rechargeReversed: boolean;
   hasPdf: boolean;
+  /** 纸质协议单的照片（没删的）。 */
+  photos: { id: string; createdAt: string }[];
   signedAt: string | null;
   createdAt: string;
   updatedAt: string;

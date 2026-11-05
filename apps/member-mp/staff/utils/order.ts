@@ -1,17 +1,26 @@
-import type { MyStoresResult, SignFlow, SignFlowStatus } from './types';
+import type { MyStoresResult, SignConfig, SignFlow, SignFlowStatus, SignMode } from './types';
 
 /**
- * 开单一条龙：输顾客手机号 → 填会员权益金额、选权益单 → 顾客扫码签合同 → 签完自动充值到账 → 顾客扫会员小程序码登录。
- * 坤总 2026-10-29 定：签完合同才到账，生成合同时不动余额。
+ * 开单一条龙：输顾客手机号 → 填会员权益金额、选权益 → 拍照上传顾客签字的纸质协议单 → 上传即充值到账 → 顾客扫会员小程序码登录。
+ * 坤总 2026-11-05 定：不签电子合同了，改成上传纸质协议单（SIGN_MODE=paper，默认）。
+ * 电子签那一套（顾客扫码签合同、签完才到账，坤总 2026-10-29 定）保留，开关打开（SIGN_MODE=esign）时照旧。
  */
-export type OrderStep = 'phone' | 'benefit' | 'sign' | 'done';
+export type OrderStep = 'phone' | 'benefit' | 'upload' | 'sign' | 'done';
 
-const STEPS: { key: OrderStep; label: string }[] = [
-  { key: 'phone', label: '手机号' },
-  { key: 'benefit', label: '填权益' },
-  { key: 'sign', label: '签合同' },
-  { key: 'done', label: '到账' },
-];
+const STEPS: Record<SignMode, { key: OrderStep; label: string }[]> = {
+  PAPER: [
+    { key: 'phone', label: '手机号' },
+    { key: 'benefit', label: '填权益' },
+    { key: 'upload', label: '传协议单' },
+    { key: 'done', label: '到账' },
+  ],
+  ESIGN: [
+    { key: 'phone', label: '手机号' },
+    { key: 'benefit', label: '填权益' },
+    { key: 'sign', label: '签合同' },
+    { key: 'done', label: '到账' },
+  ],
+};
 
 export interface StepDot {
   key: OrderStep;
@@ -21,13 +30,58 @@ export interface StepDot {
   index: number;
 }
 
-export function stepDots(current: OrderStep): StepDot[] {
-  const at = STEPS.findIndex((step) => step.key === current);
-  return STEPS.map((step, index) => ({
+export function stepDots(current: OrderStep, mode: SignMode = 'PAPER'): StepDot[] {
+  const steps = STEPS[mode];
+  const at = steps.findIndex((step) => step.key === current);
+  return steps.map((step, index) => ({
     ...step,
     index: index + 1,
     state: index < at ? 'done' : index === at ? 'current' : 'todo',
   }));
+}
+
+/** 取不到开单设置时按纸质协议单（坤总 2026-11-05 的决定）。和服务端 GET /sign-flows/config 的默认值一致。 */
+export const DEFAULT_SIGN_CONFIG: SignConfig = { mode: 'PAPER', maxPhotos: 9, maxPhotoBytes: 8 * 1024 * 1024 };
+
+/** 本机记着上次取到的开单方式，首页、会员页的说明文字不用每次等接口。 */
+export const SIGN_MODE_KEY = 'staff.sign_mode';
+
+export function readSignMode(value: unknown): SignMode {
+  return value === 'ESIGN' ? 'ESIGN' : 'PAPER';
+}
+
+/** 两种开单方式下给店员看的说明。 */
+export const ORDER_TEXT: Record<
+  SignMode,
+  { entry: string; memberEntry: string; noCard: string; phoneRules: string; amountTip: string }
+> = {
+  PAPER: {
+    entry: '输入顾客手机号，填会员权益金额，上传顾客签字的协议单后充值到账',
+    memberEntry: '填会员权益金额，上传顾客签字的协议单后充值到账',
+    noCard: '该会员还没开卡。开单时会一起开卡，上传协议单后充值到账。',
+    phoneRules: '输入手机号后填写会员权益，再拍照上传顾客签了字的纸质协议单。新顾客在上传协议单时开卡；上传成功，会员权益金额立即充值到账。',
+    amountTip: '上传顾客签字的协议单后，充值到会员余额',
+  },
+  ESIGN: {
+    entry: '输入顾客手机号，填会员权益金额，顾客签完合同自动充值',
+    memberEntry: '填会员权益金额，顾客签完合同自动充值',
+    noCard: '该会员还没开卡。开单时会一起开卡，签完合同充值到账。',
+    phoneRules: '输入手机号后直接填写会员权益、生成合同。新顾客在生成合同时开卡；顾客签完合同，会员权益金额才充值到账。',
+    amountTip: '写进合同，顾客签完后充值到会员余额',
+  },
+};
+
+/** 一张照片能不能传：太大的不收（服务端也会拦）。能传返回空串。 */
+export function photoProblem(sizeBytes: number, maxBytes: number): string {
+  if (sizeBytes > maxBytes) {
+    return `有照片超过 ${Math.round(maxBytes / 1024 / 1024)}MB，请重新拍一张`;
+  }
+  return '';
+}
+
+/** 纸质协议单交上去以后：钱充上了就是到账，没充上（中途出错）就显示正在充值，点刷新再补。 */
+export function paperProgress(flow: Pick<SignFlow, 'rechargeAmountCent' | 'rechargeEntryId'>): 'done' | 'recharging' {
+  return flow.rechargeAmountCent != null && !flow.rechargeEntryId ? 'recharging' : 'done';
 }
 
 /** 签署页隔多久问一次签好没有；自动问十分钟，之后要店员点「刷新状态」。 */
@@ -66,7 +120,7 @@ export function canCancelFlow(flow: Pick<SignFlow, 'status' | 'store'>, access: 
   return access.stores.some((store) => store.id === flow.store?.id && store.role === 'STORE_MANAGER');
 }
 
-/** 去开单页：带手机号从头开始，带会员号直接填权益，带合同号接着签。 */
+/** 去开单页：带手机号从头开始，带会员号直接填权益，带合同号接着签（电子签）。 */
 export function orderUrl(from: { phone?: string; memberId?: string; flowId?: string } = {}): string {
   const query = (Object.keys(from) as (keyof typeof from)[])
     .filter((key) => from[key])

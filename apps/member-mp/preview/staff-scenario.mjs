@@ -1,17 +1,23 @@
 // 工作台（员工用的那一半，在 staff/ 下）截图场景。先在本机准备演示数据，再按店员的实际办理顺序走一遍并截图。
 // 会员和员工共用一个小程序（2026-11-04 合并）：店员在同一个登录页用微信手机号登录，认出是员工就直接进工作台。
 //
-//   pnpm --filter member-mp exec tsx preview/fake-esign.mjs   # 本机假电子签平台（3901，控制口 3902）
-//   WECHAT_PHONE_MOCK=true ESIGN_API_HOST=http://127.0.0.1:3901 ESIGN_APP_ID=demo-app ESIGN_APP_SECRET=demo-secret pnpm dev:api
+//   WECHAT_PHONE_MOCK=true pnpm dev:api
 //   node tools/mp-preview/shoot.mjs apps/member-mp/preview/staff-scenario.mjs --out /tmp/staff-shots
+//
+// 开单默认是上传纸质协议单（坤总 2026-11-05），照片用 preview/fixtures 里画的演示样张。
+// 要截电子签那一套，接口带上 SIGN_MODE=esign 和假电子签平台：
+//   pnpm --filter member-mp exec tsx preview/fake-esign.mjs   # 本机假电子签平台（3901，控制口 3902）
+//   SIGN_MODE=esign WECHAT_PHONE_MOCK=true ESIGN_API_HOST=http://127.0.0.1:3901 ESIGN_APP_ID=demo-app ESIGN_APP_SECRET=demo-secret pnpm dev:api
 //
 // 只连本机接口（API_BASE，默认 http://localhost:3000），会往本机数据库写演示门店、员工、会员、权益单和流水。
 // 演示用的超级管理员是 prisma/seed.ts 建的 13800000000。不要对着任何正式环境跑。
 // 消费都按真机的顺序走：会员在会员小程序出示会员码 → 店员扫码 → 再扫九讯云小票的订单码、填商品应付金额 → 带着会员码和单号抵扣（最多 10%）。
 // 截图里「扫到」的会员码也是这样现拿的；订单号从一个起点往后找还没抵过的，同一个库重复跑也不会撞。
-// 开单按真机的顺序走：输手机号 → 填会员权益金额 → 生成合同 → 顾客签完（让假电子签平台标成签好）→ 自动充值、弹小程序码。
+// 开单按真机的顺序走：输手机号 → 填会员权益金额 → 拍照上传协议单 → 上传即充值、弹小程序码。
+// 电子签模式：输手机号 → 填会员权益金额 → 生成合同 → 顾客签完（让假电子签平台标成签好）→ 自动充值、弹小程序码。
 
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 
 const API = process.env.API_BASE ?? 'http://localhost:3000';
 const ESIGN_CONTROL = process.env.FAKE_ESIGN_CONTROL ?? 'http://127.0.0.1:3902';
@@ -28,6 +34,8 @@ const PLAN = {
   rules: '储值终身有效，用完为止。余额不能提现。',
 };
 const TEMPLATE_NAME = '储值会员权益单';
+/** 演示用的协议单照片（假的，满版水印），路径相对小程序目录。 */
+const AGREEMENT_PHOTOS = ['preview/fixtures/agreement-demo-1.jpg', 'preview/fixtures/agreement-demo-2.jpg'];
 
 const SUPER_ADMIN = '13800000000';
 const MANAGER = { phone: '13900000001', name: '陈店长' };
@@ -142,11 +150,14 @@ async function completeSigning(phone) {
   }
 }
 
-/** 权益方案和权益单模板：按名称找，没有就建（只有超级管理员能建）。 */
-async function ensureTemplate(admin) {
+/** 权益方案：按名称找，没有就建（只有超级管理员能建）。 */
+async function ensurePlan(admin) {
   const plans = (await call('GET', '/benefit-plans?pageSize=100', { token: admin })).items;
-  const plan =
-    plans.find((item) => item.title === PLAN.title) ?? (await call('POST', '/benefit-plans', { token: admin, body: PLAN }));
+  return plans.find((item) => item.title === PLAN.title) ?? (await call('POST', '/benefit-plans', { token: admin, body: PLAN }));
+}
+
+/** 电子签模式用的权益单模板：按名称找，没有就建。 */
+async function ensureTemplate(admin, plan) {
   const templates = (await call('GET', '/contract-templates?pageSize=100', { token: admin })).items;
   return (
     templates.find((item) => item.name === TEMPLATE_NAME) ??
@@ -166,13 +177,31 @@ async function consume(token, member, storeId, yuan, productYuan, remark) {
   return { ...(await move(token, member.id, 'consume', storeId, yuan, remark, extra)), code, orderNo };
 }
 
+/** 店员拍照上传一份纸质协议单（和工作台一样：先一张张传照片，再交单充值）。 */
+async function uploadPaper(token, memberId, storeId, plan, amountCent) {
+  const photoIds = [];
+  for (const path of AGREEMENT_PHOTOS) {
+    const form = new FormData();
+    form.append('file', new Blob([await readFile(new URL(`../${path}`, import.meta.url))], { type: 'image/jpeg' }), 'agreement.jpg');
+    const res = await fetch(`${API}/sign-flows/photos`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: form });
+    if (!res.ok) throw new Error(`上传协议单照片 → ${res.status} ${await res.text()}`);
+    photoIds.push((await res.json()).id);
+  }
+  return call('POST', '/sign-flows/paper', {
+    token,
+    body: { memberId, storeId, benefitPlanId: plan.id, rechargeAmountCent: amountCent, photoIds, requestId: randomUUID() },
+  });
+}
+
 async function setup() {
   const health = await call('GET', '/health');
   if (health.esignProductionEnabled) {
     throw new Error('本机接口打开了正式签署开关，截图只用测试环境，请关掉 ESIGN_PRODUCTION_ENABLED');
   }
   const admin = (await staffLogin(SUPER_ADMIN)).login.accessToken;
-  const template = await ensureTemplate(admin);
+  const mode = (await call('GET', '/sign-flows/config', { token: admin })).mode;
+  const plan = await ensurePlan(admin);
+  const template = mode === 'ESIGN' ? await ensureTemplate(admin, plan) : null;
 
   const stores = (await call('GET', '/stores?pageSize=100', { token: admin })).items;
   const storeIds = [];
@@ -226,8 +255,18 @@ async function setup() {
   if (liu.fresh) {
     await move(managerToken, liu.member.id, 'recharge', binjiang, 2000, '现金');
   }
-  // 张先生有一份还没签的权益单：店员在会员页能接着打开。
-  const zhangPending = await call('GET', `/sign-flows?memberId=${zhang.member.id}&status=PENDING&pageSize=1`, { token });
+  if (mode === 'PAPER') {
+    // 张先生在店里签过一份纸质协议单：会员页能点开看照片。
+    const zhangFlows = await call('GET', `/sign-flows?memberId=${zhang.member.id}&pageSize=20`, { token });
+    if (!zhangFlows.items.some((flow) => flow.kind === 'PAPER')) {
+      await uploadPaper(token, zhang.member.id, binjiang, plan, 50000);
+    }
+  }
+  // 电子签模式：张先生有一份还没签的权益单，店员在会员页能接着打开。
+  const zhangPending =
+    mode === 'ESIGN'
+      ? await call('GET', `/sign-flows?memberId=${zhang.member.id}&status=PENDING&pageSize=1`, { token })
+      : { items: [true] };
   if (!zhangPending.items.length) {
     await call('POST', '/sign-flows', {
       token,
@@ -271,6 +310,7 @@ async function setup() {
   };
 
   return {
+    mode,
     binjiang,
     wangBalance,
     clerk,
@@ -303,6 +343,62 @@ export default async function scenario() {
   /** 先扫会员码、再扫订单码：扫码结果按先后各用一个。 */
   const wangShowsCodeThen = (order) => async () => [await showCode(MEMBERS.wang.phone), order];
   const scanBoth = [{ tap: '.scan-card' }, { wait: 400 }, { tap: '.scan-order' }, { wait: 400 }];
+
+  // 开单第 2 步以后：纸质协议单（默认）
+  const paperOrderSteps = [
+    { tap: '.page > .btn-primary' },
+    { wait: 400 },
+    { expectText: '会员权益金额' },
+    { expectText: '全场护理 9 折' },
+    { fill: ['.amount-input', '1000'] },
+    { expectText: '上传顾客签字的协议单后，1,000.00 元立即充值到会员余额' },
+    { shot: '16-开单-填权益', caption: '16. 第 2 步：填会员权益金额，下面是这个权益方案的其他权益' },
+    { tap: '.page > .btn-primary' },
+    { wait: 300 },
+    { expectText: '拍照上传协议单' },
+    { shot: '17-开单-传协议单', caption: '17. 第 3 步：请顾客在纸质协议单上签字，店员拍照上传（最多 9 张）' },
+    { tap: '.photo-add' },
+    { wait: 500 },
+    { shot: '18-拍好协议单', caption: '18. 拍好的照片可以点开放大、删掉重拍；这时余额还没变' },
+    { tap: '.page > .btn-primary' },
+    { expectText: '协议单照片 2 张' },
+    { shot: '19-上传确认', caption: '19. 上传前再确认一次：给谁、哪个方案、多少钱、几张照片，上传后立即到账' },
+    { tap: '.mp-modal-confirm' },
+    { wait: 1500 },
+    { expectText: '请顾客扫码登录小程序' },
+    { shot: '20-上传即到账', caption: '20. 上传成功就充值到账，并弹出小程序码让顾客扫码登录（本机是演示码）' },
+    { tap: '.code-sheet .btn-primary' },
+    { wait: 300 },
+    { expectText: '协议单已上传，已充值到账' },
+    { expectText: '1,000.00 元' },
+    { shot: '20b-到账', caption: '20b. 第 4 步：显示充了多少、现在余额多少；码关了还能再打开' },
+  ];
+  // 电子签开关打开时
+  const esignOrderSteps = [
+          { tap: '.page > .btn-primary' },
+          { wait: 400 },
+          { expectText: '会员权益金额' },
+          { expectText: '全场护理 9 折' },
+          { fill: ['.amount-input', '1000'] },
+          { expectText: '顾客签完合同后，1,000.00 元自动充值到会员余额' },
+          { shot: '16-开单-填权益', caption: '16. 第 2 步：权益第一项填「会员权益金额」，下面是这份权益单的其他权益' },
+          { tap: '.page > .btn-primary' },
+          { expectText: '顾客签完合同后才充值到账' },
+          { shot: '17-生成合同确认', caption: '17. 生成合同前再确认一次：给谁、哪份权益单、多少钱，签完才到账' },
+          { tap: '.mp-modal-confirm' },
+          { wait: 800 },
+          { expectText: '请顾客用微信扫码签署合同' },
+          { shot: '18-请顾客扫码签', caption: '18. 第 3 步：弹出签署二维码，顾客用自己的微信扫码签合同；这时余额还没变' },
+          { run: () => completeSigning(demo.newPhone) },
+          { wait: 5000 },
+          { expectText: '请顾客扫码登录小程序' },
+          { shot: '19-签完弹小程序码', caption: '19. 顾客一签完，自动充值到账，并弹出小程序码让顾客扫码登录（本机是演示码）' },
+          { tap: '.code-sheet .btn-primary' },
+          { wait: 300 },
+          { expectText: '合同已签，已充值到账' },
+          { expectText: '1,000.00 元' },
+          { shot: '20-到账', caption: '20. 第 4 步：显示充了多少、现在余额多少；码关了还能再打开' },
+  ];
 
   return {
     app: '..',
@@ -445,6 +541,8 @@ export default async function scenario() {
         caption: '14. 查不到卡：直接为这个手机号开单',
         route: 'staff/pages/index/index',
         storage: asClerk,
+        // 店员点「拍照 / 相册」时选中的照片（演示样张）。
+        chooseMedia: AGREEMENT_PHOTOS,
         steps: [
           { fill: ['.search-input', demo.newPhone] },
           { tap: '.search-btn' },
@@ -456,39 +554,34 @@ export default async function scenario() {
           { fill: ['.field:nth-child(2) input', '赵女士'] },
           { expectText: '开单门店' },
           { shot: '15-开单-输手机号', caption: '15. 开单第 1 步：手机号已带好，称呼选填，点「下一步」直接填权益' },
-          { tap: '.page > .btn-primary' },
-          { wait: 400 },
-          { expectText: '会员权益金额' },
-          { expectText: '全场护理 9 折' },
-          { fill: ['.amount-input', '1000'] },
-          { expectText: '顾客签完合同后，1,000.00 元自动充值到会员余额' },
-          { shot: '16-开单-填权益', caption: '16. 第 2 步：权益第一项填「会员权益金额」，下面是这份权益单的其他权益' },
-          { tap: '.page > .btn-primary' },
-          { expectText: '顾客签完合同后才充值到账' },
-          { shot: '17-生成合同确认', caption: '17. 生成合同前再确认一次：给谁、哪份权益单、多少钱，签完才到账' },
-          { tap: '.mp-modal-confirm' },
-          { wait: 800 },
-          { expectText: '请顾客用微信扫码签署合同' },
-          { shot: '18-请顾客扫码签', caption: '18. 第 3 步：弹出签署二维码，顾客用自己的微信扫码签合同；这时余额还没变' },
-          { run: () => completeSigning(demo.newPhone) },
-          { wait: 5000 },
-          { expectText: '请顾客扫码登录小程序' },
-          { shot: '19-签完弹小程序码', caption: '19. 顾客一签完，自动充值到账，并弹出小程序码让顾客扫码登录（本机是演示码）' },
-          { tap: '.code-sheet .btn-primary' },
-          { wait: 300 },
-          { expectText: '合同已签，已充值到账' },
-          { expectText: '1,000.00 元' },
-          { shot: '20-到账', caption: '20. 第 4 步：显示充了多少、现在余额多少；码关了还能再打开' },
+          ...(demo.mode === 'PAPER' ? paperOrderSteps : esignOrderSteps),
         ],
         capture: false,
       },
-      {
-        name: '21-会员页待签署',
-        caption: '21. 顾客当时没签也没关系：会员页能看到没签完的权益单，点「接着签」回到签署码',
-        route: `staff/pages/member/member?id=${demo.zhangId}`,
-        storage: asClerk,
-        steps: [{ wait: 400 }, { expectText: '待签署的权益单' }, { expectText: '会员权益金额 500.00 元' }],
-      },
+      demo.mode === 'PAPER'
+        ? {
+            name: '21-会员页协议单',
+            caption: '21. 会员页能看到这位会员签过的协议单，点开看照片',
+            route: `staff/pages/member/member?id=${demo.zhangId}`,
+            storage: asClerk,
+            steps: [
+              { wait: 400 },
+              { expectText: '协议单' },
+              { expectText: '500.00' },
+              { shot: '21-会员页协议单', caption: '21. 会员页能看到这位会员签过的协议单，点「看照片」' },
+              { tap: '.list .row:has-text("看照片")' },
+              { wait: 800 },
+              { shot: '21b-看协议单照片', caption: '21b. 点开就是顾客签字的协议单照片（截图里是演示样张）' },
+            ],
+            capture: false,
+          }
+        : {
+            name: '21-会员页待签署',
+            caption: '21. 顾客当时没签也没关系：会员页能看到没签完的权益单，点「接着签」回到签署码',
+            route: `staff/pages/member/member?id=${demo.zhangId}`,
+            storage: asClerk,
+            steps: [{ wait: 400 }, { expectText: '待签署的权益单' }, { expectText: '会员权益金额 500.00 元' }],
+          },
       {
         name: '22-本店流水',
         caption: '22. 本店流水：按天分组，可按时间和类型筛选，每笔抵扣带单号',

@@ -59,7 +59,8 @@ sudo ./prepaid.sh init-company   # 输入公司名称、第一家门店、超级
 
 ## 4. 小程序那边
 
-1. 微信公众平台「开发管理 → 开发设置 → 服务器域名」：request 合法域名填 `https://api.<域名>`。
+1. 微信公众平台「开发管理 → 开发设置 → 服务器域名」：request、uploadFile、downloadFile 三个合法域名都填 `https://api.<域名>`（开单上传协议单照片、查看照片要用后两个）。
+   「设置 → 服务内容声明 → 用户隐私保护指引」里勾选「选中的照片或视频」和「摄像头」，用途写「门店开单时拍照上传顾客签字的会员协议单」。
 2. `apps/member-mp/utils/config.ts` 里 `trial` 和 `release` 填 `https://api.<域名>`，用微信开发者工具上传。
 3. 提审前在商家后台「门店与员工 → 小程序审核入口」打开审核体验（见 [docs/backend/review-demo.md](../docs/backend/review-demo.md)）。
 

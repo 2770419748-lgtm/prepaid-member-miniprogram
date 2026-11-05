@@ -20,6 +20,7 @@ import {
   toMemberSignFlowView,
 } from './esign.view';
 import { SignFlowSyncService } from './sign-flow-sync.service';
+import { PaperAgreementsService } from './paper-agreements.service';
 import { SignFlowsService } from './sign-flows.service';
 
 /** 签署顺序：已签的权益排最前，其次待签，最后是还没发起过的。 */
@@ -37,6 +38,7 @@ export class MemberSignFlowsService {
     private readonly esignConfig: EsignConfigService,
     private readonly sync: SignFlowSyncService,
     private readonly flows: SignFlowsService,
+    private readonly paper: PaperAgreementsService,
   ) {}
 
   async list(
@@ -96,7 +98,13 @@ export class MemberSignFlowsService {
 
   async pdf(principal: AccessPrincipal, id: string): Promise<StreamableFile> {
     const flow = await this.requireOwn(principal, id);
-    return this.flows.readPdf(flow.pdfObjectKey, flow.title || flow.template.name);
+    return this.flows.readPdf(flow.pdfObjectKey, flow.title || flow.template?.name || '权益单');
+  }
+
+  /** 自己的纸质协议单照片。别人的单、删掉的照片都是 404。 */
+  async photo(principal: AccessPrincipal, id: string, photoId: string): Promise<StreamableFile> {
+    const flow = await this.requireOwn(principal, id);
+    return this.paper.readPhoto(flow.id, photoId);
   }
 
   /** 本公司在用的权益方案，加上会员签过或待签的方案（即使已下架）。 */
@@ -117,6 +125,8 @@ export class MemberSignFlowsService {
                 },
               },
             },
+            // 纸质协议单直接挂在方案上。
+            { signFlows: { some: { memberId: member.id, status: SignFlowStatus.SIGNED } } },
           ],
         },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -126,12 +136,13 @@ export class MemberSignFlowsService {
           memberId: member.id,
           orgId: member.orgId,
           status: { not: SignFlowStatus.DRAFT },
-          template: { benefitPlanId: { not: null } },
+          OR: [{ benefitPlanId: { not: null } }, { template: { benefitPlanId: { not: null } } }],
         },
         select: {
           id: true,
           status: true,
           updatedAt: true,
+          benefitPlanId: true,
           template: { select: { benefitPlanId: true } },
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -140,7 +151,10 @@ export class MemberSignFlowsService {
     // 每个方案取一份最能代表现状的流程：已签 > 待签 > 最近一份。
     const byPlan = new Map<string, (typeof flows)[number]>();
     for (const flow of flows) {
-      const planId = flow.template.benefitPlanId!;
+      const planId = flow.benefitPlanId ?? flow.template?.benefitPlanId;
+      if (!planId) {
+        continue;
+      }
       const kept = byPlan.get(planId);
       if (!kept || (BENEFIT_ORDER[flow.status] ?? 9) < (BENEFIT_ORDER[kept.status] ?? 9)) {
         byPlan.set(planId, flow);
@@ -170,7 +184,8 @@ export class MemberSignFlowsService {
     return { id: principal.sub, orgId: principal.orgId };
   }
 
-  private async requireOwn(principal: AccessPrincipal, id: string) {
+  /** 会员自己的权益单（不含发起中的）。别人的一律 404。 */
+  async requireOwn(principal: AccessPrincipal, id: string) {
     const member = this.requireMember(principal);
     const flow = await this.prisma.signFlow.findUnique({ where: { id }, include: memberSignFlowInclude });
     if (

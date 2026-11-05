@@ -4,6 +4,7 @@ import {
   Prisma,
   SignEnv,
   SignFlowStatus,
+  SignKind,
 } from '@prisma/client';
 
 export interface BenefitItem {
@@ -110,25 +111,62 @@ export function toContractTemplateView(
   };
 }
 
+/** 协议单照片：只列没删的，按上传先后。 */
+const activePhotos = {
+  where: { removedAt: null },
+  select: { id: true, createdAt: true },
+  orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+} satisfies Prisma.SignFlow$photosArgs;
+
+/** 那笔充值有没有被冲正（店长或超管记错了账撤回来）。 */
+const rechargeEntryReversal = {
+  select: { reversedBy: { select: { id: true } } },
+} satisfies Prisma.LedgerEntryDefaultArgs;
+
 export const signFlowInclude = {
   member: { select: { id: true, phone: true, name: true } },
   template: {
     select: { id: true, name: true, benefitPlan: { select: { id: true, title: true } } },
   },
+  benefitPlan: { select: { id: true, title: true } },
   store: { select: { id: true, name: true } },
   initiator: { select: { id: true, name: true } },
+  photos: activePhotos,
+  rechargeEntry: rechargeEntryReversal,
 } satisfies Prisma.SignFlowInclude;
 
 export type SignFlowRecord = Prisma.SignFlowGetPayload<{ include: typeof signFlowInclude }>;
+
+export interface AgreementPhotoView {
+  id: string;
+  createdAt: string;
+}
+
+function toPhotoViews(photos: { id: string; createdAt: Date }[]): AgreementPhotoView[] {
+  return photos.map((photo) => ({ id: photo.id, createdAt: photo.createdAt.toISOString() }));
+}
+
+/** 标题：发起时的快照；老数据没有快照时用模板名，纸质协议单用方案名。 */
+function flowTitle(flow: { title: string; template: { name: string } | null }, planTitle: string | undefined): string {
+  return flow.title || flow.template?.name || planTitle || PAPER_AGREEMENT_TITLE;
+}
+
+/** 纸质协议单没选权益方案时的标题。 */
+export const PAPER_AGREEMENT_TITLE = '会员协议单';
 
 /** 店员看到的签署流程。 */
 export interface SignFlowView {
   id: string;
   title: string;
+  /** ESIGN 电子签；PAPER 纸质协议单（拍照上传）。 */
+  kind: SignKind;
   status: SignFlowStatus;
   env: SignEnv;
+  /** 电子签沙箱，界面标「测试签署」。纸质协议单永远是 false。 */
+  sandbox: boolean;
   member: { id: string; phone: string; name: string | null };
-  template: { id: string; name: string };
+  /** 电子签用的模板。纸质协议单为空。 */
+  template: { id: string; name: string } | null;
   benefitPlan: { id: string; title: string } | null;
   store: { id: string; name: string } | null;
   initiator: { id: string; name: string } | null;
@@ -138,7 +176,11 @@ export interface SignFlowView {
   rechargeAmountCent: number | null;
   /** 签完后自动记的那笔充值流水。带金额、已签署但还没充上时为空。 */
   rechargeEntryId: string | null;
+  /** 那笔充值已经被冲正（钱撤回了）。 */
+  rechargeReversed: boolean;
   hasPdf: boolean;
+  /** 纸质协议单的照片（没删的）。电子签为空数组。 */
+  photos: AgreementPhotoView[];
   signedAt: string | null;
   syncedAt: string | null;
   createdAt: string;
@@ -146,20 +188,25 @@ export interface SignFlowView {
 }
 
 export function toSignFlowView(flow: SignFlowRecord): SignFlowView {
+  const plan = flow.benefitPlan ?? flow.template?.benefitPlan ?? null;
   return {
     id: flow.id,
-    title: flow.title || flow.template.name,
+    title: flowTitle(flow, plan?.title),
+    kind: flow.kind,
     status: flow.status,
     env: flow.env,
+    sandbox: flow.kind === SignKind.ESIGN && flow.env === SignEnv.SANDBOX,
     member: flow.member,
-    template: { id: flow.template.id, name: flow.template.name },
-    benefitPlan: flow.template.benefitPlan,
+    template: flow.template ? { id: flow.template.id, name: flow.template.name } : null,
+    benefitPlan: plan,
     store: flow.store,
     initiator: flow.initiator,
     signUrl: flow.status === SignFlowStatus.PENDING ? flow.signUrl : null,
     rechargeAmountCent: flow.rechargeAmountCent,
     rechargeEntryId: flow.rechargeEntryId,
+    rechargeReversed: flow.rechargeEntry?.reversedBy != null,
     hasPdf: flow.pdfObjectKey != null,
+    photos: toPhotoViews(flow.photos),
     signedAt: flow.signedAt?.toISOString() ?? null,
     syncedAt: flow.syncedAt?.toISOString() ?? null,
     createdAt: flow.createdAt.toISOString(),
@@ -167,13 +214,18 @@ export function toSignFlowView(flow: SignFlowRecord): SignFlowView {
   };
 }
 
+const memberPlanSelect = { id: true, title: true, contentJson: true } satisfies Prisma.BenefitPlanSelect;
+
 export const memberSignFlowInclude = {
   template: {
     select: {
       name: true,
-      benefitPlan: { select: { id: true, title: true, contentJson: true } },
+      benefitPlan: { select: memberPlanSelect },
     },
   },
+  benefitPlan: { select: memberPlanSelect },
+  photos: activePhotos,
+  rechargeEntry: rechargeEntryReversal,
 } satisfies Prisma.SignFlowInclude;
 
 export type MemberSignFlowRecord = Prisma.SignFlowGetPayload<{ include: typeof memberSignFlowInclude }>;
@@ -182,33 +234,41 @@ export type MemberSignFlowRecord = Prisma.SignFlowGetPayload<{ include: typeof m
 export interface MemberSignFlowView {
   id: string;
   title: string;
+  /** ESIGN 电子签；PAPER 在门店签的纸质协议单，照片在 photos 里。 */
+  kind: SignKind;
   status: SignFlowStatus;
   env: SignEnv;
-  /** 沙箱签署，界面标「测试签署」。 */
+  /** 电子签沙箱，界面标「测试签署」。纸质协议单永远是 false。 */
   sandbox: boolean;
   benefitPlan: ({ id: string; title: string } & BenefitContent) | null;
   /** 会员权益金额（分），签完后充值到余额。不带金额的权益单为空。 */
   rechargeAmountCent: number | null;
   /** 这笔钱已经充进余额。 */
   recharged: boolean;
+  /** 充进去的钱后来被门店撤回了。 */
+  rechargeReversed: boolean;
   hasPdf: boolean;
+  photos: AgreementPhotoView[];
   signedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export function toMemberSignFlowView(flow: MemberSignFlowRecord): MemberSignFlowView {
-  const plan = flow.template.benefitPlan;
+  const plan = flow.benefitPlan ?? flow.template?.benefitPlan ?? null;
   return {
     id: flow.id,
-    title: flow.title || flow.template.name,
+    title: flowTitle(flow, plan?.title),
+    kind: flow.kind,
     status: flow.status,
     env: flow.env,
-    sandbox: flow.env === SignEnv.SANDBOX,
+    sandbox: flow.kind === SignKind.ESIGN && flow.env === SignEnv.SANDBOX,
     benefitPlan: plan ? { id: plan.id, title: plan.title, ...readBenefitContent(plan.contentJson) } : null,
     rechargeAmountCent: flow.rechargeAmountCent,
     recharged: flow.rechargeEntryId != null,
+    rechargeReversed: flow.rechargeEntry?.reversedBy != null,
     hasPdf: flow.pdfObjectKey != null,
+    photos: toPhotoViews(flow.photos),
     signedAt: flow.signedAt?.toISOString() ?? null,
     createdAt: flow.createdAt.toISOString(),
     updatedAt: flow.updatedAt.toISOString(),

@@ -78,3 +78,77 @@ export function request<T>(
     });
   });
 }
+
+function authHeader(): Record<string, string> | null {
+  const token = loadSession()?.token;
+  return token ? { Authorization: `Bearer ${token}` } : null;
+}
+
+/** 服务端回的 JSON 体。wx.uploadFile 给的是字符串。 */
+function parseBody(data: unknown): unknown {
+  if (typeof data !== 'string') {
+    return data;
+  }
+  try {
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+/** 传一个本机文件（字段名 file）。和 request 一样：登录失效回登录页，失败抛白话的 ApiError。 */
+export function uploadFile<T>(path: string, filePath: string): Promise<T> {
+  const header = authHeader();
+  if (!header) {
+    backToLogin();
+    return Promise.reject(new ApiError(401, '登录已过期，请重新登录'));
+  }
+  return new Promise<T>((resolve, reject) => {
+    wx.uploadFile({
+      url: `${apiBase()}${path}`,
+      filePath,
+      name: 'file',
+      header,
+      timeout: 60000,
+      success: (res) => {
+        const body = parseBody(res.data);
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve(body as T);
+          return;
+        }
+        if (res.statusCode === 401) {
+          backToLogin();
+        }
+        reject(toApiError(res.statusCode, body));
+      },
+      fail: () => reject(toApiError(0, null)),
+    });
+  });
+}
+
+/** 下载要登录才能看的文件（协议单照片），返回本机临时路径。 */
+export function download(path: string): Promise<string> {
+  const header = authHeader();
+  if (!header) {
+    backToLogin();
+    return Promise.reject(new ApiError(401, '登录已过期，请重新登录'));
+  }
+  return new Promise<string>((resolve, reject) => {
+    wx.downloadFile({
+      url: `${apiBase()}${path}`,
+      header,
+      timeout: 30000,
+      success: (res) => {
+        if (res.statusCode === 200) {
+          resolve(res.tempFilePath);
+          return;
+        }
+        if (res.statusCode === 401) {
+          backToLogin();
+        }
+        reject(toApiError(res.statusCode, null));
+      },
+      fail: () => reject(toApiError(0, null)),
+    });
+  });
+}

@@ -9,12 +9,14 @@ import { ContractTemplatesService } from './contract-templates.service';
 import { EsignWebhookController } from './esign-webhook.controller';
 import { MemberSignFlowsController } from './member-sign-flows.controller';
 import { MemberSignFlowsService } from './member-sign-flows.service';
+import { PaperAgreementsController } from './paper-agreements.controller';
+import { PaperAgreementsService } from './paper-agreements.service';
 import { SignFlowSyncService } from './sign-flow-sync.service';
 import { SignFlowsController } from './sign-flows.controller';
 import { SignFlowsService } from './sign-flows.service';
 
 /**
- * 电子签：权益方案、权益单模板、发起签署、回调与状态同步、合同归档。
+ * 权益单：权益方案、开单上传纸质协议单（2026-11-05 起默认）、电子签（模板、发起签署、回调与状态同步、合同归档，SIGN_MODE=esign 才用）。
  * 每次调用 e签宝都经 EsignClient 核对环境；ESIGN_PRODUCTION_ENABLED 默认 false，只打沙箱。
  * 带会员权益金额的权益单签完后经 WalletService 充值（WalletModule），这里不直接改余额。
  */
@@ -24,6 +26,7 @@ import { SignFlowsService } from './sign-flows.service';
     BenefitPlansController,
     ContractTemplatesController,
     SignFlowsController,
+    PaperAgreementsController,
     MemberSignFlowsController,
     EsignWebhookController,
   ],
@@ -33,6 +36,7 @@ import { SignFlowsService } from './sign-flows.service';
     ContractTemplatesService,
     SignFlowsService,
     SignFlowSyncService,
+    PaperAgreementsService,
     MemberSignFlowsService,
   ],
   exports: [EsignClient],

@@ -12,8 +12,8 @@ pnpm --filter api prisma:seed
 # 2. 假电子签平台（apps/member-mp/preview 里的，3901，控制口 3902）
 pnpm --filter member-mp exec tsx preview/fake-esign.mjs
 
-# 3. 接口指向假电子签平台；后台开发服务器
-ESIGN_API_HOST=http://127.0.0.1:3901 ESIGN_APP_ID=demo-app ESIGN_APP_SECRET=demo-secret pnpm dev:api
+# 3. 接口指向假电子签平台；后台开发服务器（esign 组要 SIGN_MODE=esign，见下）
+SIGN_MODE=esign ESIGN_API_HOST=http://127.0.0.1:3901 ESIGN_APP_ID=demo-app ESIGN_APP_SECRET=demo-secret pnpm dev:api
 pnpm dev:admin
 
 # 4. 演示数据：三家门店、五个员工、五位会员和几笔流水
@@ -21,7 +21,10 @@ node apps/admin-web/preview/seed-demo.mjs
 
 # 5. 截图，35 张
 node apps/admin-web/preview/shoot.mjs --out /tmp/admin-shots
-# 只跑几组：--only login,firstlogin,admin,manager,esign,refund,review（refund 是退余额、换手机号、停用会员；review 是小程序审核入口，会把生成的审核密码写到 --out 下的 review-password.txt）
+# 只跑几组：--only login,firstlogin,admin,manager,esign,paper,refund,review（refund 是退余额、换手机号、停用会员；review 是小程序审核入口，会把生成的审核密码写到 --out 下的 review-password.txt）
+# 开单方式：esign 组要接口带 SIGN_MODE=esign；paper 组（纸质协议单：查看、补传、删除照片）要接口用默认的纸质协议单，两组分开跑：
+#   第一遍接口带 SIGN_MODE=esign，--only login,firstlogin,admin,manager,esign,refund,review；
+#   第二遍去掉 SIGN_MODE 重启接口，--only paper
 ```
 
 需要本机装有 Playwright 和 Chromium（`require('playwright')` 能找到即可）。场景会开卡、充值、冲正、建权益方案和发起签署，对同一个库只跑一次；要重跑就从第 1 步换个新库。

@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagg
 import { AccessPrincipal } from '../auth/access-principal';
 import { CurrentPrincipal, Principals, Roles } from '../auth/decorators';
 import { CancelSignFlowDto, CreateSignFlowDto, SignFlowListQueryDto } from './dto/sign-flow.dto';
+import { MAX_PHOTO_BYTES, MAX_PHOTOS_PER_AGREEMENT } from './agreement-photo';
 import { SignFlowsService } from './sign-flows.service';
 
 @ApiTags('权益单')
@@ -15,7 +16,8 @@ export class SignFlowsController {
 
   @Post()
   @ApiOperation({
-    summary: '给会员发起权益单签署（会员个人签 + 商家企业章）。正式签署开关关闭时只走沙箱',
+    summary:
+      '给会员发起电子签（会员个人签 + 商家企业章）。只在 SIGN_MODE=esign 时可用；正式签署开关关闭时只走沙箱',
   })
   create(@CurrentPrincipal() actor: AccessPrincipal, @Body() dto: CreateSignFlowDto) {
     return this.flows.create(actor, dto);
@@ -27,6 +29,13 @@ export class SignFlowsController {
     return this.flows.list(actor, query);
   }
 
+  // 要写在 :id 前面，不然 config 会被当成权益单号。
+  @Get('config')
+  @ApiOperation({ summary: '现在开单怎么签：PAPER 上传纸质协议单（默认），ESIGN 电子签。附照片张数和大小上限' })
+  config() {
+    return { ...this.flows.config(), maxPhotos: MAX_PHOTOS_PER_AGREEMENT, maxPhotoBytes: MAX_PHOTO_BYTES };
+  }
+
   @Get(':id')
   @ApiOperation({ summary: '查看一份签署' })
   get(@CurrentPrincipal() actor: AccessPrincipal, @Param('id') id: string) {
@@ -34,7 +43,9 @@ export class SignFlowsController {
   }
 
   @Post(':id/refresh')
-  @ApiOperation({ summary: '到 e签宝核对状态；签完会把合同 PDF 存进对象存储' })
+  @ApiOperation({
+    summary: '到 e签宝核对状态；签完会把合同 PDF 存进对象存储。纸质协议单只补没充上的会员权益金额',
+  })
   refresh(@CurrentPrincipal() actor: AccessPrincipal, @Param('id') id: string) {
     return this.flows.refresh(actor, id);
   }

@@ -1,5 +1,5 @@
 import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
-import { SignFlow, SignFlowStatus } from '@prisma/client';
+import { SignFlow, SignFlowStatus, SignKind } from '@prisma/client';
 import { AuditAction, AuditLogWriter } from '../audit/audit-log.writer';
 import { PrismaService } from '../prisma/prisma.service';
 import { ObjectStorage } from '../storage/object-storage';
@@ -24,6 +24,7 @@ export function contractObjectKey(flow: Pick<SignFlow, 'orgId' | 'id'>): string 
 
 /**
  * 和 e签宝核对一份流程的状态。签完后：带会员权益金额的先经 WalletService 充值到余额，再把合同 PDF 存进对象存储。
+ * 纸质协议单不问 e签宝，只补没充上的钱。
  * 回调和主动刷新共用这一处，结果一致。以 e签宝查询结果为准，不轻信回调内容。
  * 充值和归档都可以重来：充值的请求号由流程号派生，重复调用只记一笔。
  */
@@ -45,6 +46,10 @@ export class SignFlowSyncService {
    */
   async sync(flowId: string, source: SyncSource, errors: 'throw' | 'keep'): Promise<SyncResult> {
     const flow = await this.prisma.signFlow.findUniqueOrThrow({ where: { id: flowId } });
+    if (flow.kind === SignKind.PAPER) {
+      // 纸质协议单一上传就是已签署，不用问 e签宝，也没有合同 PDF；只补没充上的那笔钱。
+      return this.creditPaper(flow, errors);
+    }
     if (!flow.esignFlowId) {
       return { status: flow.status, changed: false, archivePending: false, rechargePending: false };
     }
@@ -119,6 +124,23 @@ export class SignFlowSyncService {
     }
   }
 
+  /** 纸质协议单：上传时已经充过；没充上（中途出错）的在这里补，请求号由权益单派生，不会多充。 */
+  async creditPaper(flow: SignFlow, errors: 'throw' | 'keep'): Promise<SyncResult> {
+    let rechargePending = false;
+    try {
+      await this.credit(flow);
+    } catch (error) {
+      this.logger.error(
+        `recharge for paper agreement failed for ${flow.id}: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+      if (errors === 'throw') {
+        throw error;
+      }
+      rechargePending = true;
+    }
+    return { status: flow.status, changed: false, archivePending: false, rechargePending };
+  }
+
   /**
    * 签完后把会员权益金额充进余额，记在发起开单的门店和店员名下。
    * 先记流水再回填 rechargeEntryId：中间断了，下次同步时同一请求号直接拿回那笔，不会多充。
@@ -137,6 +159,7 @@ export class SignFlowSyncService {
       operatorStaffId: flow.initiatorStaffId,
       signFlowId: flow.id,
       amountCent: flow.rechargeAmountCent,
+      remark: flow.kind === SignKind.PAPER ? '纸质协议单上传后充值' : '权益单签署后充值',
     });
     await this.prisma.signFlow.updateMany({
       where: { id: flow.id, rechargeEntryId: null },

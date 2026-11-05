@@ -1,6 +1,16 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { canCancelFlow, orderUrl, signProgress, stepDots } from '../../staff/utils/order';
+import {
+  canCancelFlow,
+  DEFAULT_SIGN_CONFIG,
+  ORDER_TEXT,
+  orderUrl,
+  paperProgress,
+  photoProblem,
+  readSignMode,
+  signProgress,
+  stepDots,
+} from '../../staff/utils/order';
 import type { MyStoresResult } from '../../staff/utils/types';
 
 const store = (id: string, role: 'SUPER_ADMIN' | 'STORE_MANAGER' | 'STAFF') => ({
@@ -13,9 +23,21 @@ const store = (id: string, role: 'SUPER_ADMIN' | 'STORE_MANAGER' | 'STAFF') => (
   role,
 });
 
-test('步骤条：走过的打勾，当前的高亮', () => {
+test('步骤条（纸质协议单，默认）：手机号、填权益、传协议单、到账', () => {
   assert.deepEqual(
-    stepDots('sign').map((dot) => [dot.label, dot.state]),
+    stepDots('upload').map((dot) => [dot.label, dot.state]),
+    [
+      ['手机号', 'done'],
+      ['填权益', 'done'],
+      ['传协议单', 'current'],
+      ['到账', 'todo'],
+    ],
+  );
+});
+
+test('步骤条（电子签开关打开时）：走过的打勾，当前的高亮', () => {
+  assert.deepEqual(
+    stepDots('sign', 'ESIGN').map((dot) => [dot.label, dot.state]),
     [
       ['手机号', 'done'],
       ['填权益', 'done'],
@@ -66,4 +88,32 @@ test('开单页地址：从头开始、老会员直接填权益、接着签', ()
   assert.equal(orderUrl({ phone: '13800138000' }), '/staff/pages/order/order?phone=13800138000');
   assert.equal(orderUrl({ memberId: 'm1' }), '/staff/pages/order/order?memberId=m1');
   assert.equal(orderUrl({ flowId: 'f 1' }), '/staff/pages/order/order?flowId=f%201');
+});
+
+test('开单方式：认不出的一律按纸质协议单', () => {
+  assert.equal(readSignMode('ESIGN'), 'ESIGN');
+  assert.equal(readSignMode('PAPER'), 'PAPER');
+  assert.equal(readSignMode(undefined), 'PAPER');
+  assert.equal(readSignMode('esign'), 'PAPER');
+  assert.equal(DEFAULT_SIGN_CONFIG.mode, 'PAPER');
+});
+
+test('纸质协议单的说明不再提签合同，电子签的说明照旧', () => {
+  for (const text of Object.values(ORDER_TEXT.PAPER)) {
+    assert.doesNotMatch(text, /签完合同|生成合同|电子/);
+  }
+  assert.match(ORDER_TEXT.PAPER.entry, /协议单/);
+  assert.match(ORDER_TEXT.ESIGN.entry, /签完合同/);
+});
+
+test('照片太大不收', () => {
+  const max = 8 * 1024 * 1024;
+  assert.equal(photoProblem(500 * 1024, max), '');
+  assert.equal(photoProblem(max, max), '');
+  assert.match(photoProblem(max + 1, max), /超过 8MB/);
+});
+
+test('纸质协议单交上去后：充上了是到账，没充上显示正在充值', () => {
+  assert.equal(paperProgress({ rechargeAmountCent: 100000, rechargeEntryId: 'e1' }), 'done');
+  assert.equal(paperProgress({ rechargeAmountCent: 100000, rechargeEntryId: null }), 'recharging');
 });

@@ -11,7 +11,7 @@
     <template v-else-if="member">
       <MemberCardPanel :member="member" full-phone>
         <template v-if="member.hasCard && member.status === 'ACTIVE'">
-          <!-- 直接充值只给店长和超级管理员补录；店员给会员充值就是发起权益单。 -->
+          <!-- 直接充值只给店长和超级管理员补录；店员给会员充值就是开单（纸质协议单在手机工作台上传）。 -->
           <a-button
             v-if="session.canRecharge"
             type="primary"
@@ -19,7 +19,11 @@
           >
             充值
           </a-button>
+          <a-button v-if="paperMode" @click="router.push({ name: 'sign-flows', query: { memberId: member.id } })">
+            协议单
+          </a-button>
           <a-button
+            v-else
             :type="session.canRecharge ? 'default' : 'primary'"
             @click="router.push({ name: 'sign-flows', query: { memberId: member.id, start: '1' } })"
           >
@@ -85,6 +89,7 @@
 import { message } from 'ant-design-vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { DEFAULT_SIGN_CONFIG, loadSignConfig } from '../../api/esign';
 import { errorMessage } from '../../api/http';
 import { getLedgerEntry, listLedger } from '../../api/ledger';
 import { getMember } from '../../api/members';
@@ -206,9 +211,15 @@ watch(
   },
 );
 
+// 纸质协议单模式（默认）下开单在手机工作台，这里只能查看协议单。
+const paperMode = ref(DEFAULT_SIGN_CONFIG.mode === 'PAPER');
+
 onMounted(() => {
   void loadMember();
   void loadLedger();
+  void loadSignConfig().then((config) => {
+    paperMode.value = config.mode === 'PAPER';
+  });
 });
 </script>
 

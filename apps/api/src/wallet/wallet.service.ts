@@ -71,6 +71,8 @@ export interface SignedContractCredit {
   operatorStaffId: string | null;
   signFlowId: string;
   amountCent: number;
+  /** 流水备注。默认「权益单签署后充值」。 */
+  remark?: string;
 }
 
 /** 权益单自动充值的请求号：由流程号派生，回调和刷新同时到、重复到都只记一笔。 */
@@ -167,7 +169,8 @@ export class WalletService {
   }
 
   /**
-   * 会员签完带「会员权益金额」的权益单后，把这笔钱充进余额。由签署状态同步调用，不经店员再点一次。
+   * 会员签完带「会员权益金额」的权益单后（电子签签完，或店员上传了顾客签字的纸质协议单），把这笔钱充进余额。
+   * 由签署状态同步调用，不经店员再点一次。
    * 记在发起开单的门店和店员名下，和店员手动充值一样是一笔 RECHARGE，可以冲正。
    * 合同已经签了、钱已经在店里收了，所以不因门店或会员后来被停用而拒绝。
    */
@@ -191,7 +194,7 @@ export class WalletService {
       type: LedgerType.RECHARGE,
       direction: 1,
       amountCent: credit.amountCent,
-      remark: '权益单签署后充值',
+      remark: credit.remark ?? '权益单签署后充值',
       reversalOfId: null,
       requestId,
       payCodeId: null,

@@ -1,4 +1,4 @@
-import { contractPdfPath, fetchSignFlow, fetchSignUrl, refreshSignFlow } from '../../utils/api';
+import { agreementPhotoPath, contractPdfPath, fetchSignFlow, fetchSignUrl, refreshSignFlow } from '../../utils/api';
 import { ApiError, download, errorText } from '../../utils/request';
 import { ensureLogin } from '../../utils/session';
 import { SignDetail, toSignDetail } from '../../utils/sign';
@@ -12,6 +12,9 @@ Page({
     opening: false,
     /** 刚从签署页回来并且签好了：显示成功页。 */
     success: false,
+    /** 纸质协议单照片下载到本机后的临时路径，和 detail.photoIds 一一对应。 */
+    photoPaths: [] as string[],
+    photoError: '',
   },
 
   flowId: '',
@@ -41,9 +44,38 @@ Page({
     }
     try {
       const flow = await fetchSignFlow(this.flowId);
-      this.setData({ loading: false, error: '', detail: toSignDetail(flow) });
+      const detail = toSignDetail(flow);
+      this.setData({ loading: false, error: '', detail });
+      if (detail.paper) {
+        this.loadPhotos(detail.photoIds);
+      }
     } catch (error) {
       this.setData({ loading: false, error: errorText(error) });
+    }
+  },
+
+  /** 照片要登录才能看：一张张下载到本机再显示。 */
+  async loadPhotos(photoIds: string[]) {
+    try {
+      const paths = await Promise.all(photoIds.map((photoId) => download(agreementPhotoPath(this.flowId, photoId))));
+      this.setData({ photoPaths: paths, photoError: '' });
+    } catch (error) {
+      this.setData({ photoError: errorText(error) });
+    }
+  },
+
+  previewPhoto(event: WechatMiniprogram.TouchEvent) {
+    const urls = this.data.photoPaths;
+    const current = urls[Number(event.currentTarget.dataset.index)];
+    if (current) {
+      wx.previewImage({ urls, current });
+    }
+  },
+
+  retryPhotos() {
+    if (this.data.detail) {
+      this.setData({ photoError: '' });
+      this.loadPhotos(this.data.detail.photoIds);
     }
   },
 
