@@ -203,6 +203,26 @@ Page({
     }
   },
 
+  /**
+   * 码已被门店扫了，但不是这次要用的（扫错了店、换了店员办理）：确认后换一张新码重新给门店扫。
+   * 被扫过的那张码不会因此作废，在扫码的那位店员那里 5 分钟内仍然有效，所以要顾客确认不是正在扣款。
+   */
+  onRenewScanned() {
+    if (this.data.view !== 'scanned') {
+      return;
+    }
+    wx.showModal({
+      title: '换一张会员码？',
+      content: '门店正在用刚才的码记账时请不要换。如果门店扫错了、或要换一位办理，可以换一张新码重新扫。',
+      confirmText: '换一张',
+      success: (res) => {
+        if (res.confirm && this.data.view === 'scanned') {
+          this.renew();
+        }
+      },
+    });
+  },
+
   onRetry() {
     this.setData({ view: 'loading', message: '' });
     this.renew();

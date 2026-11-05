@@ -19,6 +19,9 @@ import { hashPassword, lockActive, lockAfterFailure, passwordMatches } from './p
 import { assertMainlandMobile, normalizePhone } from './phone';
 import { PhoneIdentity, WechatIdentityService } from './wechat/wechat-identity.service';
 
+/** 停用的会员登录小程序时看到的话：顾客要知道是会员卡停了、该去问门店。 */
+export const MEMBER_DISABLED = '会员卡已停用，如有疑问请联系门店';
+
 const staffLoginInclude = {
   storeRoles: { include: { store: { select: { name: true } } } },
 } satisfies Prisma.StaffInclude;
@@ -424,7 +427,7 @@ export class AuthService {
       where: { orgId_phone: { orgId, phone: identity.phone } },
     });
     if (existing?.status === 'DISABLED') {
-      throw new ForbiddenException('账号已停用');
+      throw new ForbiddenException(MEMBER_DISABLED);
     }
     if (!existing) {
       try {
@@ -462,7 +465,7 @@ export class AuthService {
       where: { orgId_phone: { orgId, phone: identity.phone } },
     });
     if (!current || current.status === 'DISABLED') {
-      throw new ForbiddenException('账号已停用');
+      throw new ForbiddenException(MEMBER_DISABLED);
     }
     return this.prisma.member.update({
       where: { id: current.id },

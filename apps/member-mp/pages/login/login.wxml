@@ -8,6 +8,7 @@
   </view>
 
   <view class="actions">
+    <view wx:if="{{notice}}" class="notice-line">{{notice}}</view>
     <button class="btn-primary" open-type="getPhoneNumber" bindgetphonenumber="onPhoneNumber" loading="{{submitting}}" disabled="{{submitting}}">手机号快捷登录</button>
     <view class="note">用本机微信绑定的手机号识别您的会员身份，请使用在门店开卡时登记的手机号。</view>
   </view>

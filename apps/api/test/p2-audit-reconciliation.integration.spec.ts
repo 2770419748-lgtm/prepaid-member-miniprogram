@@ -280,7 +280,8 @@ describe('P2 audit log and reconciliation', () => {
         action: 'WALLET_REVERSAL',
         actorStaffId: ids.managerB,
         storeId: storeB,
-        payload: { reversalOfId: flow.consumeId, amountCent: 3_000 },
+        // 冲正原因要在操作记录里看得到。
+        payload: { reversalOfId: flow.consumeId, amountCent: 3_000, remark: '记错了' },
       });
 
       const detail = await get(tokens.super, `/audit-logs/${recharge.id}`);

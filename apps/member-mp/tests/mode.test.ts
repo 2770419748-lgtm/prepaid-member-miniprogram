@@ -93,7 +93,7 @@ test('用会员页时会员登录失效：回登录页', async () => {
   replies.push({ statusCode: 401, data: {} });
   await assert.rejects(memberRequest('/members/me'));
   assert.equal(currentToken(), null);
-  assert.deepEqual(relaunched, ['/pages/login/login']);
+  assert.deepEqual(relaunched, ['/pages/login/login?expired=1']);
 });
 
 test('看自己的会员卡时员工登录失效（比如被停用）：只清掉员工登录，会员页照常', async () => {
@@ -114,5 +114,5 @@ test('用工作台时员工登录失效：回登录页', async () => {
   await assert.rejects(staffRequest('GET', '/staff/me/stores'));
   assert.equal(loadStaffSession(), null);
   assert.equal(relaunched.length, 1);
-  assert.equal(relaunched[0], '/pages/login/login');
+  assert.equal(relaunched[0], '/pages/login/login?expired=1');
 });

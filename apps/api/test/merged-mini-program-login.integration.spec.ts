@@ -268,6 +268,6 @@ describe('one mini-program for members and staff', () => {
     await prisma.member.update({ where: { id: login.body.member.id as string }, data: { status: 'DISABLED' } });
     const refused = await signIn(phone);
     expect(refused.status).toBe(403);
-    expect(refused.body.message).toBe('账号已停用');
+    expect(refused.body.message).toBe('会员卡已停用，如有疑问请联系门店');
   });
 });

@@ -29,7 +29,8 @@ function backToLogin(): void {
   }
   redirectingToLogin = true;
   wx.reLaunch({
-    url: LOGIN_PAGE,
+    // 登录页看到 expired=1 会说一声「登录已失效」。
+    url: `${LOGIN_PAGE}?expired=1`,
     complete: () => {
       redirectingToLogin = false;
     },
