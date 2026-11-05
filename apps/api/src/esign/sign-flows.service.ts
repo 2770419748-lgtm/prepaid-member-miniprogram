@@ -77,6 +77,10 @@ export class SignFlowsService {
 
   async create(actor: AccessPrincipal, dto: CreateSignFlowDto): Promise<SignFlowView> {
     assertStoreAccess(actor.roles, dto.storeId);
+    if (this.esignConfig.signMode !== 'ESIGN') {
+      // 坤总 2026-11-05：不签电子合同了。已有的电子签权益单照常能看、能刷新，只是不再发起新的。
+      throw new BadRequestException('现在开单改为上传顾客签字的纸质协议单，不再发起电子签');
+    }
     if (dto.requestId) {
       const replay = await this.findReplay(actor, dto);
       if (replay) {
@@ -239,6 +243,11 @@ export class SignFlowsService {
     return this.view(flow.id);
   }
 
+  /** 开单页、后台用：现在开单走纸质协议单还是电子签。 */
+  config(): { mode: 'PAPER' | 'ESIGN' } {
+    return { mode: this.esignConfig.signMode };
+  }
+
   /** 重新取会员签署链接，开单页把它画成二维码给顾客扫。链接没取到或放久了时用。 */
   async signUrl(actor: AccessPrincipal, id: string): Promise<SignFlowView> {
     const flow = await this.requireVisible(actor, id);
@@ -291,7 +300,7 @@ export class SignFlowsService {
 
   async pdf(actor: AccessPrincipal, id: string): Promise<StreamableFile> {
     const flow = await this.requireVisible(actor, id);
-    return this.readPdf(flow.pdfObjectKey, flow.title || flow.template.name);
+    return this.readPdf(flow.pdfObjectKey, flow.title || flow.template?.name || '权益单');
   }
 
   /** 会员端也用。没归档或文件丢了都按 404。 */
@@ -307,12 +316,13 @@ export class SignFlowsService {
     });
   }
 
-  private async view(id: string): Promise<SignFlowView> {
+  async view(id: string): Promise<SignFlowView> {
     const flow = await this.prisma.signFlow.findUniqueOrThrow({ where: { id }, include: signFlowInclude });
     return toSignFlowView(flow);
   }
 
-  private async requireVisible(actor: AccessPrincipal, id: string): Promise<SignFlowRecord> {
+  /** 本店员工和超管能看的权益单；看不到的一律 404，不透露有没有。纸质协议单的照片也按这个范围。 */
+  async requireVisible(actor: AccessPrincipal, id: string): Promise<SignFlowRecord> {
     const flow = await this.prisma.signFlow.findUnique({ where: { id }, include: signFlowInclude });
     if (!flow || flow.orgId !== actor.orgId) {
       throw new NotFoundException('权益单不存在');

@@ -29,6 +29,12 @@ export const AuditAction = {
   SignFlowCancel: 'SIGN_FLOW_CANCEL',
   /** e签宝回调或主动核对后状态变化（签完、拒签、过期、撤销）。系统写入，没有操作人。 */
   SignFlowStatusChange: 'SIGN_FLOW_STATUS_CHANGE',
+  /** 开单上传纸质协议单（同时自动充值，充值另记 WALLET_RECHARGE）。 */
+  PaperAgreementCreate: 'PAPER_AGREEMENT_CREATE',
+  /** 给纸质协议单补传照片。 */
+  AgreementPhotoAdd: 'AGREEMENT_PHOTO_ADD',
+  /** 超管或开单门店店长删掉照错的协议单照片（文件一并删除）。 */
+  AgreementPhotoRemove: 'AGREEMENT_PHOTO_REMOVE',
   /** 微信审核体验入口：超级管理员打开（或延长）、换密码、关闭；审核员用审核账号登录。记在真实公司名下。 */
   ReviewDemoOpen: 'REVIEW_DEMO_OPEN',
   ReviewDemoPassword: 'REVIEW_DEMO_PASSWORD',
@@ -63,6 +69,9 @@ export const AuditActionLabel: Record<AuditActionCode, string> = {
   SIGN_FLOW_CREATE: '发起签署',
   SIGN_FLOW_CANCEL: '取消签署',
   SIGN_FLOW_STATUS_CHANGE: '签署状态变化',
+  PAPER_AGREEMENT_CREATE: '上传纸质协议单',
+  AGREEMENT_PHOTO_ADD: '补传协议单照片',
+  AGREEMENT_PHOTO_REMOVE: '删除协议单照片',
   REVIEW_DEMO_OPEN: '打开审核体验入口',
   REVIEW_DEMO_PASSWORD: '更换审核密码',
   REVIEW_DEMO_CLOSE: '关闭审核体验入口',

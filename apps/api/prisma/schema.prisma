@@ -74,6 +74,13 @@ enum SignFlowStatus {
   CANCELED
 }
 
+/// 权益单怎么签的。ESIGN：e签宝电子签（2026-11-05 起默认关闭，见 SIGN_MODE）；
+/// PAPER：顾客在门店签纸质协议单，店员拍照上传，上传即算签好。
+enum SignKind {
+  ESIGN
+  PAPER
+}
+
 /// 签署环境。默认沙箱。正式环境仅在 esign.production.enabled 打开后允许写入。
 enum SignEnv {
   SANDBOX
@@ -103,6 +110,7 @@ model Org {
   benefitPlans      BenefitPlan[]
   contractTemplates ContractTemplate[]
   signFlows         SignFlow[]
+  agreementPhotos   AgreementPhoto[]
   auditLogs         AuditLog[]
   payCodes          MemberPayCode[]
   orderRedemptions  OrderRedemption[]
@@ -163,6 +171,8 @@ model Staff {
   ledgerOps          LedgerEntry[]    @relation("LedgerOperator")
   auditLogs          AuditLog[]
   initiatedSignFlows SignFlow[]       @relation("SignFlowInitiator")
+  uploadedPhotos     AgreementPhoto[] @relation("AgreementPhotoUploader")
+  removedPhotos      AgreementPhoto[] @relation("AgreementPhotoRemover")
   payCodeScans       MemberPayCode[]
 
   @@unique([orgId, phone])
@@ -351,6 +361,8 @@ model BenefitPlan {
 
   org       Org                @relation(fields: [orgId], references: [id], onDelete: Restrict)
   templates ContractTemplate[]
+  /// 纸质协议单直接关联方案（电子签的方案从模板上取）。
+  signFlows SignFlow[]
 
   @@index([orgId])
   @@map("benefit_plans")
@@ -379,14 +391,20 @@ model ContractTemplate {
   @@map("contract_templates")
 }
 
-/// 一份权益单的签署。会员个人签 + 商家企业章（沙箱为平台自动盖章）。
-/// env 记录实际调用的 e签宝环境，由网关地址决定；正式环境只有总开关打开后才允许。
-/// 同一会员同一模板最多一份未完成（DRAFT / PENDING），由迁移里的部分唯一索引保证。
+/// 一份权益单的签署。两种签法（kind）：
+/// - ESIGN：会员在 e签宝签 + 商家企业章（沙箱为平台自动盖章）。env 记录实际调用的 e签宝环境，由网关地址决定；
+///   正式环境只有总开关打开后才允许。同一会员同一模板最多一份未完成（DRAFT / PENDING），由迁移里的部分唯一索引保证。
+/// - PAPER：顾客在门店签纸质协议单，店员拍照上传（photos），一建好就是已签署并充值。没有模板和 e签宝流程号，
+///   env 没有意义（保持默认值），界面不按它显示「测试签署」。
 model SignFlow {
   id                 String         @id @default(cuid())
   orgId              String         @map("org_id")
   memberId           String         @map("member_id")
-  templateId         String         @map("template_id")
+  kind               SignKind       @default(ESIGN)
+  /// 电子签用的模板。纸质协议单为空（迁移里的 CHECK 保证电子签一定有）。
+  templateId         String?        @map("template_id")
+  /// 纸质协议单关联的权益方案（可不选）。电子签为空，方案从模板上取。
+  benefitPlanId      String?        @map("benefit_plan_id")
   /// 发起门店。店长、店员只看本店发起的。
   storeId            String?        @map("store_id")
   initiatorStaffId   String?        @map("initiator_staff_id")
@@ -411,18 +429,50 @@ model SignFlow {
   createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  org           Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
-  member        Member           @relation(fields: [memberId], references: [id], onDelete: Restrict)
-  template      ContractTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  store         Store?           @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  initiator     Staff?           @relation("SignFlowInitiator", fields: [initiatorStaffId], references: [id], onDelete: SetNull)
-  rechargeEntry LedgerEntry?     @relation(fields: [rechargeEntryId], references: [id], onDelete: Restrict)
+  org           Org               @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  member        Member            @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  template      ContractTemplate? @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  benefitPlan   BenefitPlan?      @relation(fields: [benefitPlanId], references: [id], onDelete: Restrict)
+  photos        AgreementPhoto[]
+  store         Store?            @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  initiator     Staff?            @relation("SignFlowInitiator", fields: [initiatorStaffId], references: [id], onDelete: SetNull)
+  rechargeEntry LedgerEntry?      @relation(fields: [rechargeEntryId], references: [id], onDelete: Restrict)
 
   @@unique([orgId, requestId])
   @@index([orgId, createdAt])
   @@index([memberId, createdAt])
   @@index([storeId, createdAt])
   @@map("sign_flows")
+}
+
+/// 纸质协议单的照片（顾客签了字的协议单，含姓名、电话等个人信息）。文件在对象存储里（私有），库里只记 key。
+/// 店员先一张张传上来（signFlowId 为空），交单时和权益单同一事务挂上去；之后可以补传。
+/// 照错了由超管或开单门店店长删除：文件从存储里删掉，这一行留着记谁、为什么删的。
+/// 只有会员本人、开单门店的员工和超管能看。
+model AgreementPhoto {
+  id               String    @id @default(cuid())
+  orgId            String    @map("org_id")
+  signFlowId       String?   @map("sign_flow_id")
+  uploaderStaffId  String?   @map("uploader_staff_id")
+  objectKey        String    @unique @map("object_key")
+  /// 按文件头识别的类型（image/jpeg、image/png、image/webp），不信客户端报的。
+  contentType      String    @map("content_type")
+  sizeBytes        Int       @map("size_bytes")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// 挂到权益单上的时间。
+  attachedAt       DateTime? @map("attached_at") @db.Timestamptz(6)
+  removedAt        DateTime? @map("removed_at") @db.Timestamptz(6)
+  removedByStaffId String?   @map("removed_by_staff_id")
+  removeReason     String?   @map("remove_reason")
+
+  org       Org       @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  signFlow  SignFlow? @relation(fields: [signFlowId], references: [id], onDelete: Restrict)
+  uploader  Staff?    @relation("AgreementPhotoUploader", fields: [uploaderStaffId], references: [id], onDelete: SetNull)
+  removedBy Staff?    @relation("AgreementPhotoRemover", fields: [removedByStaffId], references: [id], onDelete: SetNull)
+
+  @@index([signFlowId, createdAt])
+  @@index([orgId, uploaderStaffId, createdAt])
+  @@map("agreement_photos")
 }
 
 /// 操作记录。只追加，数据库触发器拒绝修改和删除。

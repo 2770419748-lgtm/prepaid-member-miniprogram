@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Query, StreamableFile } from '@nestjs/common';
+import { Controller, Get, Header, Param, Post, Query, StreamableFile } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import { AccessPrincipal } from '../auth/access-principal';
 import { CurrentPrincipal, Principals } from '../auth/decorators';
@@ -40,6 +40,18 @@ export class MemberSignFlowsController {
   @ApiOperation({ summary: '从签署页回来后同步状态' })
   refresh(@CurrentPrincipal() principal: AccessPrincipal, @Param('id') id: string) {
     return this.flows.refresh(principal, id);
+  }
+
+  @Get('sign-flows/:id/photos/:photoId')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiProduces('image/jpeg', 'image/png', 'image/webp')
+  @ApiOperation({ summary: '查看我的纸质协议单照片' })
+  photo(
+    @CurrentPrincipal() principal: AccessPrincipal,
+    @Param('id') id: string,
+    @Param('photoId') photoId: string,
+  ): Promise<StreamableFile> {
+    return this.flows.photo(principal, id, photoId);
   }
 
   @Get('sign-flows/:id/pdf')

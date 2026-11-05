@@ -15,6 +15,12 @@ export interface EsignTarget {
   baseUrl: string;
 }
 
+/**
+ * 开单时顾客怎么签权益单。坤总 2026-11-05：不签电子合同了，改成上传纸质协议单。
+ * PAPER（默认）：店员拍照上传顾客签了字的纸质协议单，上传即充值；ESIGN：原来的 e签宝 电子签（代码保留，开关打开才用）。
+ */
+export type SignMode = 'PAPER' | 'ESIGN';
+
 /** 环境或网关不允许调用。调用方转成 503，不打出任何请求。 */
 export class EsignTargetRefusedError extends Error {}
 
@@ -26,6 +32,15 @@ export class EsignTargetRefusedError extends Error {}
 @Injectable()
 export class EsignConfigService {
   constructor(private readonly config: ConfigService) {}
+
+  /**
+   * 环境变量 SIGN_MODE：paper（默认）或 esign。写错了按 paper，不会意外打开电子签。
+   * 只决定新开单走哪种；已有的电子签权益单照常能查看、刷新、下载。
+   */
+  get signMode(): SignMode {
+    const value = this.config.get<string>('SIGN_MODE')?.trim().toLowerCase();
+    return value === 'esign' ? 'ESIGN' : 'PAPER';
+  }
 
   /** false 时不得走正式密钥、计费或对外正式签署。 */
   get productionEnabled(): boolean {

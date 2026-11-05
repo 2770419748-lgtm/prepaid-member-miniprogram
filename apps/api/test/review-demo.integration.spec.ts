@@ -211,12 +211,24 @@ describe('review demo entry', () => {
     expect(recharge.status).toBe(201);
     expect(recharge.body.balanceCent).toBe(30_000);
 
-    const sign = await http()
-      .post('/sign-flows')
-      .set('Authorization', `Bearer ${demoStaffToken}`)
-      .send({ storeId: store.id, memberId: member.id, templateId: template.id, requestId: randomUUID() });
-    expect(sign.status).toBe(403);
-    expect(messageOf(sign.body)).toContain('审核体验里不发起真实的合同签署');
+    const startSign = () =>
+      http()
+        .post('/sign-flows')
+        .set('Authorization', `Bearer ${demoStaffToken}`)
+        .send({ storeId: store.id, memberId: member.id, templateId: template.id, requestId: randomUUID() });
+    // 2026-11-05 起开单默认上传纸质协议单，不再发起电子签。
+    const refused = await startSign();
+    expect(refused.status).toBe(400);
+    expect(messageOf(refused.body)).toContain('不再发起电子签');
+    // 电子签开关打开时，演示公司里也不发起真实的合同。
+    process.env.SIGN_MODE = 'esign';
+    try {
+      const sign = await startSign();
+      expect(sign.status).toBe(403);
+      expect(messageOf(sign.body)).toContain('审核体验里不发起真实的合同签署');
+    } finally {
+      delete process.env.SIGN_MODE;
+    }
     expect(await prisma.signFlow.count({ where: { orgId: demoId } })).toBe(0);
   });
 
