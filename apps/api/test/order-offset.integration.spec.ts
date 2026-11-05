@@ -23,8 +23,15 @@ describe('order offset', () => {
   let otherOrgId = '';
   let storeA = '';
   let storeB = '';
-  const tokens = { clerkA: '', clerkB: '', managerA: '', otherClerk: '' };
-  const phones = { clerkA: randomPhone(), clerkB: randomPhone(), managerA: randomPhone(), otherClerk: randomPhone() };
+  const tokens = { clerkA: '', clerkB: '', managerA: '', managerB: '', otherClerk: '', otherManager: '' };
+  const phones = {
+    clerkA: randomPhone(),
+    clerkB: randomPhone(),
+    managerA: randomPhone(),
+    managerB: randomPhone(),
+    otherClerk: randomPhone(),
+    otherManager: randomPhone(),
+  };
   let otherStore = '';
   let seq = 0;
   const orderBase = randomInt(100_000_000, 900_000_000);
@@ -45,15 +52,17 @@ describe('order offset', () => {
     return response.body.accessToken as string;
   }
 
+  /** 店员开卡，这家店的店长补录充值（店员不能直接充值，只能走开单）。 */
   async function memberWithBalance(balanceCent: number, token = tokens.clerkA, storeId = storeA): Promise<string> {
     const opened = await http()
       .post('/members/open')
       .set('Authorization', `Bearer ${token}`)
       .send({ phone: randomPhone(), storeId });
     expect(opened.status).toBe(201);
+    const manager = storeId === storeA ? tokens.managerA : storeId === storeB ? tokens.managerB : tokens.otherManager;
     const recharge = await http()
       .post(`/wallets/${opened.body.id}/recharge`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${manager}`)
       .send({ storeId, amountCent: balanceCent, requestId: randomUUID() });
     expect(recharge.status).toBe(201);
     return opened.body.id as string;
@@ -117,7 +126,9 @@ describe('order offset', () => {
       ['clerkA', '滨江店员', StaffRole.STAFF, storeA, orgId],
       ['clerkB', '社区店员', StaffRole.STAFF, storeB, orgId],
       ['managerA', '滨江店长', StaffRole.STORE_MANAGER, storeA, orgId],
+      ['managerB', '社区店长', StaffRole.STORE_MANAGER, storeB, orgId],
       ['otherClerk', '别家店员', StaffRole.STAFF, otherStore, otherOrgId],
+      ['otherManager', '别家店长', StaffRole.STORE_MANAGER, otherStore, otherOrgId],
     ];
     for (const [key, name, role, storeId, org] of people) {
       await prisma.staff.create({

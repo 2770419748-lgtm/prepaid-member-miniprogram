@@ -8,10 +8,22 @@
         <template #subTitle>
           {{ created.name || '未填称呼' }} · {{ created.phone }} · {{ created.openStoreName }}
           <div>会员用这个手机号登录小程序，就能看到余额和明细。</div>
+          <div v-if="!session.canRecharge && paperMode">给会员充值请在手机工作台开单，上传顾客签字的协议单后到账。</div>
         </template>
         <template #extra>
-          <a-button type="primary" @click="router.push({ name: 'recharge', query: { memberId: created.id } })">
+          <a-button
+            v-if="session.canRecharge"
+            type="primary"
+            @click="router.push({ name: 'recharge', query: { memberId: created.id } })"
+          >
             去充值
+          </a-button>
+          <a-button
+            v-else-if="!paperMode"
+            type="primary"
+            @click="router.push({ name: 'sign-flows', query: { memberId: created.id, start: '1' } })"
+          >
+            发起权益单
           </a-button>
           <a-button @click="router.push({ name: 'member-detail', params: { id: created.id } })">查看会员</a-button>
           <a-button @click="reset">继续开卡</a-button>
@@ -41,7 +53,9 @@
           <template v-if="existing" #description>
             <router-link :to="{ name: 'member-detail', params: { id: existing.id } }">查看这位会员</router-link>
             ，或直接
-            <router-link :to="{ name: 'recharge', query: { memberId: existing.id } }">给他充值</router-link>
+            <router-link v-if="session.canRecharge" :to="{ name: 'recharge', query: { memberId: existing.id } }">给他充值</router-link>
+            <span v-else-if="paperMode">在手机工作台给他开单</span>
+            <router-link v-else :to="{ name: 'sign-flows', query: { memberId: existing.id, start: '1' } }">给他发起权益单</router-link>
           </template>
         </a-alert>
         <a-button type="primary" size="large" html-type="submit">开卡</a-button>
@@ -68,8 +82,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { DEFAULT_SIGN_CONFIG, loadSignConfig } from '../../api/esign';
 import { errorMessage, errorStatus } from '../../api/http';
 import { findMemberByPhone, openCard } from '../../api/members';
 import type { MemberCard } from '../../api/types';
@@ -137,6 +152,15 @@ function reset(): void {
   form.name = '';
   form.storeId = initialStore();
 }
+
+// 纸质协议单模式（默认）下开单只在手机工作台，后台不发起签署。
+const paperMode = ref(DEFAULT_SIGN_CONFIG.mode === 'PAPER');
+
+onMounted(() => {
+  void loadSignConfig().then((config) => {
+    paperMode.value = config.mode === 'PAPER';
+  });
+});
 </script>
 
 <style scoped>

@@ -285,8 +285,9 @@ async function main(): Promise<void> {
     return code;
   }
 
+  // 直接充值只有店长和超级管理员能做（补录），店员走开单。
   const recharge = await api(`/wallets/${memberId}/recharge`, {
-    token: clerkA,
+    token: managerA,
     body: { storeId: flagship.id, amountCent: 10000, remark: '现金', requestId: randomUUID() },
   });
   expectStatus(recharge, 201, '充值');
@@ -386,14 +387,14 @@ async function main(): Promise<void> {
   });
 
   const wrong = await api(`/wallets/${memberId}/recharge`, {
-    token: clerkA,
+    token: managerA,
     body: { storeId: flagship.id, amountCent: 100000, remark: '充值', requestId: randomUUID() },
   });
   expectStatus(wrong, 201, '误录充值');
   const wrongId = (wrong.body as MoveBody).entry.id;
   steps.push({
     tone: 'ok',
-    title: '李店员把 100 元误录成了 1000 元',
+    title: '张店长补录时把 100 元误录成了 1000 元',
     detail: `余额一下变成 ${yuan((wrong.body as MoveBody).balanceCent)} 元。这条记录不能删也不能改，只能冲正。`,
   });
 
@@ -428,11 +429,11 @@ async function main(): Promise<void> {
 
   const requestId = randomUUID();
   const first = await api(`/wallets/${memberId}/recharge`, {
-    token: clerkA,
+    token: managerA,
     body: { storeId: flagship.id, amountCent: 10000, remark: '充值', requestId },
   });
   const retry = await api(`/wallets/${memberId}/recharge`, {
-    token: clerkA,
+    token: managerA,
     body: { storeId: flagship.id, amountCent: 10000, remark: '充值', requestId },
   });
   expectStatus(first, 201, '正确充值');

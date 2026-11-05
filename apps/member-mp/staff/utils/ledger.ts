@@ -83,6 +83,17 @@ export function canReverse(entry: LedgerEntry, access: MyStoresResult): boolean 
   return access.stores.some((store) => store.id === entry.storeId && store.role === 'STORE_MANAGER');
 }
 
+/**
+ * 不经开单直接充值（补录线下已收的款）：和服务端一致，超级管理员，或这家门店的店长。
+ * 店员给会员充值只能走开单（办理权益单），顾客签完才到账。
+ */
+export function canRechargeAt(storeId: string, access: MyStoresResult): boolean {
+  if (access.unrestricted) {
+    return true;
+  }
+  return access.stores.some((store) => store.id === storeId && store.role === 'STORE_MANAGER');
+}
+
 /** 选当前门店：沿用上次选的在营门店，否则取第一家在营门店。都停用时返回空。 */
 export function pickStore(stores: MyStore[], preferredId: string | null): MyStore | null {
   const active = stores.filter((store) => store.status === 'ACTIVE');

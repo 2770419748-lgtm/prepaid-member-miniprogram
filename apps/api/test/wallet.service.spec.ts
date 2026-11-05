@@ -13,6 +13,14 @@ const clerk: AccessPrincipal = {
   roles: [{ storeId: 'store-1', role: 'STAFF' }],
 };
 
+/** 直接充值只给店长和超级管理员（店员走开单）。 */
+const manager: AccessPrincipal = {
+  sub: 'staff-2',
+  orgId: 'org-1',
+  principalType: 'STAFF',
+  roles: [{ storeId: 'store-1', role: 'STORE_MANAGER' }],
+};
+
 interface FakeWallet {
   id: string;
   balanceCent: number;
@@ -130,7 +138,7 @@ describe('WalletService', () => {
     const wallet = { id: 'wallet-1', balanceCent: 0, version: 0 };
     const fake = fakePrisma(wallet);
     const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service, new OrderRedemptionService(fake.prisma));
-    const result = await service.recharge(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 10000 });
+    const result = await service.recharge(manager, 'member-1', { ...req, storeId: 'store-1', amountCent: 10000 });
     expect(result.balanceCent).toBe(10000);
     expect(fake.transactions()).toBe(1);
     expect(fake.tx.wallet.updateMany).toHaveBeenCalledWith({
@@ -142,7 +150,7 @@ describe('WalletService', () => {
       amountCent: 10000,
       balanceBefore: 0,
       balanceAfter: 10000,
-      operatorStaffId: 'staff-1',
+      operatorStaffId: 'staff-2',
       storeId: 'store-1',
     });
     expect(fake.audits[0]).toMatchObject({ action: 'WALLET_RECHARGE', targetId: 'entry-1' });
@@ -219,7 +227,7 @@ describe('WalletService', () => {
     const fake = fakePrisma(wallet);
     const codes = fakePayCodes();
     const service = new WalletService(fake.prisma, new AuditLogWriter(), codes.service, new OrderRedemptionService(fake.prisma));
-    await service.recharge(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 100 });
+    await service.recharge(manager, 'member-1', { ...req, storeId: 'store-1', amountCent: 100 });
     expect(codes.raw.assertUsable).not.toHaveBeenCalled();
     expect(codes.raw.markUsed).not.toHaveBeenCalled();
   });
@@ -231,6 +239,16 @@ describe('WalletService', () => {
     await expect(
       service.recharge(clerk, 'member-1', { ...req, storeId: 'store-2', amountCent: 100 }),
     ).rejects.toThrow('无权操作该门店');
+    expect(fake.transactions()).toBe(0);
+  });
+
+  it('refuses a direct recharge by a clerk before touching anything', async () => {
+    const wallet = { id: 'wallet-1', balanceCent: 0, version: 0 };
+    const fake = fakePrisma(wallet);
+    const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service, new OrderRedemptionService(fake.prisma));
+    await expect(
+      service.recharge(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 100 }),
+    ).rejects.toThrow('请走开单');
     expect(fake.transactions()).toBe(0);
   });
 
@@ -298,7 +316,7 @@ describe('WalletService', () => {
     const wallet = { id: 'wallet-1', balanceCent: 0, version: 0 };
     const fake = fakePrisma(wallet);
     const service = new WalletService(fake.prisma, new AuditLogWriter(), fakePayCodes().service, new OrderRedemptionService(fake.prisma));
-    await service.recharge(clerk, 'member-1', { ...req, storeId: 'store-1', amountCent: 100 });
+    await service.recharge(manager, 'member-1', { ...req, storeId: 'store-1', amountCent: 100 });
     expect(fake.created[0]).toMatchObject({ orderNo: null, productAmountCent: null, orderNoTyped: null });
     expect(fake.occupied).toHaveLength(0);
   });

@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { canReverse, groupByDay, pickStore, toLedgerRow } from '../../staff/utils/ledger';
+import { canRechargeAt, canReverse, groupByDay, pickStore, toLedgerRow } from '../../staff/utils/ledger';
 import type { LedgerEntry, MyStore, MyStoresResult } from '../../staff/utils/types';
 
 function entry(overrides: Partial<LedgerEntry>): LedgerEntry {
@@ -93,6 +93,18 @@ test('冲正权限与服务端一致：超管或原门店店长，每笔只冲�
   assert.equal(canReverse(entry({}), clerk), false);
   assert.equal(canReverse(entry({ reversedById: 'r1' }), superAdmin), false);
   assert.equal(canReverse(entry({ type: 'REVERSAL', reversalOfId: 'e0' }), superAdmin), false);
+});
+
+test('直接充值只给超级管理员和本店店长，店员走开单', () => {
+  const superAdmin: MyStoresResult = { unrestricted: true, stores: [store('s1', 'SUPER_ADMIN')] };
+  const manager: MyStoresResult = { unrestricted: false, stores: [store('s1', 'STORE_MANAGER'), store('s2', 'STAFF')] };
+  const clerk: MyStoresResult = { unrestricted: false, stores: [store('s1', 'STAFF')] };
+
+  assert.equal(canRechargeAt('s9', superAdmin), true);
+  assert.equal(canRechargeAt('s1', manager), true);
+  // 在别的店只是店员，在那家店也不能直接充值。
+  assert.equal(canRechargeAt('s2', manager), false);
+  assert.equal(canRechargeAt('s1', clerk), false);
 });
 
 test('当前门店：沿用上次选择，停用的店跳过', () => {

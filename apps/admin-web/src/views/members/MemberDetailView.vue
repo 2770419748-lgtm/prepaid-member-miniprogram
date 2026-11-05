@@ -11,11 +11,22 @@
     <template v-else-if="member">
       <MemberCardPanel :member="member" full-phone>
         <template v-if="member.hasCard && member.status === 'ACTIVE'">
-          <a-button type="primary" @click="router.push({ name: 'recharge', query: { memberId: member.id } })">充值</a-button>
+          <!-- 直接充值只给店长和超级管理员补录；店员给会员充值就是开单（纸质协议单在手机工作台上传）。 -->
+          <a-button
+            v-if="session.canRecharge"
+            type="primary"
+            @click="router.push({ name: 'recharge', query: { memberId: member.id } })"
+          >
+            充值
+          </a-button>
           <a-button v-if="paperMode" @click="router.push({ name: 'sign-flows', query: { memberId: member.id } })">
             协议单
           </a-button>
-          <a-button v-else @click="router.push({ name: 'sign-flows', query: { memberId: member.id, start: '1' } })">
+          <a-button
+            v-else
+            :type="session.canRecharge ? 'default' : 'primary'"
+            @click="router.push({ name: 'sign-flows', query: { memberId: member.id, start: '1' } })"
+          >
             发起权益单
           </a-button>
         </template>

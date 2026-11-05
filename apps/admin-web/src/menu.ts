@@ -36,7 +36,8 @@ export const MENU: MenuGroup[] = [
     label: '记账',
     icon: 'billing',
     children: [
-      { key: 'recharge', label: '充值记账' },
+      // 直接充值只给店长和超级管理员补录，店员给会员充值走「权益单」。
+      { key: 'recharge', label: '充值记账', minRole: 'STORE_MANAGER' },
       { key: 'ledger', label: '流水查询' },
     ],
   },

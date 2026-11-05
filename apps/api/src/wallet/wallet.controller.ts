@@ -14,7 +14,7 @@ export class WalletController {
   constructor(private readonly wallets: WalletService) {}
 
   @Post(':memberId/recharge')
-  @ApiOperation({ summary: '线下充值记账。只记账，不收款；门店须在操作人权限内' })
+  @ApiOperation({ summary: '直接充值记账（补录）。只记账，不收款；只有超级管理员和这家门店的店长能做，店员充值走开单' })
   recharge(
     @CurrentPrincipal() actor: AccessPrincipal,
     @Param('memberId') memberId: string,

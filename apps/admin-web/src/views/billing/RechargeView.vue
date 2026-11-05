@@ -108,13 +108,14 @@ import { maskPhone } from '../../utils/phone';
 import { newRequestId } from '../../utils/request-id';
 
 // 消费扣款必须在小程序工作台里先扫会员码，后台只做充值记账。
+// 这里是不经开单的直接充值，只给店长（本店）和超级管理员补录；店员给会员充值走权益单，签完才到账。
 const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
 
 const copy = {
   title: '充值记账',
-  sub: '会员在门店线下付款后，在这里记一笔充值。系统不收款，只记账。',
+  sub: '日常给会员充值请走权益单，办完自动到账。这里给店长和超级管理员补录线下已收款、没走权益单的充值。系统不收款，只记账。',
   amountStep: '填写充值金额',
   remarkHint: '例如：现金、刷卡、转账',
   button: '充值',
@@ -137,12 +138,14 @@ const result = ref<MoneyMoveResult | null>(null);
 let requestId = newRequestId();
 
 const storeOptions = computed(() =>
-  session.activeStores.map((store) => ({ value: store.id, label: store.name })),
+  session.rechargeStores.map((store) => ({ value: store.id, label: store.name })),
 );
 
 const storeName = computed(() => session.stores.find((s) => s.id === storeId.value)?.name ?? '');
 const storeHint = computed(() =>
-  session.activeStores.length === 0 ? '你没有在营业的门店，不能记账' : '默认是顶部选中的当前门店',
+  session.rechargeStores.length === 0
+    ? '你没有可以直接充值的在营门店（店长只能在自己管的店补录）'
+    : '默认是顶部选中的当前门店；店长只能选自己管的店',
 );
 
 const amountCent = computed(() => yuanToCent(amount.value));
@@ -176,8 +179,9 @@ const resultTitle = computed(() => {
 });
 
 function defaultStore(): void {
-  const current = session.currentStore;
-  storeId.value = current && current.status === 'ACTIVE' ? current.id : session.activeStores[0]?.id;
+  const allowed = session.rechargeStores;
+  const current = allowed.find((store) => store.id === session.currentStoreId);
+  storeId.value = current ? current.id : allowed[0]?.id;
 }
 
 function onFound(found: MemberCard): void {

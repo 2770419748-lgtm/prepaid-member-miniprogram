@@ -59,7 +59,7 @@ const routes: RouteRecordRaw[] = [
         path: 'billing/recharge',
         name: 'recharge',
         component: () => import('../views/billing/RechargeView.vue'),
-        meta: { title: '充值记账' },
+        meta: { title: '充值记账', minRole: 'STORE_MANAGER' },
       },
       {
         path: 'billing/consume',
