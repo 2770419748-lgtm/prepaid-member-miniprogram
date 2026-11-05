@@ -86,7 +86,28 @@ export interface LedgerEntry {
   /** 冲正抵掉的是哪一类。不是冲正为空。 */
   reversalOfType?: LedgerType | null;
   reversedById: string | null;
+  /** 消费抵扣的九讯云订单号（A+数字）；冲正流水显示被冲那笔的订单号。2026-11-05 以前的消费为空。 */
+  orderNo?: string | null;
+  /** 那张订单的商品应付金额，分。只有带订单号的消费有。 */
+  productAmountCent?: number | null;
+  /** 订单号是店员手输的。 */
+  orderNoTyped?: boolean | null;
   createdAt: string;
+}
+
+/** 扫到订单码后先查一下这张单抵过没有（全公司范围）。 */
+export interface OrderCheck {
+  /** 整理后的订单号，如 A5982。 */
+  orderNo: string;
+  redeemed: {
+    entryId: string;
+    storeName: string;
+    amountCent: number;
+    productAmountCent: number | null;
+    createdAt: string;
+  } | null;
+  /** 抵过时的提示（哪天在哪家店抵了多少）。 */
+  message: string | null;
 }
 
 export interface MoveResult {

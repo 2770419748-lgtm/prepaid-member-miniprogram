@@ -23,6 +23,10 @@ interface DetailView {
   remark: string;
   reversedById: string;
   reversalOfId: string;
+  /** 九讯云订单号，后面标「手输」；没有为空。 */
+  order: string;
+  /** 商品应付金额（元）；没有为空。 */
+  product: string;
 }
 
 function toView(entry: LedgerEntry): DetailView {
@@ -41,6 +45,8 @@ function toView(entry: LedgerEntry): DetailView {
     remark: entry.remark || '无',
     reversedById: entry.reversedById ?? '',
     reversalOfId: entry.reversalOfId ?? '',
+    order: entry.orderNo ? `${entry.orderNo}${entry.orderNoTyped ? '（手输）' : ''}` : '',
+    product: entry.productAmountCent != null ? `${formatCent(entry.productAmountCent)} 元` : '',
   };
 }
 

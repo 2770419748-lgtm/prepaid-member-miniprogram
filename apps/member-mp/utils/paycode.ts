@@ -14,6 +14,10 @@ export interface UsedView {
   balanceText: string;
   storeName: string;
   timeText: string;
+  /** 订单号，没有为空。 */
+  orderText: string;
+  /** 商品金额（元），没有为空。 */
+  productText: string;
 }
 
 /**
@@ -33,6 +37,8 @@ export function usedView(entry: LedgerItem): UsedView {
     balanceText: formatYuan(entry.balanceAfter),
     storeName: entry.storeName,
     timeText: dateTime(entry.createdAt),
+    orderText: entry.orderNo ?? '',
+    productText: entry.productAmountCent != null ? formatYuan(entry.productAmountCent) : '',
   };
 }
 

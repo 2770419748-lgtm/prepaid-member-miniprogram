@@ -45,6 +45,10 @@ export interface LedgerItem {
   reversalOfType?: LedgerType | null;
   /** 这一笔已经被撤销。 */
   reversed: boolean;
+  /** 门店消费抵扣的订单号（如 A5982）；撤销记录显示被撤销那笔的订单号。以前的消费没有。 */
+  orderNo?: string | null;
+  /** 那张订单的商品金额，分。 */
+  productAmountCent?: number | null;
   createdAt: string;
 }
 

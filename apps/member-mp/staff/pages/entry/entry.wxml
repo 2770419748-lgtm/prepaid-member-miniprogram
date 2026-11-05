@@ -12,6 +12,8 @@
       <view class="kv"><text class="kv-key">会员</text><text class="kv-value">{{memberLabel}}</text></view>
       <view class="kv"><text class="kv-key">当前余额</text><text class="kv-value strong">{{done.balance}} 元</text></view>
       <view class="kv"><text class="kv-key">门店</text><text class="kv-value">{{done.storeName}}</text></view>
+      <view wx:if="{{done.orderNo}}" class="kv"><text class="kv-key">九讯云订单</text><text class="kv-value">{{done.orderNo}}</text></view>
+      <view wx:if="{{done.product}}" class="kv"><text class="kv-key">商品应付</text><text class="kv-value">{{done.product}} 元</text></view>
       <view class="kv"><text class="kv-key">时间</text><text class="kv-value">{{done.time}}</text></view>
       <view wx:if="{{done.remark}}" class="kv"><text class="kv-key">备注</text><text class="kv-value">{{done.remark}}</text></view>
     </view>
@@ -22,7 +24,7 @@
   <block wx:elif="{{needCode}}">
     <view class="card scan-need">
       <text class="card-title">消费要先扫会员码</text>
-      <text class="hint">请顾客打开小程序，点首页的「会员码」，再用下面的按钮扫码。扫到才能填扣款金额。</text>
+      <text class="hint">请顾客打开小程序，点首页的「会员码」，再用下面的按钮扫码。扫到会员码、再扫九讯云订单码，才能抵扣。</text>
     </view>
     <view class="btn btn-primary" hover-class="is-pressed" bindtap="onRescan">扫会员码</view>
   </block>
@@ -38,8 +40,58 @@
       </view>
     </view>
 
+    <view wx:if="{{kind === 'CONSUME'}}" class="card order-card">
+      <text class="field-label">九讯云订单</text>
+      <view wx:if="{{orderNo}}" class="order-line">
+        <text class="order-no">{{orderNo}}</text>
+        <text class="tag {{orderNoTyped ? 'tag-warning' : 'tag-primary'}}">{{orderNoTyped ? '手输单号' : '已扫码'}}</text>
+        <text wx:if="{{!uncertain}}" class="link order-change" bindtap="onChangeOrder">换一张</text>
+      </view>
+      <block wx:elif="{{typingOrder}}">
+        <view class="order-type">
+          <input
+            class="field-input order-input"
+            type="text"
+            maxlength="12"
+            placeholder="小票上的单号，如 5982"
+            placeholder-class="placeholder"
+            value="{{orderInput}}"
+            focus="{{true}}"
+            bindinput="onOrderInput"
+          />
+          <view class="btn btn-plain order-ok" hover-class="is-pressed" bindtap="onConfirmTypedOrder">确定</view>
+        </view>
+        <text wx:if="{{orderError}}" class="error">{{orderError}}</text>
+        <text class="link order-switch" bindtap="onCancelTypeOrder">改回扫码</text>
+      </block>
+      <block wx:else>
+        <text class="hint">扫九讯云小票上方的条码。一张单只能抵一次。</text>
+        <view class="btn btn-plain scan-order" hover-class="is-pressed" bindtap="onScanOrder">扫订单码</view>
+        <text wx:if="{{orderError}}" class="error">{{orderError}}</text>
+        <text class="link order-switch type-order" bindtap="onTypeOrder">条码扫不出来？手输单号</text>
+      </block>
+    </view>
+
     <view class="card">
-      <text class="field-label">{{kindLabel}}金额（元）</text>
+      <block wx:if="{{kind === 'CONSUME'}}">
+        <text class="field-label">商品应付金额（元）</text>
+        <view class="product-line">
+          <input
+            class="field-input product-input"
+            type="digit"
+            placeholder="小票上的总计减优惠"
+            placeholder-class="placeholder"
+            value="{{product}}"
+            disabled="{{uncertain}}"
+            bindinput="onProductInput"
+          />
+        </view>
+        <text wx:if="{{productError}}" class="error">{{productError}}</text>
+        <text wx:elif="{{capText}}" class="hint cap">{{capText}}</text>
+        <text wx:else class="hint cap">只算能用储值抵扣的商品，最多抵 10%</text>
+        <text class="field-label offset-label">本次抵扣（元）</text>
+      </block>
+      <text wx:else class="field-label">{{kindLabel}}金额（元）</text>
       <view class="amount-line">
         <text class="amount-symbol">¥</text>
         <input
@@ -49,7 +101,7 @@
           placeholder-class="placeholder"
           value="{{amount}}"
           disabled="{{uncertain}}"
-          focus="{{!uncertain}}"
+          focus="{{kind === 'RECHARGE' && !uncertain}}"
           bindinput="onAmountInput"
         />
       </view>
