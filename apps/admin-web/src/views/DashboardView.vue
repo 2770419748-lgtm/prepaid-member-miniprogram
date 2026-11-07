@@ -53,7 +53,7 @@
         <a-skeleton v-if="loading" active :title="false" :paragraph="{ rows: 1, width: '60%' }" />
         <template v-else>
           <div class="value">{{ overview ? formatCent(overview.today.netConsumeCent) : '—' }}<span class="unit">元</span></div>
-          <div class="note">{{ overview ? `${overview.today.consumeCount} 笔${reversalNote(overview.today.reversedConsumeCent)}` : '' }}</div>
+          <div class="note">{{ overview ? `${overview.today.consumeCount} 笔${reversalNote(overview.today.reversedConsumeCent)}${codelessNote(overview.today.codelessCount)}` : '' }}</div>
         </template>
       </div>
     </div>
@@ -75,7 +75,7 @@
                 <span class="muted"> · {{ maskPhone(item.memberPhone) }}</span>
               </template>
               <template #description>
-                {{ LEDGER_TYPE_LABEL[item.type as LedgerType] }} · {{ item.storeName }} · {{ formatDateTime(item.createdAt) }}
+                {{ LEDGER_TYPE_LABEL[item.type as LedgerType] }}{{ item.codeless ? ` · ${CODELESS_LABEL}` : '' }} · {{ item.storeName }} · {{ formatDateTime(item.createdAt) }}
                 <a-tag v-if="item.reversedById" class="reversed">已冲正</a-tag>
               </template>
             </a-list-item-meta>
@@ -99,7 +99,7 @@ import type { LedgerEntry, LedgerType } from '../api/types';
 import MoneyText from '../components/MoneyText.vue';
 import { useSessionStore } from '../stores/session';
 import { formatDateTime } from '../utils/datetime';
-import { LEDGER_TYPE_LABEL } from '../utils/ledger';
+import { CODELESS_LABEL, LEDGER_TYPE_LABEL } from '../utils/ledger';
 import { formatCent } from '../utils/money';
 import { maskPhone } from '../utils/phone';
 
@@ -119,6 +119,11 @@ const scopeText = computed(() =>
 );
 /** 储值总额只给超级管理员看。 */
 const showBalance = computed(() => session.superAdmin);
+
+/** 今天有无码抵扣时提一句，方便店长、老板抽查。 */
+function codelessNote(count: number): string {
+  return count > 0 ? `，其中无码抵扣 ${count} 笔` : '';
+}
 
 function reversalNote(cent: number): string {
   return cent > 0 ? `，已扣除冲正 ${formatCent(cent)} 元` : '';

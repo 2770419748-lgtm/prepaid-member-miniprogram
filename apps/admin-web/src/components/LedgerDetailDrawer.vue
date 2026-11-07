@@ -3,6 +3,7 @@
     <template v-if="entry">
       <div class="head">
         <LedgerTypeTag :type="entry.type" />
+        <a-tag v-if="entry.codeless" color="purple">{{ CODELESS_LABEL }}</a-tag>
         <a-tag v-if="entry.reversedById">已冲正</a-tag>
         <div class="amount"><MoneyText :cent="entry.changeCent" signed /> <span class="unit">元</span></div>
       </div>
@@ -15,6 +16,12 @@
         </a-descriptions-item>
         <a-descriptions-item label="时间">{{ formatDateTime(entry.createdAt) }}</a-descriptions-item>
         <a-descriptions-item label="门店">{{ entry.storeName }}</a-descriptions-item>
+        <a-descriptions-item v-if="entry.codeless" label="办理方式">
+          无码抵扣：顾客没出示会员码，由店长按手机号办理
+        </a-descriptions-item>
+        <a-descriptions-item v-if="entry.codeless && !entry.orderNo" label="九讯云订单">
+          <span class="muted">没填单号</span>
+        </a-descriptions-item>
         <a-descriptions-item v-if="entry.orderNo" label="九讯云订单">
           <span class="order">{{ entry.orderNo }}</span>
           <a-tag v-if="entry.orderNoTyped" color="orange" class="typed">手输单号</a-tag>
@@ -28,7 +35,7 @@
         <a-descriptions-item label="操作人">{{ entry.operatorName || '系统' }}</a-descriptions-item>
         <a-descriptions-item label="变动前余额"><MoneyText :cent="entry.balanceBefore" /> 元</a-descriptions-item>
         <a-descriptions-item label="变动后余额"><MoneyText :cent="entry.balanceAfter" /> 元</a-descriptions-item>
-        <a-descriptions-item :label="entry.type === 'REFUND' ? '退款原因和方式' : '备注'">{{ entry.remark || '无' }}</a-descriptions-item>
+        <a-descriptions-item :label="remarkLabel">{{ entry.remark || '无' }}</a-descriptions-item>
         <a-descriptions-item v-if="entry.reversalOfId" label="抵掉的原流水">
           <a @click="emit('jump', entry.reversalOfId)">查看原流水</a>
         </a-descriptions-item>
@@ -49,7 +56,7 @@ import { computed } from 'vue';
 import type { LedgerEntry } from '../api/types';
 import { useSessionStore } from '../stores/session';
 import { formatDateTime } from '../utils/datetime';
-import { ORDER_OFFSET_MAX_CENT, ORDER_OFFSET_PERCENT } from '../utils/ledger';
+import { CODELESS_LABEL, ORDER_OFFSET_MAX_CENT, ORDER_OFFSET_PERCENT } from '../utils/ledger';
 import { formatCent } from '../utils/money';
 import { maskPhone } from '../utils/phone';
 import { canReverse } from '../utils/roles';
@@ -58,6 +65,10 @@ import MoneyText from './MoneyText.vue';
 
 const props = defineProps<{ open: boolean; entry: LedgerEntry | null }>();
 const emit = defineEmits<{ close: []; reverse: [entry: LedgerEntry]; jump: [id: string] }>();
+
+const remarkLabel = computed(() =>
+  props.entry?.type === 'REFUND' ? '退款原因和方式' : props.entry?.codeless ? '无码原因' : '备注',
+);
 
 const session = useSessionStore();
 const reversible = computed(() => (props.entry ? canReverse(session.roles, props.entry) : false));

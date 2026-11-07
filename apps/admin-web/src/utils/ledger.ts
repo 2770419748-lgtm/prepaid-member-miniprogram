@@ -15,6 +15,30 @@ export const LEDGER_TYPE_OPTIONS = (Object.keys(LEDGER_TYPE_LABEL) as LedgerType
   label: LEDGER_TYPE_LABEL[value],
 }));
 
+/** 无码抵扣：顾客出示不了会员码，店长或超管按手机号直接抵扣（坤总 2026-11-07）。 */
+export const CODELESS_LABEL = '无码抵扣';
+
+/** 流水查询的「类型」筛选：四类之外再加「消费 · 无码抵扣」，查的是 type=CONSUME&codeless=true。 */
+export type LedgerTypeFilter = LedgerType | 'CODELESS';
+
+export const LEDGER_FILTER_OPTIONS: { value: LedgerTypeFilter; label: string }[] = [
+  ...LEDGER_TYPE_OPTIONS.flatMap((option) =>
+    option.value === 'CONSUME' ? [option, { value: 'CODELESS' as const, label: `消费 · ${CODELESS_LABEL}` }] : [option],
+  ),
+];
+
+export function isLedgerTypeFilter(value: unknown): value is LedgerTypeFilter {
+  return value === 'CODELESS' || (typeof value === 'string' && value in LEDGER_TYPE_LABEL);
+}
+
+/** 筛选换成接口参数。 */
+export function typeFilterQuery(filter: LedgerTypeFilter | undefined): { type?: LedgerType; codeless?: 'true' } {
+  if (!filter) {
+    return {};
+  }
+  return filter === 'CODELESS' ? { type: 'CONSUME', codeless: 'true' } : { type: filter };
+}
+
 /** 消费最多抵商品应付金额的 10%，和服务端一致。 */
 export const ORDER_OFFSET_PERCENT = 10;
 
@@ -35,6 +59,7 @@ const CSV_COLUMNS: Array<[string, (entry: LedgerEntry) => string]> = [
   ['时间', (e) => formatDateTime(e.createdAt)],
   ['门店', (e) => e.storeName],
   ['类型', (e) => (e.type === 'REVERSAL' && e.reversalOfType ? `冲正（抵掉${LEDGER_TYPE_LABEL[e.reversalOfType]}）` : LEDGER_TYPE_LABEL[e.type])],
+  ['办理方式', (e) => (e.type === 'CONSUME' ? (e.codeless ? CODELESS_LABEL : '扫码') : '')],
   ['九讯云订单', (e) => e.orderNo ?? ''],
   ['单号来源', (e) => (e.orderNoTyped == null ? '' : e.orderNoTyped ? '手输' : '扫码')],
   ['商品应付（元）', (e) => (e.productAmountCent == null ? '' : formatCent(e.productAmountCent).replace(/,/g, ''))],

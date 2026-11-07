@@ -31,6 +31,10 @@
         <text class="row-label">门店</text>
         <text class="row-value">{{detail.storeName}}</text>
       </view>
+      <view wx:if="{{detail.codeless}}" class="row">
+        <text class="row-label">办理方式</text>
+        <text class="row-value">未出示会员码，门店按手机号办理</text>
+      </view>
       <view wx:if="{{detail.orderNo}}" class="row">
         <text class="row-label">订单号</text>
         <text class="row-value">{{detail.orderNo}}</text>

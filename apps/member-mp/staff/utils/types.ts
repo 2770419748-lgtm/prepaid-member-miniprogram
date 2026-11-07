@@ -92,6 +92,8 @@ export interface LedgerEntry {
   productAmountCent?: number | null;
   /** 订单号是店员手输的。 */
   orderNoTyped?: boolean | null;
+  /** 无码抵扣：没扫会员码，店长按手机号办理。原因在 remark。 */
+  codeless?: boolean;
   createdAt: string;
 }
 

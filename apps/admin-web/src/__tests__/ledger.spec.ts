@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LedgerEntry } from '../api/types';
-import { ledgerCsv, normalizeOrderNo } from '../utils/ledger';
+import { isLedgerTypeFilter, LEDGER_FILTER_OPTIONS, ledgerCsv, normalizeOrderNo, typeFilterQuery } from '../utils/ledger';
 
 function entry(patch: Partial<LedgerEntry>): LedgerEntry {
   return {
@@ -24,6 +24,7 @@ function entry(patch: Partial<LedgerEntry>): LedgerEntry {
     orderNo: 'A5982',
     productAmountCent: 129900,
     orderNoTyped: false,
+    codeless: false,
     createdAt: '2026-11-05T06:32:00.000Z',
     ...patch,
   };
@@ -52,11 +53,12 @@ describe('流水导出表格', () => {
     const csv = ledgerCsv([entry({})]);
     const [header, row] = csv.trim().split('\r\n');
     expect(header).toBe(
-      '时间,门店,类型,九讯云订单,单号来源,商品应付（元）,金额（元）,变动后余额（元）,已冲正,会员,手机号,操作人,备注,流水号',
+      '时间,门店,类型,办理方式,九讯云订单,单号来源,商品应付（元）,金额（元）,变动后余额（元）,已冲正,会员,手机号,操作人,备注,流水号',
     );
     expect(row.split(',').slice(1)).toEqual([
       '旗舰店',
       '消费',
+      '扫码',
       'A5982',
       '扫码',
       '1299.00',
@@ -85,9 +87,18 @@ describe('流水导出表格', () => {
       }),
     ]);
     const [, first, second] = csv.trim().split('\r\n');
-    expect(first.split(',')[4]).toBe('手输');
-    expect(first.split(',')[8]).toBe('是');
-    expect(second.split(',').slice(2, 7)).toEqual(['冲正（抵掉消费）', 'A5982', '', '', '129.90']);
+    expect(first.split(',')[5]).toBe('手输');
+    expect(first.split(',')[9]).toBe('是');
+    expect(second.split(',').slice(2, 8)).toEqual(['冲正（抵掉消费）', '', 'A5982', '', '', '129.90']);
+  });
+
+  it('无码抵扣标出来，没填单号的单号列留空、商品金额照写，原因在备注', () => {
+    const csv = ledgerCsv([
+      entry({ codeless: true, orderNo: null, orderNoTyped: null, remark: '顾客没带手机', operatorName: '王店长' }),
+    ]);
+    const [, row] = csv.trim().split('\r\n');
+    expect(row.split(',').slice(2, 8)).toEqual(['消费', '无码抵扣', '', '', '1299.00', '-129.90']);
+    expect(row.split(',').slice(12, 14)).toEqual(['王店长', '顾客没带手机']);
   });
 
   it('备注带逗号、引号、换行的加引号；像公式的前面加单引号', () => {
@@ -96,5 +107,17 @@ describe('流水导出表格', () => {
     expect(lines[1]).toContain('"买手机, 送""膜""\n分两次"');
     expect(lines[2]).toContain(`"'=HYPERLINK(""x"")"`);
     expect(csv.endsWith('\r\n')).toBe(true);
+  });
+});
+
+describe('流水类型筛选', () => {
+  it('「消费 · 无码抵扣」查的是消费里的无码抵扣，排在消费后面', () => {
+    expect(LEDGER_FILTER_OPTIONS.map((o) => o.label)).toEqual(['充值', '消费', '消费 · 无码抵扣', '冲正', '退余额']);
+    expect(typeFilterQuery('CODELESS')).toEqual({ type: 'CONSUME', codeless: 'true' });
+    expect(typeFilterQuery('CONSUME')).toEqual({ type: 'CONSUME' });
+    expect(typeFilterQuery(undefined)).toEqual({});
+    expect(isLedgerTypeFilter('CODELESS')).toBe(true);
+    expect(isLedgerTypeFilter('REFUND')).toBe(true);
+    expect(isLedgerTypeFilter('X')).toBe(false);
   });
 });

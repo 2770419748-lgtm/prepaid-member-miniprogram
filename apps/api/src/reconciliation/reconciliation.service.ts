@@ -24,6 +24,8 @@ interface AggregateRow {
   type: LedgerType;
   /** 冲正抵掉的原流水类型；不是冲正为空。 */
   original_type: LedgerType | null;
+  /** 无码抵扣的消费（没扫会员码）。 */
+  codeless: boolean;
   count: number;
   total: bigint;
 }
@@ -51,6 +53,10 @@ function add(figures: DailyFigures, row: AggregateRow): void {
   } else if (row.type === LedgerType.CONSUME) {
     figures.consumeCount += row.count;
     figures.consumeCent += total;
+    if (row.codeless) {
+      figures.codelessCount += row.count;
+      figures.codelessCent += total;
+    }
   } else if (row.type === LedgerType.REFUND) {
     figures.refundCount += row.count;
     figures.refundCent += total;
@@ -298,7 +304,7 @@ export class ReconciliationService {
     return { openingCent, netChangeCent, closingCent: openingCent + netChangeCent };
   }
 
-  /** 按门店、类型汇总；冲正再按抵掉的原流水类型拆开（冲回充值、退回消费、冲回退款）。 */
+  /** 按门店、类型汇总；冲正再按抵掉的原流水类型拆开（冲回充值、退回消费、冲回退款）；消费再拆出无码抵扣。 */
   private aggregate(orgId: string, storeIds: string[], from: Date, to: Date): Promise<AggregateRow[]> {
     if (storeIds.length === 0) {
       return Promise.resolve([]);
@@ -307,6 +313,7 @@ export class ReconciliationService {
       SELECT e."store_id",
              e."type",
              o."type" AS "original_type",
+             e."codeless",
              COUNT(*)::int AS "count",
              COALESCE(SUM(e."amount_cent"), 0)::bigint AS "total"
       FROM "ledger_entries" e
@@ -315,7 +322,7 @@ export class ReconciliationService {
         AND e."store_id" IN (${Prisma.join(storeIds)})
         AND e."created_at" >= ${from}
         AND e."created_at" < ${to}
-      GROUP BY 1, 2, 3
+      GROUP BY 1, 2, 3, 4
     `;
   }
 }

@@ -1,7 +1,7 @@
-import { fetchMember, recordMove } from '../../utils/api';
+import { fetchMember, MoveKind, recordMove } from '../../utils/api';
 import { ApiError, messageOf } from '../../utils/errors';
-import { LEDGER_TYPE_LABELS } from '../../utils/labels';
-import { canRechargeAt, memberLabel } from '../../utils/ledger';
+import { CODELESS_LABEL, LEDGER_TYPE_LABELS } from '../../utils/labels';
+import { canCodelessAt, canRechargeAt, memberLabel } from '../../utils/ledger';
 import { formatCent, formatChange, parseYuanToCent } from '../../utils/money';
 import { needsRescan, untilText, validUntilText } from '../../utils/paycode';
 import { maskPhone } from '../../utils/phone';
@@ -12,7 +12,15 @@ import { currentStore, rememberMember, requireSession } from '../../utils/sessio
 import { formatDateTime } from '../../utils/time';
 import { goWorkbench } from '../../utils/nav';
 
-type Kind = 'RECHARGE' | 'CONSUME';
+/** 充值、扫码消费、无码抵扣（店长按手机号直接抵扣，不扫会员码）。 */
+type Kind = MoveKind;
+
+/** 无码抵扣常见原因，点一下填进去。 */
+const CODELESS_REASONS = ['顾客没带手机', '手机没电', '小程序打不开'];
+
+function kindLabelOf(kind: Kind): string {
+  return kind === 'CODELESS' ? CODELESS_LABEL : LEDGER_TYPE_LABELS[kind];
+}
 
 /** 点了「确认」的这一笔。没拿到结果前一直沿用同一个请求号，重试不会重复记账。 */
 interface Pending {
@@ -36,6 +44,7 @@ interface Done {
   replayed: boolean;
   orderNo: string;
   product: string;
+  codeless: boolean;
 }
 
 /** 消费：校验通过的商品金额和抵扣金额。 */
@@ -49,6 +58,12 @@ Page({
     memberId: '',
     kind: 'CONSUME' as Kind,
     kindLabel: '消费',
+    /** 扫码消费和无码抵扣都要填订单和商品金额，最多抵 10%。 */
+    offset: true,
+    codeless: false,
+    reasons: CODELESS_REASONS,
+    /** 无码抵扣：没写原因时的提示。 */
+    remarkError: '',
     ready: false,
     error: '',
     memberLabel: '',
@@ -89,16 +104,18 @@ Page({
   amountTouched: false,
 
   onLoad(query: Record<string, string | undefined>) {
-    const kind: Kind = query.kind === 'RECHARGE' ? 'RECHARGE' : 'CONSUME';
-    const label = LEDGER_TYPE_LABELS[kind];
+    const kind: Kind = query.kind === 'RECHARGE' || query.kind === 'CODELESS' ? query.kind : 'CONSUME';
+    const label = kindLabelOf(kind);
     wx.setNavigationBarTitle({ title: label });
     const payCode = kind === 'CONSUME' ? (query.payCode ?? '') : '';
     this.setData({
       memberId: query.memberId ?? '',
       kind,
       kindLabel: label,
+      offset: kind !== 'RECHARGE',
+      codeless: kind === 'CODELESS',
       submitText: kind === 'CONSUME' ? '确认抵扣' : `确认${label}`,
-      remarkPlaceholder: kind === 'RECHARGE' ? '如：现金、转账' : '如：消费项目',
+      remarkPlaceholder: kind === 'RECHARGE' ? '如：现金、转账' : kind === 'CODELESS' ? '如：顾客没带手机' : '如：消费项目',
       payCode,
       codeText: payCode ? untilText(query.until) : '',
       needCode: kind === 'CONSUME' && !payCode,
@@ -121,6 +138,10 @@ Page({
     }
     if (this.data.kind === 'RECHARGE' && !canRechargeAt(store.id, session.access)) {
       this.setData({ error: '直接充值只有店长和超级管理员能做。给会员充值请回到会员页「办理权益单」。' });
+      return;
+    }
+    if (this.data.kind === 'CODELESS' && !canCodelessAt(store.id, session.access)) {
+      this.setData({ error: '无码抵扣只有本店店长和超级管理员能做。请扫顾客小程序里的会员码。' });
       return;
     }
     try {
@@ -157,7 +178,19 @@ Page({
   },
 
   onRemarkInput(event: WechatMiniprogram.Input) {
-    this.setData({ remark: event.detail.value });
+    this.setData({ remark: event.detail.value, remarkError: '' });
+    if (this.data.codeless) {
+      this.validate();
+    }
+  },
+
+  /** 无码抵扣：点常见原因填进去。 */
+  onPickReason(event: WechatMiniprogram.BaseEvent<Record<string, never>, { reason: string }>) {
+    if (this.data.uncertain || this.data.submitting) {
+      return;
+    }
+    this.setData({ remark: event.currentTarget.dataset.reason, remarkError: '' });
+    this.validate();
   },
 
   /** 改商品金额：店员没自己改过抵扣金额时，自动填上能抵的最多金额（余额不够就填余额）。 */
@@ -217,8 +250,7 @@ Page({
 
   /** 校验并预览记账后余额。合法时返回金额，否则返回空。 */
   validate(): Valid | null {
-    const { kind } = this.data;
-    return kind === 'CONSUME' ? this.validateConsume() : this.validateRecharge();
+    return this.data.offset ? this.validateConsume() : this.validateRecharge();
   },
 
   validateRecharge(): Valid | null {
@@ -242,16 +274,20 @@ Page({
     return { amountCent: parsed.cent, productAmountCent: 0 };
   },
 
-  /** 消费：先有订单、商品金额，抵扣金额不超过商品金额的 10%、不超过余额。 */
+  /**
+   * 消费：先有订单、商品金额，抵扣金额不超过商品金额的 10%、不超过余额。
+   * 无码抵扣：单号选填，但要写原因。
+   */
   validateConsume(): Valid | null {
-    const { amount, product, balanceCent, balance, orderNo } = this.data;
+    const { amount, product, balanceCent, balance, orderNo, codeless, remark } = this.data;
+    const verb = codeless ? '确认无码抵扣' : '确认抵扣';
     const reset = {
       amountError: '',
       productError: '',
       afterText: '',
       capText: '',
       canSubmit: false,
-      submitText: '确认抵扣',
+      submitText: verb,
     };
     if (!product.trim()) {
       this.setData(reset);
@@ -288,15 +324,17 @@ Page({
       this.setData({ ...reset, capText, amountError: `余额不足，当前余额 ${balance} 元` });
       return null;
     }
+    // 扫码消费必须有单号；无码抵扣单号选填，但要写原因。
+    const missing = codeless ? (remark.trim() ? '' : '先写无码原因') : orderNo ? '' : '先扫订单码';
     this.setData({
       amountError: '',
       productError: '',
       capText,
       afterText: `抵扣后余额 ${formatCent(balanceCent - parsed.cent)} 元`,
-      canSubmit: !!orderNo,
-      submitText: orderNo ? `确认抵扣 ${formatCent(parsed.cent)} 元` : '先扫订单码',
+      canSubmit: !missing,
+      submitText: missing || `${verb} ${formatCent(parsed.cent)} 元`,
     });
-    return orderNo ? { amountCent: parsed.cent, productAmountCent: productParsed.cent } : null;
+    return missing ? null : { amountCent: parsed.cent, productAmountCent: productParsed.cent };
   },
 
   async onSubmit() {
@@ -305,22 +343,29 @@ Page({
     }
     const valid = this.validate();
     if (valid == null) {
-      if (this.data.kind === 'CONSUME' && !this.data.orderNo) {
+      const { kind, offset } = this.data;
+      if (kind === 'CONSUME' && !this.data.orderNo) {
         this.setData({ orderError: '请先扫九讯云小票上的订单码' });
-      } else if (this.data.kind === 'CONSUME' && !this.data.product.trim()) {
+      } else if (offset && !this.data.product.trim()) {
         this.setData({ productError: '请填商品应付金额' });
       } else if (!this.data.amount.trim()) {
         this.setData({ amountError: '请输入金额' });
+      } else if (kind === 'CODELESS' && !this.data.remark.trim()) {
+        this.setData({ remarkError: '请写明为什么没扫会员码，如：顾客没带手机' });
       }
       return;
     }
     const { kind, kindLabel, balanceCent, orderNo } = this.data;
     const cent = valid.amountCent;
+    const offsetLine = `抵扣 ${formatCent(cent)} 元，抵扣后余额 ${formatCent(balanceCent - cent)} 元`;
     const content =
       kind === 'CONSUME'
-        ? `${this.data.memberLabel}\n订单 ${orderNo} · 商品 ${formatCent(valid.productAmountCent)} 元\n` +
-          `抵扣 ${formatCent(cent)} 元，抵扣后余额 ${formatCent(balanceCent - cent)} 元`
-        : `${this.data.memberLabel}\n${kindLabel} ${formatCent(cent)} 元\n记账后余额 ${formatCent(balanceCent + cent)} 元`;
+        ? `${this.data.memberLabel}\n订单 ${orderNo} · 商品 ${formatCent(valid.productAmountCent)} 元\n${offsetLine}`
+        : kind === 'CODELESS'
+          ? `${this.data.memberLabel}\n没扫会员码，记在你名下\n` +
+            `${orderNo ? `订单 ${orderNo}` : '没填单号'} · 商品 ${formatCent(valid.productAmountCent)} 元\n` +
+            `${offsetLine}\n原因：${this.data.remark.trim()}`
+          : `${this.data.memberLabel}\n${kindLabel} ${formatCent(cent)} 元\n记账后余额 ${formatCent(balanceCent + cent)} 元`;
     const { confirm } = await wx.showModal({
       title: kind === 'CONSUME' ? '确认抵扣' : `确认${kindLabel}`,
       content,
@@ -352,29 +397,27 @@ Page({
     if (!pending) {
       return;
     }
-    const consume = this.data.kind === 'CONSUME';
+    const { kind } = this.data;
+    const consume = kind === 'CONSUME';
+    const offset = kind !== 'RECHARGE';
     this.setData({ submitting: true });
     try {
-      const result = await recordMove(this.data.memberId, this.data.kind, {
+      const result = await recordMove(this.data.memberId, kind, {
         storeId: this.data.storeId,
         amountCent: pending.amountCent,
         requestId: pending.requestId,
         ...(pending.remark ? { remark: pending.remark } : {}),
-        ...(consume
-          ? {
-              payCode: this.data.payCode,
-              orderNo: pending.orderNo,
-              orderNoTyped: pending.orderNoTyped,
-              productAmountCent: pending.productAmountCent,
-            }
-          : {}),
+        ...(consume ? { payCode: this.data.payCode } : {}),
+        // 无码抵扣没填单号时不带。
+        ...(offset && pending.orderNo ? { orderNo: pending.orderNo, orderNoTyped: pending.orderNoTyped } : {}),
+        ...(offset ? { productAmountCent: pending.productAmountCent } : {}),
       });
       this.pending = null;
       const { entry } = result;
       this.setData({
         uncertain: false,
         done: {
-          title: consume ? '抵扣成功' : `${this.data.kindLabel}成功`,
+          title: offset ? '抵扣成功' : `${this.data.kindLabel}成功`,
           change: formatChange(entry.changeCent),
           tone: entry.changeCent >= 0 ? 'plus' : 'minus',
           balance: formatCent(result.balanceCent),
@@ -384,6 +427,7 @@ Page({
           replayed: result.replayed,
           orderNo: entry.orderNo ?? '',
           product: entry.productAmountCent != null ? formatCent(entry.productAmountCent) : '',
+          codeless: entry.codeless === true,
         },
       });
     } catch (error) {
@@ -395,7 +439,7 @@ Page({
       // 明确没记上（例如别人刚扣过、余额不够了）：放弃这个请求号，刷新余额后可重新填写。
       this.pending = null;
       this.setData({ uncertain: false });
-      if (needsRescan(error)) {
+      if (consume && needsRescan(error)) {
         // 会员码过期或用过了：请顾客刷新会员码再扫一次，金额不用重填。
         wx.showModal({
           title: '没有记上',
@@ -411,7 +455,7 @@ Page({
         });
         return;
       }
-      if (consume && error instanceof ApiError && error.status === 409 && /这张单已经抵扣过/.test(error.message)) {
+      if (offset && error instanceof ApiError && error.status === 409 && /这张单已经抵扣过/.test(error.message)) {
         // 这张单刚被别人抵了：清掉单号，换一张再扫。
         this.setData({ orderNo: '', orderNoTyped: false });
       }

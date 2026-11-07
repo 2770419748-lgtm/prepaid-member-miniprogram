@@ -66,6 +66,9 @@ export class LedgerService {
       // 抵这张单的消费，和冲掉它的那笔。
       where.OR = [{ orderNo }, { reversalOf: { orderNo } }];
     }
+    if (query.codeless) {
+      where.codeless = query.codeless === 'true';
+    }
     const range = this.range(query);
     if (range) {
       where.createdAt = range;

@@ -2,7 +2,7 @@ import { Body, Controller, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccessPrincipal } from '../auth/access-principal';
 import { CurrentPrincipal, Principals, Roles } from '../auth/decorators';
-import { ConsumeDto, MoneyMoveDto, RefundDto } from './dto/ledger.dto';
+import { CodelessConsumeDto, ConsumeDto, MoneyMoveDto, RefundDto } from './dto/ledger.dto';
 import { WalletService } from './wallet.service';
 
 @ApiTags('记账')
@@ -33,6 +33,21 @@ export class WalletController {
     @Body() dto: ConsumeDto,
   ) {
     return this.wallets.consume(actor, memberId, dto);
+  }
+
+  /** 权限在服务里按门店判断（超级管理员，或这家门店的店长），这样店员能看到具体原因。 */
+  @Post(':memberId/consume-codeless')
+  @ApiOperation({
+    summary:
+      '无码抵扣：顾客出示不了会员码时，本店店长或超级管理员按手机号直接抵扣。不要会员码，九讯云单号选填；' +
+      '必须写原因；照样最多抵商品金额的 10%、一单最多 1000 元，填了单号照样一单一抵',
+  })
+  consumeCodeless(
+    @CurrentPrincipal() actor: AccessPrincipal,
+    @Param('memberId') memberId: string,
+    @Body() dto: CodelessConsumeDto,
+  ) {
+    return this.wallets.consumeCodeless(actor, memberId, dto);
   }
 
   /** 权限在服务里按门店判断（超级管理员，或这家门店的店长），这样店员能看到具体原因。 */

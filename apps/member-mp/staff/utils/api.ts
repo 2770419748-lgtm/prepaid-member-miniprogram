@@ -60,11 +60,20 @@ export interface MoneyMove {
   requestId: string;
   /** 消费必须带上刚扫到的会员码。充值不用。 */
   payCode?: string;
-  /** 消费必须带九讯云订单号和商品应付金额（分），最多抵商品金额的 10%。充值不用。 */
+  /** 消费必须带九讯云订单号和商品应付金额（分），最多抵商品金额的 10%。充值不用。无码抵扣单号选填。 */
   orderNo?: string;
   orderNoTyped?: boolean;
   productAmountCent?: number;
 }
+
+/** 记账页办理的三种：充值、扫码消费、无码抵扣（店长按手机号直接抵扣，不扫会员码）。 */
+export type MoveKind = 'RECHARGE' | 'CONSUME' | 'CODELESS';
+
+const MOVE_ACTION: Record<MoveKind, string> = {
+  RECHARGE: 'recharge',
+  CONSUME: 'consume',
+  CODELESS: 'consume-codeless',
+};
 
 /** 扫到订单码后先查这张单抵过没有。真正拦住重复抵扣的是扣款时的服务端校验。 */
 export function checkOrder(orderNo: string) {
@@ -76,15 +85,17 @@ export function scanPayCode(code: string, storeId: string) {
   return request<ScannedPayCode>('POST', '/pay-codes/scan', { body: { code, storeId } });
 }
 
-export function recordMove(memberId: string, kind: 'RECHARGE' | 'CONSUME', body: MoneyMove) {
-  const action = kind === 'RECHARGE' ? 'recharge' : 'consume';
-  return request<MoveResult>('POST', `/wallets/${encodeURIComponent(memberId)}/${action}`, { body });
+/** 无码抵扣时 remark 是必填的原因。 */
+export function recordMove(memberId: string, kind: MoveKind, body: MoneyMove) {
+  return request<MoveResult>('POST', `/wallets/${encodeURIComponent(memberId)}/${MOVE_ACTION[kind]}`, { body });
 }
 
 export interface LedgerQuery {
   memberId?: string;
   storeId?: string;
   type?: LedgerType;
+  /** 'true' 只看无码抵扣。 */
+  codeless?: 'true' | 'false';
   from?: string;
   to?: string;
   page?: number;

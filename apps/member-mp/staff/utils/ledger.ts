@@ -1,4 +1,4 @@
-import { ledgerTitle } from './labels';
+import { entryTitle } from './labels';
 import { formatCent, formatChange } from './money';
 import { maskPhone } from './phone';
 import { dayKey, dayLabel, formatClock } from './time';
@@ -40,7 +40,7 @@ export function toLedgerRow(entry: LedgerEntry, options: { showStore?: boolean }
   }
   return {
     id: entry.id,
-    title: ledgerTitle(entry.type, entry.changeCent, entry.reversalOfType),
+    title: entryTitle(entry),
     member: memberLabel(entry.memberPhone, entry.memberName),
     meta: meta.join(' · '),
     change: formatChange(entry.changeCent),
@@ -92,6 +92,14 @@ export function canRechargeAt(storeId: string, access: MyStoresResult): boolean 
     return true;
   }
   return access.stores.some((store) => store.id === storeId && store.role === 'STORE_MANAGER');
+}
+
+/**
+ * 无码抵扣（顾客出示不了会员码时按手机号直接抵扣）：和服务端一致，超级管理员，或这家门店的店长。
+ * 店员只能扫会员码消费。
+ */
+export function canCodelessAt(storeId: string, access: MyStoresResult): boolean {
+  return canRechargeAt(storeId, access);
 }
 
 /** 选当前门店：沿用上次选的在营门店，否则取第一家在营门店。都停用时返回空。 */

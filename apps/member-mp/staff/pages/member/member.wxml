@@ -31,6 +31,14 @@
         <view class="btn btn-primary" hover-class="is-pressed" bindtap="onConsume">扫码消费</view>
       </view>
       <text class="hint consume-hint">消费要先扫顾客小程序里的会员码</text>
+      <!-- 无码抵扣：「消费必须扫会员码」的例外，只给本店店长和超级管理员（坤总 2026-11-07）。 -->
+      <view wx:if="{{canCodeless}}" class="entry-row" hover-class="is-pressed" bindtap="onCodeless">
+        <view class="row-main">
+          <text class="row-title">无码抵扣 <text class="tag tag-warning">店长权限</text></text>
+          <text class="row-sub">顾客没带手机、出示不了会员码时用，要写原因</text>
+        </view>
+        <text class="row-arrow">›</text>
+      </view>
       <view class="entry-row" hover-class="is-pressed" bindtap="onOrder">
         <view class="row-main">
           <text class="row-title">办理权益单</text>

@@ -12,10 +12,11 @@
       <view class="kv"><text class="kv-key">会员</text><text class="kv-value">{{memberLabel}}</text></view>
       <view class="kv"><text class="kv-key">当前余额</text><text class="kv-value strong">{{done.balance}} 元</text></view>
       <view class="kv"><text class="kv-key">门店</text><text class="kv-value">{{done.storeName}}</text></view>
+      <view wx:if="{{done.codeless}}" class="kv"><text class="kv-key">办理方式</text><text class="kv-value">无码抵扣（没扫会员码）</text></view>
       <view wx:if="{{done.orderNo}}" class="kv"><text class="kv-key">九讯云订单</text><text class="kv-value">{{done.orderNo}}</text></view>
       <view wx:if="{{done.product}}" class="kv"><text class="kv-key">商品应付</text><text class="kv-value">{{done.product}} 元</text></view>
       <view class="kv"><text class="kv-key">时间</text><text class="kv-value">{{done.time}}</text></view>
-      <view wx:if="{{done.remark}}" class="kv"><text class="kv-key">备注</text><text class="kv-value">{{done.remark}}</text></view>
+      <view wx:if="{{done.remark}}" class="kv"><text class="kv-key">{{done.codeless ? '无码原因' : '备注'}}</text><text class="kv-value">{{done.remark}}</text></view>
     </view>
     <view class="btn btn-primary" hover-class="is-pressed" bindtap="onBackToMember">返回会员</view>
     <view class="btn btn-quiet" hover-class="is-pressed" bindtap="onNextMember">办理下一位</view>
@@ -30,6 +31,7 @@
   </block>
 
   <block wx:elif="{{ready}}">
+    <text wx:if="{{codeless}}" class="notice notice-warning">顾客出示不了会员码时才用。会记下经办人和原因，流水、对账和操作记录里都标「无码抵扣」。顾客在场时请扫会员码。</text>
     <view class="card summary">
       <view class="kv"><text class="kv-key">会员</text><text class="kv-value">{{memberLabel}}</text></view>
       <view class="kv"><text class="kv-key">当前余额</text><text class="kv-value">{{balance}} 元</text></view>
@@ -38,10 +40,14 @@
         <text class="kv-key">会员码</text>
         <text class="kv-value code-ok">已扫码{{codeText ? ' · ' + codeText : ''}}</text>
       </view>
+      <view wx:if="{{codeless}}" class="kv">
+        <text class="kv-key">会员码</text>
+        <text class="kv-value code-skip">没扫（无码抵扣）</text>
+      </view>
     </view>
 
-    <view wx:if="{{kind === 'CONSUME'}}" class="card order-card">
-      <text class="field-label">九讯云订单</text>
+    <view wx:if="{{offset}}" class="card order-card">
+      <text class="field-label">{{codeless ? '九讯云订单（选填）' : '九讯云订单'}}</text>
       <view wx:if="{{orderNo}}" class="order-line">
         <text class="order-no">{{orderNo}}</text>
         <text class="tag {{orderNoTyped ? 'tag-warning' : 'tag-primary'}}">{{orderNoTyped ? '手输单号' : '已扫码'}}</text>
@@ -65,7 +71,8 @@
         <text class="link order-switch" bindtap="onCancelTypeOrder">改回扫码</text>
       </block>
       <block wx:else>
-        <text class="hint">扫九讯云小票上方的条码。一张单只能抵一次。</text>
+        <text wx:if="{{codeless}}" class="hint">不连九讯云，没有小票可以不填。填了单号，这张单就不能再抵第二次。</text>
+        <text wx:else class="hint">扫九讯云小票上方的条码。一张单只能抵一次。</text>
         <view class="btn btn-plain scan-order" hover-class="is-pressed" bindtap="onScanOrder">扫订单码</view>
         <text wx:if="{{orderError}}" class="error">{{orderError}}</text>
         <text class="link order-switch type-order" bindtap="onTypeOrder">条码扫不出来？手输单号</text>
@@ -73,7 +80,7 @@
     </view>
 
     <view class="card">
-      <block wx:if="{{kind === 'CONSUME'}}">
+      <block wx:if="{{offset}}">
         <text class="field-label">商品应付金额（元）</text>
         <view class="product-line">
           <input
@@ -108,7 +115,7 @@
       <text wx:if="{{amountError}}" class="error">{{amountError}}</text>
       <text wx:elif="{{afterText}}" class="hint after">{{afterText}}</text>
       <view class="field remark">
-        <text class="field-label">备注（选填，会员看不到）</text>
+        <text class="field-label">{{codeless ? '无码原因（必填，会员看不到）' : '备注（选填，会员看不到）'}}</text>
         <input
           class="field-input"
           maxlength="200"
@@ -118,6 +125,16 @@
           disabled="{{uncertain}}"
           bindinput="onRemarkInput"
         />
+        <view wx:if="{{codeless && !uncertain}}" class="reason-chips">
+          <text
+            wx:for="{{reasons}}"
+            wx:key="*this"
+            class="reason-chip {{remark === item ? 'is-picked' : ''}}"
+            data-reason="{{item}}"
+            bindtap="onPickReason"
+          >{{item}}</text>
+        </view>
+        <text wx:if="{{remarkError}}" class="error">{{remarkError}}</text>
       </view>
     </view>
 

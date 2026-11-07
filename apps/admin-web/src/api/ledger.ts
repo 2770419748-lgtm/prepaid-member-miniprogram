@@ -36,6 +36,8 @@ export interface LedgerQuery extends PageQuery {
   type?: LedgerType;
   /** 九讯云订单号：查抵这张单的消费和冲掉它的那笔。 */
   orderNo?: string;
+  /** 'true' 只看无码抵扣。 */
+  codeless?: 'true' | 'false';
   from?: string;
   to?: string;
 }

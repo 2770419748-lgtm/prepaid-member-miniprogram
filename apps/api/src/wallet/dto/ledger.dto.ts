@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -19,6 +20,8 @@ import { ORDER_NO_INPUT_PATTERN, ORDER_NO_MESSAGE } from '../order-no';
 
 /** 单笔金额上限：100 万元。防止把元当分、多按几个 0 之类的误录，也远离 Int 上限。 */
 export const MAX_AMOUNT_CENT = 100_000_000;
+
+export const CODELESS_REASON_MESSAGE = '请写明为什么没扫会员码，如：顾客没带手机';
 
 /**
  * 防重复提交的请求号。充值、扣款、冲正都必须带：同一个号提交几次都只记一笔，返回第一次的结果。
@@ -93,6 +96,56 @@ export class ConsumeDto extends MoneyMoveDto {
   productAmountCent!: number;
 }
 
+/**
+ * 无码抵扣（坤总 2026-11-07）：顾客没带手机、出示不了会员码时，本店店长或超级管理员按手机号找到会员直接抵扣。
+ * 不要会员码；九讯云单号选填（不连九讯云，填了照样一单一抵）；商品应付金额必填，照样最多抵 10%、一张单最多 1000 元；必须写原因。
+ */
+export class CodelessConsumeDto {
+  @ApiProperty({ description: '在哪家门店办理。超级管理员任一门店；店长只能是自己管的门店' })
+  @IsString()
+  @IsNotEmpty()
+  storeId!: string;
+
+  @ApiProperty({ example: 12990, description: '抵扣多少，单位分。不能超过商品应付金额的 10%、1000 元和余额' })
+  @IsInt()
+  @Min(1)
+  @Max(MAX_AMOUNT_CENT)
+  amountCent!: number;
+
+  @ApiProperty({
+    example: 129900,
+    description: '必填。商品应付金额（小票「总计」减优惠），单位分。本次抵扣不能超过它的 10%',
+  })
+  @IsInt({ message: '请填商品应付金额' })
+  @Min(1, { message: '商品应付金额要大于 0' })
+  @Max(MAX_AMOUNT_CENT, { message: '商品应付金额不能超过 100 万元' })
+  productAmountCent!: number;
+
+  @ApiPropertyOptional({
+    example: '5982',
+    description: '选填。九讯云小票上的单号（扫到的 A5982 或手输的 5982）。填了就和扫码抵扣一样，同一张单全公司只能抵一次',
+  })
+  @IsOptional()
+  @IsString({ message: ORDER_NO_MESSAGE })
+  @Matches(ORDER_NO_INPUT_PATTERN, { message: ORDER_NO_MESSAGE })
+  orderNo?: string;
+
+  @ApiPropertyOptional({ example: true, description: '单号是手输的。只在带了单号时有意义，默认 false：扫码读到的' })
+  @IsOptional()
+  @IsBoolean()
+  orderNoTyped?: boolean;
+
+  @ApiProperty({ example: '顾客没带手机', description: '必填：为什么没扫会员码。写进流水备注和操作记录，会员端不显示' })
+  @IsString({ message: CODELESS_REASON_MESSAGE })
+  @IsNotEmpty({ message: CODELESS_REASON_MESSAGE })
+  @MaxLength(200, { message: '原因最多 200 个字' })
+  remark!: string;
+
+  @ApiProperty({ description: '必填。防重复提交的请求号，同充值' })
+  @Matches(REQUEST_ID, { message: requestIdMessage })
+  requestId!: string;
+}
+
 /** 退余额：把会员没用完的储值退给顾客。钱在店里线下退（现金、转账等），这里只记账。 */
 export class RefundDto {
   @ApiProperty({ description: '在哪家门店办理。超级管理员任一门店；店长只能是自己管的门店' })
@@ -151,6 +204,14 @@ export class LedgerQueryDto extends PageQueryDto {
   @IsOptional()
   @Matches(ORDER_NO_INPUT_PATTERN, { message: ORDER_NO_MESSAGE })
   orderNo?: string;
+
+  @ApiPropertyOptional({
+    enum: ['true', 'false'],
+    description: 'true 只看无码抵扣（没扫会员码、店长按手机号办理的消费）；false 不看无码抵扣',
+  })
+  @IsOptional()
+  @IsIn(['true', 'false'], { message: 'codeless 只能是 true 或 false' })
+  codeless?: 'true' | 'false';
 
   @ApiPropertyOptional({ example: '2026-10-01T00:00:00+08:00', description: '起始时间（含）' })
   @IsOptional()

@@ -11,7 +11,14 @@ import { AccessPrincipal } from '../auth/access-principal';
 import { assertStoreAccess, isSuperAdmin } from '../auth/staff-access';
 import { PayCodeService } from '../pay-code/pay-code.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ConsumeDto, MoneyMoveDto, RefundDto, ReversalDto } from './dto/ledger.dto';
+import {
+  CODELESS_REASON_MESSAGE,
+  CodelessConsumeDto,
+  ConsumeDto,
+  MoneyMoveDto,
+  RefundDto,
+  ReversalDto,
+} from './dto/ledger.dto';
 import { ledgerInclude, LedgerRecord, StaffLedgerView, toStaffLedgerView } from './ledger.view';
 import { maxOffsetCent, offsetCapMessage } from './order-no';
 import { OrderRedemptionService, redeemedMessage } from './order-redemption.service';
@@ -49,18 +56,20 @@ interface Movement {
   payCodeId: string | null;
   /** 签完权益单后自动充值时，是哪一份权益单。写进操作记录。 */
   signFlowId: string | null;
-  /** 消费抵扣的收银订单。只有消费有，和流水同一事务占住这张单。 */
+  /** 消费抵扣的收银订单。只有消费有，带单号时和流水同一事务占住这张单。 */
   order: OrderOffset | null;
+  /** 无码抵扣：没扫会员码，店长或超级管理员按手机号办理。 */
+  codeless: boolean;
 }
 
 /** 一笔消费抵的是哪张收银订单。 */
 interface OrderOffset {
-  /** 规范写法 A+数字。 */
-  orderNo: string;
+  /** 规范写法 A+数字。无码抵扣没填单号时为空。 */
+  orderNo: string | null;
   /** 商品应付金额（总计减优惠），分。 */
   productAmountCent: number;
-  /** 店员手输的单号。 */
-  typed: boolean;
+  /** 店员手输的单号。没有单号时为空。 */
+  typed: boolean | null;
 }
 
 /** 签完一份带会员权益金额的权益单后要充的那笔。 */
@@ -99,7 +108,7 @@ function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
-/** 判断「同一请求号是不是同一笔」时比哪些字段：冲正比原流水，充值、扣款比金额和门店，扣款还比订单号。 */
+/** 判断「同一请求号是不是同一笔」时比哪些字段：冲正比原流水，充值、扣款比金额和门店，扣款还比订单号和是不是无码抵扣。 */
 function requestShape(movement: Movement) {
   return {
     memberId: movement.memberId,
@@ -108,12 +117,15 @@ function requestShape(movement: Movement) {
       ? { reversalOfId: movement.reversalOfId }
       : { amountCent: movement.amountCent, storeId: movement.storeId }),
     ...(movement.order ? { orderNo: movement.order.orderNo } : {}),
+    ...(movement.type === LedgerType.CONSUME ? { codeless: movement.codeless } : {}),
   };
 }
 
 const DIRECT_RECHARGE_FORBIDDEN = '直接充值只有店长和超级管理员能做，店员给会员充值请走开单';
 
-/** 直接充值、退余额：超级管理员在任一门店，店长只在自己管的门店。 */
+const CODELESS_FORBIDDEN = '无码抵扣只有本店店长和超级管理员能做；店员请扫顾客的会员码';
+
+/** 直接充值、退余额、无码抵扣：超级管理员在任一门店，店长只在自己管的门店。 */
 function canManageMoneyAt(actor: AccessPrincipal, storeId: string): boolean {
   return (
     isSuperAdmin(actor.roles) || actor.roles.some((role) => role.storeId === storeId && role.role === 'STORE_MANAGER')
@@ -149,7 +161,7 @@ export class WalletService {
     if (!canManageMoneyAt(actor, dto.storeId)) {
       throw new ForbiddenException(DIRECT_RECHARGE_FORBIDDEN);
     }
-    return this.move(actor, memberId, dto, LedgerType.RECHARGE, 1, null, null);
+    return this.move(actor, memberId, dto, LedgerType.RECHARGE, 1, null, null, false);
   }
 
   /**
@@ -165,7 +177,33 @@ export class WalletService {
     if (dto.amountCent > maxOffsetCent(order.productAmountCent)) {
       throw new BadRequestException(offsetCapMessage(order.productAmountCent));
     }
-    return this.move(actor, memberId, dto, LedgerType.CONSUME, -1, dto.payCode, order);
+    return this.move(actor, memberId, dto, LedgerType.CONSUME, -1, dto.payCode, order, false);
+  }
+
+  /**
+   * 无码抵扣（坤总 2026-11-07）：顾客没带手机、出示不了会员码时，本店店长或超级管理员按手机号找到会员直接抵扣。
+   * 是「消费必须扫会员码」的例外，所以只给店长和超级管理员，必须写原因；流水标成无码抵扣，操作记录单独一类。
+   * 不连九讯云：单号选填，填了照样全公司一单一抵；商品应付金额必填，照样最多抵 10%、一张单最多 1000 元。
+   */
+  async consumeCodeless(actor: AccessPrincipal, memberId: string, dto: CodelessConsumeDto): Promise<MoveResult> {
+    assertStoreAccess(actor.roles, dto.storeId);
+    if (!canManageMoneyAt(actor, dto.storeId)) {
+      throw new ForbiddenException(CODELESS_FORBIDDEN);
+    }
+    const remark = cleanRemark(dto.remark);
+    if (!remark) {
+      throw new BadRequestException(CODELESS_REASON_MESSAGE);
+    }
+    const orderNo = dto.orderNo?.trim() ? this.orders.normalize(dto.orderNo) : null;
+    const order: OrderOffset = {
+      orderNo,
+      productAmountCent: dto.productAmountCent,
+      typed: orderNo ? dto.orderNoTyped ?? false : null,
+    };
+    if (dto.amountCent > maxOffsetCent(order.productAmountCent)) {
+      throw new BadRequestException(offsetCapMessage(order.productAmountCent));
+    }
+    return this.move(actor, memberId, { ...dto, remark }, LedgerType.CONSUME, -1, null, order, true);
   }
 
   /**
@@ -200,6 +238,7 @@ export class WalletService {
       payCodeId: null,
       signFlowId: credit.signFlowId,
       order: null,
+      codeless: false,
     });
   }
 
@@ -252,6 +291,7 @@ export class WalletService {
       payCodeId: null,
       signFlowId: null,
       order: null,
+      codeless: false,
     });
   }
 
@@ -302,6 +342,7 @@ export class WalletService {
       payCodeId: null,
       signFlowId: null,
       order: null,
+      codeless: false,
     });
   }
 
@@ -313,6 +354,7 @@ export class WalletService {
     direction: 1 | -1,
     payCode: string | null,
     order: OrderOffset | null,
+    codeless: boolean,
   ): Promise<MoveResult> {
     assertStoreAccess(actor.roles, dto.storeId);
     const sameRequest = {
@@ -321,6 +363,7 @@ export class WalletService {
       amountCent: dto.amountCent,
       storeId: dto.storeId,
       ...(order ? { orderNo: order.orderNo } : {}),
+      ...(type === LedgerType.CONSUME ? { codeless } : {}),
     };
     const replay = await this.replay(actor.orgId, dto.requestId, sameRequest);
     if (replay) {
@@ -349,7 +392,7 @@ export class WalletService {
     let payCodeId: string | null = null;
     if (payCode != null || order != null) {
       try {
-        if (order) {
+        if (order?.orderNo) {
           await this.orders.assertNotRedeemed(actor.orgId, order.orderNo);
         }
         if (payCode != null) {
@@ -379,6 +422,7 @@ export class WalletService {
       payCodeId,
       signFlowId: null,
       order,
+      codeless,
     });
   }
 
@@ -450,12 +494,13 @@ export class WalletService {
         orderNo: movement.order?.orderNo ?? null,
         productAmountCent: movement.order?.productAmountCent ?? null,
         orderNoTyped: movement.order?.typed ?? null,
+        codeless: movement.codeless,
       },
       include: ledgerInclude,
     });
     // 占单和放开也在写流水之后，理由同下面的会员码：同一请求号并发提交时先撞流水的唯一约束。
     // 两笔同时抵同一张单（不同请求号）时，第二笔在这里撞部分唯一索引，整笔回滚。
-    if (movement.order) {
+    if (movement.order?.orderNo) {
       await this.orders.occupy(tx, movement.orgId, movement.order.orderNo, entry.id);
     }
     if (movement.reversalOfId) {
@@ -470,7 +515,7 @@ export class WalletService {
       orgId: movement.orgId,
       actorStaffId: movement.operatorStaffId,
       storeId: movement.storeId,
-      action: auditActionOf[movement.type],
+      action: movement.codeless ? AuditAction.WalletConsumeCodeless : auditActionOf[movement.type],
       targetType: 'LedgerEntry',
       targetId: entry.id,
       payload: {
@@ -484,13 +529,15 @@ export class WalletService {
         ...(movement.signFlowId ? { signFlowId: movement.signFlowId } : {}),
         ...(movement.order
           ? {
-              orderNo: movement.order.orderNo,
+              ...(movement.order.orderNo ? { orderNo: movement.order.orderNo } : {}),
               productAmountCent: movement.order.productAmountCent,
               ...(movement.order.typed ? { orderNoTyped: true } : {}),
             }
           : {}),
-        // 退余额的原因和退款方式、冲正的原因，要在操作记录里看得到。
-        ...((movement.type === LedgerType.REFUND || movement.type === LedgerType.REVERSAL) && movement.remark
+        ...(movement.codeless ? { codeless: true } : {}),
+        // 退余额的原因和退款方式、冲正的原因、无码抵扣的原因，要在操作记录里看得到。
+        ...((movement.type === LedgerType.REFUND || movement.type === LedgerType.REVERSAL || movement.codeless) &&
+        movement.remark
           ? { remark: movement.remark }
           : {}),
       },
@@ -507,7 +554,7 @@ export class WalletService {
     if (movement.reversalOfId) {
       throw new ConflictException('这笔流水已经冲正过');
     }
-    if (movement.order) {
+    if (movement.order?.orderNo) {
       const redeemed = await this.orders.findActive(this.prisma, movement.orgId, movement.order.orderNo);
       if (redeemed) {
         throw new ConflictException(redeemedMessage(redeemed));
@@ -523,7 +570,9 @@ export class WalletService {
   private async replay(
     orgId: string,
     requestId: string,
-    expected: Partial<Pick<LedgerRecord, 'memberId' | 'type' | 'amountCent' | 'storeId' | 'reversalOfId' | 'orderNo'>>,
+    expected: Partial<
+      Pick<LedgerRecord, 'memberId' | 'type' | 'amountCent' | 'storeId' | 'reversalOfId' | 'orderNo' | 'codeless'>
+    >,
   ): Promise<MoveResult | null> {
     const entry = await this.prisma.ledgerEntry.findUnique({
       where: { orgId_requestId: { orgId, requestId } },

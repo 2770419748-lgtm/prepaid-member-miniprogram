@@ -17,6 +17,8 @@ export const AuditAction = {
   MemberEnable: 'MEMBER_ENABLE',
   WalletRecharge: 'WALLET_RECHARGE',
   WalletConsume: 'WALLET_CONSUME',
+  /** 无码抵扣：顾客出示不了会员码，本店店长或超级管理员按手机号直接抵扣。payload 带原因。 */
+  WalletConsumeCodeless: 'WALLET_CONSUME_CODELESS',
   WalletReversal: 'WALLET_REVERSAL',
   /** 退余额：店长或超级管理员把没用完的储值退给顾客。 */
   WalletRefund: 'WALLET_REFUND',
@@ -60,6 +62,7 @@ export const AuditActionLabel: Record<AuditActionCode, string> = {
   MEMBER_ENABLE: '恢复会员',
   WALLET_RECHARGE: '充值',
   WALLET_CONSUME: '消费扣款',
+  WALLET_CONSUME_CODELESS: '无码抵扣',
   WALLET_REVERSAL: '冲正',
   WALLET_REFUND: '退余额',
   BENEFIT_PLAN_CREATE: '新建权益方案',
