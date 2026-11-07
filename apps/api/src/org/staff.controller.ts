@@ -62,7 +62,10 @@ export class StaffController {
 
   @Put(':id/roles')
   @Roles('STORE_MANAGER')
-  @ApiOperation({ summary: '设置员工在各门店的角色。店长只能给普通店员分配店员角色' })
+  @ApiOperation({
+    summary:
+      '设置员工在各门店的角色（调店就是改这个）。店长只能动本店的普通店员、只能分配本店店员；一家门店都不剩时账号自动停用；至少留一位在职超级管理员',
+  })
   replaceRoles(
     @CurrentPrincipal() actor: AccessPrincipal,
     @Param('id') id: string,

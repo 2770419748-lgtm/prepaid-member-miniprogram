@@ -144,8 +144,10 @@
       @cancel="roleTarget = null"
     >
       <p class="muted">
-        <template v-if="session.superAdmin">一位员工可以在多家门店有角色。超级管理员在任意一家店有这个角色就能管全公司。</template>
-        <template v-else>只能调整你管理的门店，只能分配「店员」。</template>
+        <template v-if="session.superAdmin">
+          一位员工可以在多家门店有角色。调店就是在这里把旧门店换成新门店：以前记的账留在原来的门店，调走后他看不到原店的流水。超级管理员在任意一家店有这个角色就能管全公司。
+        </template>
+        <template v-else>只能调整你管理的门店，只能分配「店员」。要把人调去别的门店，请找超级管理员。</template>
       </p>
       <div v-for="(row, index) in roleRows" :key="index" class="role-row">
         <a-select v-model:value="row.storeId" :options="assignableStores" placeholder="门店" style="flex: 1" />
@@ -405,7 +407,9 @@ async function submitRoles(): Promise<void> {
     const ok = await new Promise<boolean>((resolve) => {
       Modal.confirm({
         title: '移除全部门店？',
-        content: '没有门店的员工登录后什么都做不了。确定要这样保存吗？',
+        content: session.superAdmin
+          ? '一家门店都不剩的员工账号会自动停用（已经记过的账不受影响）。以后要用，先分配门店再恢复。'
+          : '如果这位员工没有其他门店，账号会自动停用，你这里也就看不到他了；要恢复请找超级管理员。',
         okText: '确定',
         cancelText: '取消',
         onOk: () => resolve(true),
@@ -469,6 +473,10 @@ async function submitReset(): Promise<void> {
 
 function toggleStatus(staff: StaffView): void {
   const disabling = staff.status === 'ACTIVE';
+  if (!disabling && staff.roles.length === 0) {
+    message.warning('这位员工没有门店，请先在「门店角色」里分配门店再恢复');
+    return;
+  }
   Modal.confirm({
     title: disabling ? `停用「${staff.name}」的账号？` : `恢复「${staff.name}」的账号？`,
     content: disabling

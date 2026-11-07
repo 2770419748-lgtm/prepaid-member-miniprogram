@@ -47,6 +47,24 @@ describe('操作记录翻成白话', () => {
     expect(describeAuditPayload({ roles: [] }, storeName)).toEqual(['移除了全部门店角色']);
   });
 
+  it('调店写成原来 → 现在，别家店用记录里的店名，移空了说明自动停用', () => {
+    expect(
+      describeAuditPayload(
+        {
+          previousRoles: [{ storeId: 's1', storeName: '旗舰店', role: 'STAFF' }],
+          roles: [{ storeId: 's2', storeName: '内江店', role: 'STAFF' }],
+        },
+        storeName,
+      ),
+    ).toEqual(['门店角色 旗舰店 · 店员 → 内江店 · 店员']);
+    expect(
+      describeAuditPayload(
+        { previousRoles: [{ storeId: 's1', storeName: '旗舰店', role: 'STAFF' }], roles: [], autoDisabled: true },
+        storeName,
+      ),
+    ).toEqual(['门店角色 旗舰店 · 店员 → 无门店', '一家门店都不剩，账号已自动停用']);
+  });
+
   it('权益单的模板、状态变化翻成白话', () => {
     expect(
       describeAuditPayload(

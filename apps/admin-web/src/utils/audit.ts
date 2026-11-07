@@ -82,18 +82,30 @@ export function describeAuditPayload(payload: Record<string, unknown> | null, st
     const store = typeof p.storeId === 'string' ? storeName(p.storeId) : null;
     lines.push(`${store ? `${store} · ` : ''}${ROLE_LABEL[p.role]}`);
   }
-  if (Array.isArray(p.roles)) {
-    const roles = p.roles
+  // 门店角色：新记录前后都有（调店写成「原来 → 现在」），旧记录只有改成了什么。
+  const roleList = (value: unknown[]) =>
+    value
       .map((r: unknown) => {
-        const item = r as { storeId?: unknown; role?: unknown };
+        const item = r as { storeId?: unknown; storeName?: unknown; role?: unknown };
         if (!isRole(item.role)) {
           return '';
         }
-        const store = typeof item.storeId === 'string' ? storeName(item.storeId) : null;
+        const store =
+          (typeof item.storeId === 'string' ? storeName(item.storeId) : null) ??
+          (typeof item.storeName === 'string' ? item.storeName : null);
         return `${store ?? '某门店'} · ${ROLE_LABEL[item.role]}`;
       })
       .filter(Boolean);
+  if (Array.isArray(p.roles) && Array.isArray(p.previousRoles)) {
+    const before = roleList(p.previousRoles);
+    const after = roleList(p.roles);
+    lines.push(`门店角色 ${before.length > 0 ? before.join('、') : '无门店'} → ${after.length > 0 ? after.join('、') : '无门店'}`);
+  } else if (Array.isArray(p.roles)) {
+    const roles = roleList(p.roles);
     lines.push(roles.length > 0 ? `角色改为 ${roles.join('、')}` : '移除了全部门店角色');
+  }
+  if (p.autoDisabled === true) {
+    lines.push('一家门店都不剩，账号已自动停用');
   }
   if (typeof p.status === 'string' && STATUS_LABEL[p.status]) {
     lines.push(`状态改为${STATUS_LABEL[p.status]}`);
