@@ -151,6 +151,10 @@ function actionColor(action: string): string {
   if (action === 'WALLET_REVERSAL') {
     return 'warning';
   }
+  // 无码抵扣是扫码消费的例外，和流水列表的标签一样用紫色，方便抽查。
+  if (action === 'WALLET_CONSUME_CODELESS') {
+    return 'purple';
+  }
   if (action.startsWith('WALLET_')) {
     return 'blue';
   }
