@@ -10,7 +10,7 @@ import { AuditLogQueryDto } from './dto/audit-query.dto';
 
 /**
  * 操作记录只读查询。没有修改和删除。
- * 超级管理员看全公司；店长看自己管的门店里发生的，加上自己做的；店员只看自己做的。会员不能看。
+ * 超级管理员看全公司；店长看自己管的门店里发生的（含调店这类牵涉到本店的），加上自己做的；店员只看自己做的。会员不能看。
  */
 @Injectable()
 export class AuditQueryService {
@@ -34,7 +34,7 @@ export class AuditQueryService {
       filters.push({ actorStaffId: query.actorStaffId });
     }
     if (query.storeId) {
-      filters.push({ storeId: query.storeId });
+      filters.push({ OR: [{ storeId: query.storeId }, { relatedStoreIds: { has: query.storeId } }] });
     }
     if (query.targetType) {
       filters.push({ targetType: query.targetType });
@@ -79,7 +79,12 @@ export class AuditQueryService {
     const managed = managedStoreIds(actor.roles);
     return {
       orgId: actor.orgId,
-      OR: [{ actorStaffId: actor.sub }, ...(managed.length > 0 ? [{ storeId: { in: managed } }] : [])],
+      OR: [
+        { actorStaffId: actor.sub },
+        ...(managed.length > 0
+          ? [{ storeId: { in: managed } }, { relatedStoreIds: { hasSome: managed } }]
+          : []),
+      ],
     };
   }
 

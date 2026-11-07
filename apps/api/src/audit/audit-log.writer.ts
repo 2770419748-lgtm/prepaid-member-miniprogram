@@ -86,6 +86,8 @@ export interface AuditWriteInput {
   actorStaffId?: string | null;
   /** 操作发生在哪家门店。与门店无关的操作不填。 */
   storeId?: string | null;
+  /** 还牵涉到的门店（例如调店时调出、调入的门店）。这些门店的店长也能看到这条记录。 */
+  relatedStoreIds?: string[];
   action: string;
   targetType: string;
   targetId: string;
@@ -110,6 +112,7 @@ export class AuditLogWriter {
         orgId: entry.orgId,
         actorStaffId: entry.actorStaffId ?? null,
         storeId: entry.storeId ?? null,
+        relatedStoreIds: entry.relatedStoreIds ? [...new Set(entry.relatedStoreIds)] : [],
         action: entry.action,
         targetType: entry.targetType,
         targetId: entry.targetId,

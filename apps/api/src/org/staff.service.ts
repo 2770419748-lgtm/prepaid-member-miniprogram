@@ -28,6 +28,14 @@ const staffInclude = {
 
 type StaffWithRoles = Prisma.StaffGetPayload<{ include: typeof staffInclude }>;
 
+/** 降级、移除门店或停用最后一位在职超级管理员时的提示。 */
+export const LAST_SUPER_ADMIN = '公司至少要留一位在职的超级管理员';
+
+/** 操作记录里的门店角色快照：带门店名，别家店的店长看记录时也知道是哪家店。 */
+function roleSnapshot(staff: StaffWithRoles) {
+  return staff.storeRoles.map((role) => ({ storeId: role.storeId, storeName: role.store.name, role: role.role }));
+}
+
 @Injectable()
 export class StaffService {
   constructor(
@@ -163,6 +171,9 @@ export class StaffService {
         throw new ForbiddenException('该员工还属于其他门店，不能在这里停用');
       }
     }
+    if (dto.status === StaffStatus.ACTIVE && current.storeRoles.length === 0) {
+      throw new BadRequestException('这位员工没有门店，请先在「门店角色」里分配门店再恢复');
+    }
     if (dto.status !== undefined) {
       data.status = dto.status;
     }
@@ -175,14 +186,19 @@ export class StaffService {
     }
     try {
       const updated = await this.prisma.$transaction(async (tx) => {
+        await this.lockOrgStaff(tx, actor.orgId);
+        const before = await tx.staff.findUniqueOrThrow({ where: { id: current.id }, include: staffInclude });
         const staff = await tx.staff.update({
           where: { id: current.id },
           data,
           include: staffInclude,
         });
+        await this.assertKeepsSuperAdmin(tx, actor.orgId, before);
         await this.audit.write(tx, {
           orgId: actor.orgId,
           actorStaffId: actor.sub,
+          // 这位员工所在门店的店长都能在操作记录里看到（改名、停用、恢复、换手机号）。
+          relatedStoreIds: before.storeRoles.map((role) => role.storeId),
           action: AuditAction.StaffUpdate,
           targetType: 'Staff',
           targetId: staff.id,
@@ -226,6 +242,10 @@ export class StaffService {
       if (managed.length === 0) {
         throw new ForbiddenException('无权执行该操作');
       }
+      // 店长只能动自己店里的人。别家店的店员要调过来，找超级管理员。
+      if (!current.storeRoles.some((role) => managed.includes(role.storeId))) {
+        throw new ForbiddenException('这位员工不在你管的门店，调店请找超级管理员');
+      }
       for (const role of dto.roles) {
         if (role.role === StaffRole.SUPER_ADMIN) {
           throw new ForbiddenException('不可分配超级管理员');
@@ -239,6 +259,8 @@ export class StaffService {
       }
     }
     const updated = await this.prisma.$transaction(async (tx) => {
+      await this.lockOrgStaff(tx, actor.orgId);
+      const before = await tx.staff.findUniqueOrThrow({ where: { id: current.id }, include: staffInclude });
       if (superAdmin) {
         await tx.staffStoreRole.deleteMany({ where: { staffId: current.id } });
       } else {
@@ -255,17 +277,32 @@ export class StaffService {
           })),
         });
       }
+      let after = await tx.staff.findUniqueOrThrow({ where: { id: current.id }, include: staffInclude });
+      // 一家门店都不剩的员工登录后什么都做不了，店长那边也看不到他了：直接停用。要再用，先分配门店再恢复。
+      const autoDisabled = after.storeRoles.length === 0 && after.status === StaffStatus.ACTIVE;
+      if (autoDisabled) {
+        after = await tx.staff.update({
+          where: { id: current.id },
+          data: { status: StaffStatus.DISABLED },
+          include: staffInclude,
+        });
+      }
+      await this.assertKeepsSuperAdmin(tx, actor.orgId, before);
       await this.audit.write(tx, {
         orgId: actor.orgId,
         actorStaffId: actor.sub,
+        // 调出、调入的门店的店长都能在操作记录里看到这次调动。
+        relatedStoreIds: [...before.storeRoles, ...after.storeRoles].map((role) => role.storeId),
         action: AuditAction.StaffRolesReplace,
         targetType: 'Staff',
         targetId: current.id,
         payload: {
-          roles: dto.roles.map((role) => ({ storeId: role.storeId, role: role.role })),
+          previousRoles: roleSnapshot(before),
+          roles: roleSnapshot(after),
+          ...(autoDisabled ? { autoDisabled: true } : {}),
         },
       });
-      return tx.staff.findUniqueOrThrow({ where: { id: current.id }, include: staffInclude });
+      return after;
     });
     return this.present(actor, updated);
   }
@@ -304,6 +341,33 @@ export class StaffService {
       return staff;
     });
     return this.present(actor, updated);
+  }
+
+  /**
+   * 员工的角色和停用都在这一把锁后面依次改，「至少留一位在职超级管理员」才不会被两个同时进行的操作绕过。
+   * 只锁公司这一行（不影响记账等其他写入）。
+   */
+  private async lockOrgStaff(tx: Prisma.TransactionClient, orgId: string): Promise<void> {
+    await tx.$queryRaw`SELECT 1 FROM "orgs" WHERE "id" = ${orgId} FOR NO KEY UPDATE`;
+  }
+
+  /** 改之前是在职超级管理员的，改完以后公司里还得有一位在职的超级管理员，否则整笔撤回。 */
+  private async assertKeepsSuperAdmin(
+    tx: Prisma.TransactionClient,
+    orgId: string,
+    before: StaffWithRoles,
+  ): Promise<void> {
+    const wasSuperAdmin =
+      before.status === StaffStatus.ACTIVE && before.storeRoles.some((role) => role.role === StaffRole.SUPER_ADMIN);
+    if (!wasSuperAdmin) {
+      return;
+    }
+    const remaining = await tx.staff.count({
+      where: { orgId, status: StaffStatus.ACTIVE, storeRoles: { some: { role: StaffRole.SUPER_ADMIN } } },
+    });
+    if (remaining === 0) {
+      throw new ConflictException(LAST_SUPER_ADMIN);
+    }
   }
 
   private storeCard(store: Parameters<typeof toStoreView>[0]) {
