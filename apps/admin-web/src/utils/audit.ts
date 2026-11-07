@@ -116,6 +116,13 @@ export function describeAuditPayload(payload: Record<string, unknown> | null, st
   if (typeof p.businessHours === 'string') {
     lines.push(`营业时间 ${p.businessHours}`);
   }
+  if (typeof p.lat === 'number' && typeof p.lng === 'number') {
+    lines.push(`坐标 ${p.lat.toFixed(6)},${p.lng.toFixed(6)}`);
+  }
+  // 门店管理里用表格批量导入的。
+  if (p.source === 'import') {
+    lines.push('用表格批量导入');
+  }
   if (typeof p.remark === 'string' && p.remark) {
     lines.push(`${p.codeless === true ? '无码原因' : '备注'} ${p.remark}`);
   }

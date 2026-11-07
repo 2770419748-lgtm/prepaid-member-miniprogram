@@ -3,7 +3,8 @@
     <h1 class="pm-page-title">门店管理</h1>
     <p class="pm-page-sub">
       门店的地址、电话和营业时间会显示在小程序会员页的「可用门店」里，供会员导航和拨号。
-      <template v-if="!session.superAdmin && session.managed.length > 0">店长可以改自己店的资料，不能停用门店。</template>
+      <template v-if="session.superAdmin">门店多的话，点「批量导入」一次传一张 Excel 表。</template>
+      <template v-else-if="session.managed.length > 0">店长可以改自己店的资料，不能停用门店。</template>
     </p>
     <a-card :bordered="false" class="block">
       <div class="pm-toolbar">
@@ -13,7 +14,11 @@
           <a-radio-button value="DISABLED">已停用</a-radio-button>
         </a-radio-group>
         <span class="pm-spacer" />
-        <a-button v-if="session.superAdmin" type="primary" @click="openCreate">新建门店</a-button>
+        <a-space v-if="session.superAdmin" wrap>
+          <a-button :loading="downloading" @click="downloadSheet">下载门店表格</a-button>
+          <a-button @click="importOpen = true">批量导入</a-button>
+          <a-button type="primary" @click="openCreate">新建门店</a-button>
+        </a-space>
       </div>
       <a-table
         :columns="columns"
@@ -21,7 +26,7 @@
         :loading="loading"
         :pagination="pagination"
         row-key="id"
-        :scroll="{ x: 1120 }"
+        :scroll="{ x: 960 }"
         @change="onTableChange"
       >
         <template #emptyText><a-empty description="还没有门店" /></template>
@@ -45,8 +50,10 @@
             <span :class="{ muted: !record.businessHours }">{{ record.businessHours || '未填写' }}</span>
           </template>
           <template v-else-if="column.key === 'location'">
-            <span v-if="record.lat !== null" class="pm-num nowrap">{{ record.lat }}, {{ record.lng }}</span>
-            <span v-else class="muted">未设置</span>
+            <a-tooltip v-if="record.lat !== null" :title="`纬度 ${record.lat}，经度 ${record.lng}`">
+              <span class="nowrap located">已设置</span>
+            </a-tooltip>
+            <span v-else class="muted nowrap">未设置</span>
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space :size="4">
@@ -104,27 +111,40 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-form-item label="地图坐标" extra="可在地图软件里取点后填写，纬度和经度要一起填；不填则会员端不显示导航定位">
-          <a-space>
-            <a-input-number v-model:value="form.lat" :min="-90" :max="90" :precision="6" placeholder="纬度" style="width: 160px" />
-            <a-input-number v-model:value="form.lng" :min="-180" :max="180" :precision="6" placeholder="经度" style="width: 160px" />
-          </a-space>
+        <a-form-item label="地图坐标" :validate-status="coordHint.error ? 'error' : ''" :help="coordHint.text || undefined">
+          <a-input v-model:value="form.coords" :maxlength="60" allow-clear placeholder="例如 30.657180,104.080810" />
+          <template #extra>
+            在 <a :href="COORDINATE_PICKER_URL" target="_blank" rel="noopener noreferrer">腾讯坐标拾取器</a>
+            搜到门店、点一下，把两个数整段复制过来就行，高德的也可以，先后不用管。不填则会员端不能导航。
+          </template>
         </a-form-item>
         <a-alert v-if="formError" type="error" show-icon :message="formError" />
       </a-form>
     </a-modal>
+
+    <StoreImportModal
+      :open="importOpen"
+      :downloading="downloading"
+      @close="importOpen = false"
+      @download="downloadSheet"
+      @done="onImported"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { message, Modal, type TablePaginationConfig } from 'ant-design-vue';
 import type { ColumnsType } from 'ant-design-vue/es/table';
+import dayjs from 'dayjs';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { errorMessage } from '../../api/http';
-import { createStore, listStores, updateStore, type StoreForm } from '../../api/org';
+import { createStore, listAllStores, listStores, updateStore, type StoreForm } from '../../api/org';
 import type { ActiveStatus, StoreView } from '../../api/types';
 import { useSessionStore } from '../../stores/session';
+import { downloadBytes } from '../../utils/download';
+import { COORDINATE_PICKER_URL, formatCoordinates, parseCoordinates, storeSheetFile } from '../../utils/store-import';
+import StoreImportModal from './StoreImportModal.vue';
 
 const router = useRouter();
 const session = useSessionStore();
@@ -146,18 +166,34 @@ const form = reactive({
   address: '',
   phone: '',
   businessHours: '',
-  lat: null as number | null,
-  lng: null as number | null,
+  /** 坐标整段粘贴，例如「30.657180,104.080810」，先后都认。 */
+  coords: '',
 });
 
+const importOpen = ref(false);
+const downloading = ref(false);
+
+/** 坐标框下面的提示：认出来了就写清纬度、经度，看不懂就说为什么。 */
+const coordHint = computed<{ text: string; error: boolean }>(() => {
+  const parsed = parseCoordinates(form.coords);
+  if (!parsed.ok) {
+    return { text: parsed.message, error: true };
+  }
+  if (!parsed.value) {
+    return { text: '', error: false };
+  }
+  return { text: `认出来了：纬度 ${parsed.value.lat.toFixed(6)}，经度 ${parsed.value.lng.toFixed(6)}`, error: false };
+});
+
+// 1280 宽的笔记本上不用左右滚：坐标只显示有没有设置，具体数字放在提示里。
 const columns: ColumnsType<StoreView> = [
-  { title: '门店', key: 'name', width: 150 },
-  { title: '状态', key: 'status', width: 90 },
-  // 地址不给固定宽度，吃掉剩下的空间；表格最小宽度里给它留了约 200px。
+  { title: '门店', key: 'name', width: 160 },
+  { title: '状态', key: 'status', width: 84 },
+  // 地址不给固定宽度，吃掉剩下的空间；表格最小宽度里给它留了约 180px。
   { title: '地址', key: 'address', ellipsis: true },
-  { title: '电话', key: 'phone', width: 140 },
-  { title: '营业时间', key: 'hours', width: 170 },
-  { title: '坐标', key: 'location', width: 200 },
+  { title: '电话', key: 'phone', width: 130 },
+  { title: '营业时间', key: 'hours', width: 150 },
+  { title: '导航坐标', key: 'location', width: 90 },
   { title: '操作', key: 'actions', width: 170, fixed: 'right' },
 ];
 
@@ -192,8 +228,7 @@ function fill(store: StoreView | null): void {
   form.address = store?.address ?? '';
   form.phone = store?.phone ?? '';
   form.businessHours = store?.businessHours ?? '';
-  form.lat = store?.lat ?? null;
-  form.lng = store?.lng ?? null;
+  form.coords = store ? formatCoordinates(store.lat, store.lng) : '';
 }
 
 function openCreate(): void {
@@ -216,10 +251,9 @@ async function save(): Promise<void> {
   } catch {
     return;
   }
-  const hasLat = form.lat !== null && form.lat !== undefined;
-  const hasLng = form.lng !== null && form.lng !== undefined;
-  if (hasLat !== hasLng) {
-    formError.value = '纬度和经度要一起填，或者都不填';
+  const coords = parseCoordinates(form.coords);
+  if (!coords.ok) {
+    formError.value = `地图坐标：${coords.message}`;
     return;
   }
   const body: StoreForm = {
@@ -232,13 +266,13 @@ async function save(): Promise<void> {
   formError.value = '';
   try {
     if (editing.value) {
-      await updateStore(editing.value.id, { ...body, lat: hasLat ? form.lat : null, lng: hasLng ? form.lng : null });
+      await updateStore(editing.value.id, { ...body, lat: coords.value?.lat ?? null, lng: coords.value?.lng ?? null });
       message.success('门店资料已保存');
     } else {
       await createStore({
         ...body,
         name: body.name ?? '',
-        ...(hasLat ? { lat: form.lat, lng: form.lng } : {}),
+        ...(coords.value ? { lat: coords.value.lat, lng: coords.value.lng } : {}),
       });
       message.success('门店已新建');
     }
@@ -273,6 +307,25 @@ function toggleStatus(store: StoreView): void {
   });
 }
 
+/** 下载门店表格：现有门店（含已停用的）都列上，改完传回「批量导入」。 */
+async function downloadSheet(): Promise<void> {
+  downloading.value = true;
+  try {
+    // 按建店先后排，和小程序会员看到的顺序一样。
+    const stores = await listAllStores();
+    downloadBytes(`门店清单-${dayjs().format('YYYYMMDD')}.xlsx`, storeSheetFile(stores));
+  } catch (e) {
+    message.error(errorMessage(e));
+  } finally {
+    downloading.value = false;
+  }
+}
+
+async function onImported(): Promise<void> {
+  importOpen.value = false;
+  await Promise.all([reload(1), session.refreshStores()]);
+}
+
 onMounted(() => reload(1));
 </script>
 
@@ -295,5 +348,10 @@ onMounted(() => reload(1));
 
 .nowrap {
   white-space: nowrap;
+}
+
+.located {
+  color: #16a34a;
+  cursor: default;
 }
 </style>

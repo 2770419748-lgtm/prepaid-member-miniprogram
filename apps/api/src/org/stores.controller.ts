@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccessPrincipal } from '../auth/access-principal';
 import { CurrentPrincipal, Principals, Roles } from '../auth/decorators';
-import { CreateStoreDto, StoreListQueryDto, UpdateStoreDto } from './dto/store.dto';
+import { CreateStoreDto, StoreImportDto, StoreListQueryDto, UpdateStoreDto } from './dto/store.dto';
 import { StoresService } from './stores.service';
 
 @ApiTags('门店')
@@ -23,6 +23,15 @@ export class StoresController {
   @ApiOperation({ summary: '新建门店（仅超级管理员）' })
   create(@CurrentPrincipal() actor: AccessPrincipal, @Body() dto: CreateStoreDto) {
     return this.stores.create(actor, dto);
+  }
+
+  @Post('import')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({
+    summary: '用表格批量录门店（仅超级管理员）。按名称对上的补全资料、对不上的新建；dryRun=true 只核对不写库',
+  })
+  importStores(@CurrentPrincipal() actor: AccessPrincipal, @Body() dto: StoreImportDto) {
+    return this.stores.importStores(actor, dto);
   }
 
   @Get(':id')

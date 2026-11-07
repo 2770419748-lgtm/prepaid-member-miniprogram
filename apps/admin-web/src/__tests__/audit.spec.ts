@@ -35,6 +35,15 @@ describe('操作记录翻成白话', () => {
     ).toEqual(['没扫会员码', '九讯云订单 A5982（手输单号）', '无码原因 手机没电']);
   });
 
+  it('表格批量导入的门店写明来源和坐标', () => {
+    expect(
+      describeAuditPayload(
+        { address: '成都市锦江区示例路 1 号', businessHours: '每天 10:00-22:00', lat: 30.65718, lng: 104.08081, source: 'import' },
+        storeName,
+      ),
+    ).toEqual(['地址 成都市锦江区示例路 1 号', '营业时间 每天 10:00-22:00', '坐标 30.657180,104.080810', '用表格批量导入']);
+  });
+
   it('员工角色显示门店名和中文角色', () => {
     expect(describeAuditPayload({ name: '李店员', phone: '13800000002', storeId: 's1', role: 'STAFF' }, storeName)).toEqual([
       '名称 李店员',

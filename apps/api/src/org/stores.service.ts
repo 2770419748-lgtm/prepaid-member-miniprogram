@@ -5,7 +5,8 @@ import { AccessPrincipal } from '../auth/access-principal';
 import { assertCanManageStore, assertStoreAccess, isSuperAdmin } from '../auth/staff-access';
 import { PageResult } from '../common/page';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateStoreDto, StoreListQueryDto, UpdateStoreDto } from './dto/store.dto';
+import { CreateStoreDto, StoreImportDto, StoreListQueryDto, UpdateStoreDto } from './dto/store.dto';
+import { planStoreImport, StoreImportResult, summarizeImport } from './store-import';
 import { StoreView, toStoreView } from './store.view';
 
 function requireName(value: string): string {
@@ -74,7 +75,8 @@ export class StoresService {
       this.prisma.store.count({ where }),
       this.prisma.store.findMany({
         where,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        // 按建店先后排，和小程序会员看到的顺序、批量导入时表格里的顺序一样。
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -194,6 +196,109 @@ export class StoresService {
       return store;
     });
     return toStoreView(updated);
+  }
+
+  /**
+   * 用表格批量录门店（仅超级管理员）。按门店名称对上已有门店：只补上填了且不一样的项，空格子不动；
+   * 名称对不上的新建（营业中）。dryRun 只列出会怎么处理；真正导入时有一行不对就整批不导。
+   * 每家新建或改动的门店各写一条操作记录，带 source: 'import'。
+   */
+  async importStores(actor: AccessPrincipal, dto: StoreImportDto): Promise<StoreImportResult> {
+    if (!isSuperAdmin(actor.roles)) {
+      throw new ForbiddenException('无权执行该操作');
+    }
+    if (dto.dryRun) {
+      const existing = await this.prisma.store.findMany({ where: { orgId: actor.orgId } });
+      return summarizeImport(true, planStoreImport(dto.rows, existing).items);
+    }
+    return this.prisma.$transaction(
+      async (tx) => {
+        // 两个人同时导入时排队，免得同一个名字建出两家。只锁公司这一行，不影响记账。
+        await tx.$queryRaw`SELECT 1 FROM "orgs" WHERE "id" = ${actor.orgId} FOR NO KEY UPDATE`;
+        const existing = await tx.store.findMany({ where: { orgId: actor.orgId } });
+        const plan = planStoreImport(dto.rows, existing);
+        const failed = plan.items.filter((item) => item.action === 'ERROR').length;
+        if (failed > 0) {
+          throw new BadRequestException(`表格里有 ${failed} 行要先改好，这次一家都没导入`);
+        }
+        for (const [i, item] of plan.items.entries()) {
+          const row = plan.rows[i];
+          if (!row || item.action === 'UNCHANGED') {
+            continue;
+          }
+          const coords =
+            row.lat !== undefined && row.lng !== undefined
+              ? { lat: row.lat.toNumber(), lng: row.lng.toNumber() }
+              : null;
+          if (item.action === 'CREATE') {
+            const store = await tx.store.create({
+              data: {
+                orgId: actor.orgId,
+                name: row.name,
+                address: row.address ?? null,
+                contactPhone: row.phone ?? null,
+                businessHours: row.businessHours ?? null,
+                lat: row.lat ?? null,
+                lng: row.lng ?? null,
+                status: StoreStatus.ACTIVE,
+              },
+            });
+            item.storeId = store.id;
+            await this.audit.write(tx, {
+              orgId: actor.orgId,
+              actorStaffId: actor.sub,
+              storeId: store.id,
+              action: AuditAction.StoreCreate,
+              targetType: 'Store',
+              targetId: store.id,
+              payload: {
+                name: store.name,
+                address: store.address,
+                lat: coords?.lat ?? null,
+                lng: coords?.lng ?? null,
+                phone: store.contactPhone,
+                businessHours: store.businessHours,
+                source: 'import',
+              },
+            });
+            continue;
+          }
+          const storeId = item.storeId as string;
+          const data: Prisma.StoreUpdateInput = {};
+          const payload: Record<string, string | number | null> = {};
+          if (item.changes.includes('address')) {
+            data.address = row.address;
+            payload.address = row.address ?? null;
+          }
+          if (item.changes.includes('phone')) {
+            data.contactPhone = row.phone;
+            payload.phone = row.phone ?? null;
+          }
+          if (item.changes.includes('businessHours')) {
+            data.businessHours = row.businessHours;
+            payload.businessHours = row.businessHours ?? null;
+          }
+          if (item.changes.includes('location') && coords) {
+            data.lat = row.lat;
+            data.lng = row.lng;
+            payload.lat = coords.lat;
+            payload.lng = coords.lng;
+          }
+          await tx.store.update({ where: { id: storeId }, data });
+          await this.audit.write(tx, {
+            orgId: actor.orgId,
+            actorStaffId: actor.sub,
+            storeId,
+            action: AuditAction.StoreUpdate,
+            targetType: 'Store',
+            targetId: storeId,
+            payload: { ...payload, source: 'import' },
+          });
+        }
+        return summarizeImport(false, plan.items);
+      },
+      { maxWait: 5_000, timeout: 30_000 },
+    );
   }
 
   private async requireStore(orgId: string, storeId: string) {
