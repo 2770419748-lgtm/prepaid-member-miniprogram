@@ -39,6 +39,10 @@ export function describeAuditPayload(payload: Record<string, unknown> | null, st
   if (typeof p.balanceBefore === 'number' && typeof p.balanceAfter === 'number') {
     lines.push(`余额 ${formatCent(p.balanceBefore)} → ${formatCent(p.balanceAfter)} 元`);
   }
+  // 无码抵扣：顾客出示不了会员码，店长或超管按手机号办理，原因写在 remark 里。
+  if (p.codeless === true) {
+    lines.push(typeof p.orderNo === 'string' ? '没扫会员码' : '没扫会员码，没填九讯云单号');
+  }
   // 消费抵扣的收银订单：单号、商品应付金额，手输的标出来。
   if (typeof p.orderNo === 'string') {
     lines.push(`九讯云订单 ${p.orderNo}${p.orderNoTyped === true ? '（手输单号）' : ''}`);
@@ -101,7 +105,7 @@ export function describeAuditPayload(payload: Record<string, unknown> | null, st
     lines.push(`营业时间 ${p.businessHours}`);
   }
   if (typeof p.remark === 'string' && p.remark) {
-    lines.push(`备注 ${p.remark}`);
+    lines.push(`${p.codeless === true ? '无码原因' : '备注'} ${p.remark}`);
   }
   if (p.mustChangePassword === true) {
     lines.push('下次登录需改密码');

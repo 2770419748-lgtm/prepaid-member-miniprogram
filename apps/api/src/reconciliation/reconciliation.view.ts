@@ -4,6 +4,12 @@ export interface DailyFigures {
   rechargeCent: number;
   consumeCount: number;
   consumeCent: number;
+  /**
+   * 其中无码抵扣（没扫会员码、店长按手机号办理）的笔数和金额，已经算在消费里，不另加减。
+   * 和消费一样按当天记的算，后来冲正的照样算在里面（冲正记在退回的消费里）。
+   */
+  codelessCount: number;
+  codelessCent: number;
   /** 退余额：把没用完的储值退给顾客（钱线下退出去）。 */
   refundCount: number;
   refundCent: number;
@@ -98,6 +104,8 @@ export function emptyFigures(): DailyFigures {
     rechargeCent: 0,
     consumeCount: 0,
     consumeCent: 0,
+    codelessCount: 0,
+    codelessCent: 0,
     refundCount: 0,
     refundCent: 0,
     reversalCount: 0,

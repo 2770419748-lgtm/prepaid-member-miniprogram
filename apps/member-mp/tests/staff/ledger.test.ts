@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { canRechargeAt, canReverse, groupByDay, pickStore, toLedgerRow } from '../../staff/utils/ledger';
+import { canCodelessAt, canRechargeAt, canReverse, groupByDay, pickStore, toLedgerRow } from '../../staff/utils/ledger';
 import type { LedgerEntry, MyStore, MyStoresResult } from '../../staff/utils/types';
 
 function entry(overrides: Partial<LedgerEntry>): LedgerEntry {
@@ -105,6 +105,24 @@ test('直接充值只给超级管理员和本店店长，店员走开单', () =>
   // 在别的店只是店员，在那家店也不能直接充值。
   assert.equal(canRechargeAt('s2', manager), false);
   assert.equal(canRechargeAt('s1', clerk), false);
+});
+
+test('无码抵扣：标题单列，只给超级管理员和这家门店的店长', () => {
+  const row = toLedgerRow(entry({ codeless: true, remark: '顾客没带手机' }));
+  assert.equal(row.title, '消费 · 无码抵扣');
+  assert.equal(row.meta, '14:05 · 小李');
+  // 冲正一笔无码抵扣，照旧叫「冲正 · 抵掉消费」。
+  assert.equal(
+    toLedgerRow(entry({ type: 'REVERSAL', changeCent: 3000, reversalOfType: 'CONSUME', codeless: false })).title,
+    '冲正 · 抵掉消费',
+  );
+  const superAdmin: MyStoresResult = { unrestricted: true, stores: [] };
+  const manager: MyStoresResult = { unrestricted: false, stores: [store('s1', 'STORE_MANAGER'), store('s2', 'STAFF')] };
+  const clerk: MyStoresResult = { unrestricted: false, stores: [store('s1', 'STAFF')] };
+  assert.equal(canCodelessAt('s9', superAdmin), true);
+  assert.equal(canCodelessAt('s1', manager), true);
+  assert.equal(canCodelessAt('s2', manager), false);
+  assert.equal(canCodelessAt('s1', clerk), false);
 });
 
 test('当前门店：沿用上次选择，停用的店跳过', () => {

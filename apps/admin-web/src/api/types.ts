@@ -129,6 +129,8 @@ export interface LedgerEntry {
   productAmountCent: number | null;
   /** 单号是店员手输的（条码扫不出来时）。只有消费有。 */
   orderNoTyped: boolean | null;
+  /** 无码抵扣：顾客出示不了会员码，店长或超管按手机号直接抵扣；原因在 remark。 */
+  codeless: boolean;
   createdAt: string;
 }
 

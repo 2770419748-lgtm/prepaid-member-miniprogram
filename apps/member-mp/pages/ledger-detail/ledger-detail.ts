@@ -21,6 +21,8 @@ interface Detail {
   orderNo: string;
   /** 商品金额（元）；没有为空。 */
   productText: string;
+  /** 没出示会员码、门店按手机号办理的消费。 */
+  codeless: boolean;
 }
 
 function toDetail(entry: LedgerItem): Detail {
@@ -50,6 +52,7 @@ function toDetail(entry: LedgerItem): Detail {
     note,
     orderNo: entry.orderNo ?? '',
     productText: entry.productAmountCent != null ? formatYuan(entry.productAmountCent) : '',
+    codeless: entry.codeless === true,
   };
 }
 

@@ -7,18 +7,21 @@
       <view class="hero-amount {{view.tone}}">{{view.change}}<text class="hero-unit">元</text></view>
       <text wx:if="{{view.reversed}}" class="tag tag-gray">已冲正</text>
       <text wx:if="{{view.isReversal}}" class="tag tag-warning">冲正记录</text>
+      <text wx:if="{{view.codeless}}" class="tag tag-warning">没扫会员码</text>
     </view>
 
     <view class="card">
       <view class="kv"><text class="kv-key">会员</text><text class="kv-value">{{view.member}}</text></view>
       <view class="kv"><text class="kv-key">门店</text><text class="kv-value">{{view.storeName}}</text></view>
+      <view wx:if="{{view.codeless}}" class="kv"><text class="kv-key">办理方式</text><text class="kv-value">无码抵扣（店长按手机号办理）</text></view>
       <view wx:if="{{view.order}}" class="kv"><text class="kv-key">九讯云订单</text><text class="kv-value">{{view.order}}</text></view>
+      <view wx:elif="{{view.codeless}}" class="kv"><text class="kv-key">九讯云订单</text><text class="kv-value muted">没填单号</text></view>
       <view wx:if="{{view.product}}" class="kv"><text class="kv-key">商品应付</text><text class="kv-value">{{view.product}}</text></view>
       <view class="kv"><text class="kv-key">经办人</text><text class="kv-value">{{view.operator}}</text></view>
       <view class="kv"><text class="kv-key">时间</text><text class="kv-value">{{view.time}}</text></view>
       <view class="kv"><text class="kv-key">记账前余额</text><text class="kv-value">{{view.before}} 元</text></view>
       <view class="kv"><text class="kv-key">记账后余额</text><text class="kv-value">{{view.after}} 元</text></view>
-      <view class="kv"><text class="kv-key">备注</text><text class="kv-value">{{view.remark}}</text></view>
+      <view class="kv"><text class="kv-key">{{view.codeless ? '无码原因' : '备注'}}</text><text class="kv-value">{{view.remark}}</text></view>
     </view>
 
     <view wx:if="{{view.reversedById}}" class="list jump">

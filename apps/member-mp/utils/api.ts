@@ -49,6 +49,8 @@ export interface LedgerItem {
   orderNo?: string | null;
   /** 那张订单的商品金额，分。 */
   productAmountCent?: number | null;
+  /** 这笔消费没出示会员码，门店按手机号办理的。 */
+  codeless?: boolean;
   createdAt: string;
 }
 

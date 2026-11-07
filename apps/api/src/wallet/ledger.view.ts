@@ -43,6 +43,8 @@ export interface StaffLedgerView {
   productAmountCent: number | null;
   /** 订单号是店员手输的。只有带订单号的消费有。 */
   orderNoTyped: boolean | null;
+  /** 无码抵扣：没扫会员码，店长或超级管理员按手机号办理。原因在 remark。 */
+  codeless: boolean;
   createdAt: string;
 }
 
@@ -62,6 +64,8 @@ export interface MemberLedgerView {
   orderNo: string | null;
   /** 消费那张订单的商品金额，分。 */
   productAmountCent: number | null;
+  /** 这笔消费没扫会员码（顾客没出示），门店按手机号办理。 */
+  codeless: boolean;
   createdAt: string;
 }
 
@@ -87,6 +91,7 @@ export function toStaffLedgerView(entry: LedgerRecord): StaffLedgerView {
     orderNo: entry.orderNo ?? entry.reversalOf?.orderNo ?? null,
     productAmountCent: entry.productAmountCent,
     orderNoTyped: entry.orderNoTyped,
+    codeless: entry.codeless,
     createdAt: entry.createdAt.toISOString(),
   };
 }
@@ -104,6 +109,7 @@ export function toMemberLedgerView(entry: LedgerRecord): MemberLedgerView {
     reversed: entry.reversedBy != null,
     orderNo: entry.orderNo ?? entry.reversalOf?.orderNo ?? null,
     productAmountCent: entry.productAmountCent,
+    codeless: entry.codeless,
     createdAt: entry.createdAt.toISOString(),
   };
 }

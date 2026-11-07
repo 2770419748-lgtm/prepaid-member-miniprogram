@@ -24,6 +24,10 @@
         <div class="label">净消费（元）</div>
         <div class="value pm-amount-minus">{{ report ? formatCent(report.total.netConsumeCent) : '—' }}</div>
         <div class="note">{{ report ? `${report.total.consumeCount} 笔，合计 ${formatCent(report.total.consumeCent)} 元${minus(report.total.reversedConsumeCent)}` : '' }}</div>
+        <div v-if="report && report.total.codelessCount > 0" class="note codeless">
+          其中无码抵扣 {{ report.total.codelessCount }} 笔 {{ formatCent(report.total.codelessCent) }} 元
+          <a @click="toCodeless(undefined)">看明细</a>
+        </div>
       </div>
       <div class="figure">
         <div class="label">净退余额（元）</div>
@@ -79,6 +83,9 @@
           <template v-else-if="column.key === 'consume'">
             <span class="pm-num strong">{{ formatCent(record.netConsumeCent) }}</span>
             <div class="sub">{{ record.consumeCount }} 笔 {{ formatCent(record.consumeCent) }}{{ cutBack(record.reversedConsumeCent) }}</div>
+            <div v-if="record.codelessCount > 0" class="sub codeless">
+              <a @click="toCodeless(record.storeId)">无码 {{ record.codelessCount }} 笔 {{ formatCent(record.codelessCent) }}</a>
+            </div>
           </template>
           <template v-else-if="column.key === 'refund'">
             <template v-if="record.refundCount > 0">
@@ -109,6 +116,7 @@
               <a-table-summary-cell align="right">
                 <span class="strong">{{ formatCent(report.total.netConsumeCent) }}</span>
                 <div class="sub">{{ report.total.consumeCount }} 笔</div>
+                <div v-if="report.total.codelessCount > 0" class="sub codeless">无码 {{ report.total.codelessCount }} 笔</div>
               </a-table-summary-cell>
               <a-table-summary-cell align="right">
                 <span class="strong">{{ formatCent(report.total.netRefundCent) }}</span>
@@ -124,6 +132,7 @@
       <p class="hint">
         金额单位：元。大字是净额，小字是笔数、合计和被冲正抵掉的金额：净充值 = 充值 − 冲回的充值；净消费 = 消费 − 冲回的消费；
         净退余额 = 退余额 − 冲回的退款。余额净变动 = 净充值 − 净消费 − 净退余额。
+        「无码」是没扫会员码、店长按手机号办理的无码抵扣，已经算在消费里，单列出来方便抽查。
       </p>
     </a-card>
 
@@ -255,6 +264,11 @@ function toLedger(id: string): void {
   void router.push({ name: 'ledger', query: { storeId: id, date: date.value } });
 }
 
+/** 打开当天的无码抵扣明细（可按门店）。 */
+function toCodeless(id: string | undefined): void {
+  void router.push({ name: 'ledger', query: { ...(id ? { storeId: id } : {}), date: date.value, type: 'CODELESS' } });
+}
+
 onMounted(load);
 </script>
 
@@ -363,6 +377,17 @@ onMounted(load);
 .sub {
   color: #64748b;
   font-size: 12px;
+}
+
+/* 无码抵扣单列，紫色和流水列表里的标签一致。 */
+.codeless,
+.codeless a {
+  color: #722ed1;
+}
+
+.note.codeless {
+  margin-top: 0;
+  padding-top: 2px;
 }
 
 .strong {

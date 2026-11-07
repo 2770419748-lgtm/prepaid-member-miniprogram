@@ -30,6 +30,8 @@ interface Figures {
   rechargeCent: number;
   consumeCount: number;
   consumeCent: number;
+  codelessCount: number;
+  codelessCent: number;
   refundCount: number;
   refundCent: number;
   reversalCount: number;
@@ -51,6 +53,8 @@ function figuresOf(entries: EntryWithOriginal[]): Figures {
     rechargeCent: 0,
     consumeCount: 0,
     consumeCent: 0,
+    codelessCount: 0,
+    codelessCent: 0,
     refundCount: 0,
     refundCent: 0,
     reversalCount: 0,
@@ -69,6 +73,10 @@ function figuresOf(entries: EntryWithOriginal[]): Figures {
     } else if (entry.type === 'CONSUME') {
       figures.consumeCount += 1;
       figures.consumeCent += entry.amountCent;
+      if (entry.codeless) {
+        figures.codelessCount += 1;
+        figures.codelessCent += entry.amountCent;
+      }
     } else if (entry.type === 'REFUND') {
       figures.refundCount += 1;
       figures.refundCent += entry.amountCent;

@@ -33,6 +33,7 @@ P2 提供操作记录查询、当日对账、余额日结与核对，见 `docs/b
 | 扫码消费（会员码） | `docs/backend/pay-code.md` | — | M2 |
 | 扫订单码抵扣 10% | `docs/backend/order-offset.md` | — | 扫码消费 |
 | 开单上传纸质协议单 | `docs/backend/paper-agreement.md` | — | M4（2026-11-05 起默认代替电子签） |
+| 店长无码抵扣 | `docs/backend/codeless-offset.md` | — | 扫订单码抵扣（2026-11-07，扫码消费的例外） |
 
 ---
 

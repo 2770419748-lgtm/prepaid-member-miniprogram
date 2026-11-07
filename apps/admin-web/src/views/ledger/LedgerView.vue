@@ -32,10 +32,10 @@
         />
         <a-select
           v-model:value="filters.type"
-          :options="LEDGER_TYPE_OPTIONS"
+          :options="LEDGER_FILTER_OPTIONS"
           placeholder="全部类型"
           allow-clear
-          style="width: 120px"
+          style="width: 160px"
         />
         <a-range-picker
           v-model:value="filters.range"
@@ -75,14 +75,21 @@ import { useRoute } from 'vue-router';
 import { errorMessage } from '../../api/http';
 import { getLedgerEntry, listLedger, type LedgerQuery } from '../../api/ledger';
 import { findMemberByPhone } from '../../api/members';
-import type { LedgerEntry, LedgerType } from '../../api/types';
+import type { LedgerEntry } from '../../api/types';
 import LedgerDetailDrawer from '../../components/LedgerDetailDrawer.vue';
 import LedgerTable from '../../components/LedgerTable.vue';
 import ReversalModal from '../../components/ReversalModal.vue';
 import { useSessionStore } from '../../stores/session';
 import { dayStart, nextDayStart } from '../../utils/datetime';
 import { downloadText } from '../../utils/download';
-import { LEDGER_TYPE_LABEL, LEDGER_TYPE_OPTIONS, ledgerCsv, normalizeOrderNo } from '../../utils/ledger';
+import {
+  isLedgerTypeFilter,
+  LEDGER_FILTER_OPTIONS,
+  ledgerCsv,
+  normalizeOrderNo,
+  typeFilterQuery,
+  type LedgerTypeFilter,
+} from '../../utils/ledger';
 import { isMobile, normalizePhone } from '../../utils/phone';
 
 const route = useRoute();
@@ -92,16 +99,13 @@ const filters = reactive<{
   phone: string;
   orderNo: string;
   storeId: string | undefined;
-  type: LedgerType | undefined;
+  type: LedgerTypeFilter | undefined;
   range: [string | null, string | null] | null;
 }>({
   phone: '',
   orderNo: typeof route.query.orderNo === 'string' ? route.query.orderNo : '',
   storeId: typeof route.query.storeId === 'string' ? route.query.storeId : undefined,
-  type:
-    typeof route.query.type === 'string' && route.query.type in LEDGER_TYPE_LABEL
-      ? (route.query.type as LedgerType)
-      : undefined,
+  type: isLedgerTypeFilter(route.query.type) ? route.query.type : undefined,
   range: typeof route.query.date === 'string' ? [route.query.date, route.query.date] : null,
 });
 
@@ -158,9 +162,7 @@ async function buildQuery(): Promise<LedgerQuery | null> {
   if (filters.storeId) {
     query.storeId = filters.storeId;
   }
-  if (filters.type) {
-    query.type = filters.type;
-  }
+  Object.assign(query, typeFilterQuery(filters.type));
   const [from, to] = filters.range ?? [null, null];
   if (from) {
     query.from = dayStart(from);

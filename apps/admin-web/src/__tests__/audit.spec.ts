@@ -23,6 +23,18 @@ describe('操作记录翻成白话', () => {
     ]);
   });
 
+  it('无码抵扣写明没扫会员码和原因', () => {
+    expect(
+      describeAuditPayload(
+        { amountCent: 12990, productAmountCent: 129900, codeless: true, remark: '顾客没带手机' },
+        storeName,
+      ),
+    ).toEqual(['金额 129.90 元', '没扫会员码，没填九讯云单号', '商品应付 1,299.00 元', '无码原因 顾客没带手机']);
+    expect(
+      describeAuditPayload({ codeless: true, orderNo: 'A5982', orderNoTyped: true, remark: '手机没电' }, storeName),
+    ).toEqual(['没扫会员码', '九讯云订单 A5982（手输单号）', '无码原因 手机没电']);
+  });
+
   it('员工角色显示门店名和中文角色', () => {
     expect(describeAuditPayload({ name: '李店员', phone: '13800000002', storeId: 's1', role: 'STAFF' }, storeName)).toEqual([
       '名称 李店员',

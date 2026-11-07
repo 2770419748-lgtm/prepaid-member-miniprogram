@@ -1,6 +1,6 @@
 import { fetchLedgerEntry, reverseEntry } from '../../utils/api';
 import { ApiError, messageOf } from '../../utils/errors';
-import { ledgerTitle } from '../../utils/labels';
+import { entryTitle } from '../../utils/labels';
 import { canReverse, memberLabel } from '../../utils/ledger';
 import { formatCent, formatChange } from '../../utils/money';
 import { newRequestId } from '../../utils/request-id';
@@ -27,11 +27,13 @@ interface DetailView {
   order: string;
   /** 商品应付金额（元）；没有为空。 */
   product: string;
+  /** 无码抵扣：没扫会员码，店长按手机号办理；备注是原因。 */
+  codeless: boolean;
 }
 
 function toView(entry: LedgerEntry): DetailView {
   return {
-    title: ledgerTitle(entry.type, entry.changeCent, entry.reversalOfType),
+    title: entryTitle(entry),
     change: formatChange(entry.changeCent),
     tone: entry.changeCent >= 0 ? 'plus' : 'minus',
     reversed: entry.reversedById != null,
@@ -47,6 +49,7 @@ function toView(entry: LedgerEntry): DetailView {
     reversalOfId: entry.reversalOfId ?? '',
     order: entry.orderNo ? `${entry.orderNo}${entry.orderNoTyped ? '（手输）' : ''}` : '',
     product: entry.productAmountCent != null ? `${formatCent(entry.productAmountCent)} 元` : '',
+    codeless: entry.type === 'CONSUME' && entry.codeless === true,
   };
 }
 

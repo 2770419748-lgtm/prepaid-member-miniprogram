@@ -24,6 +24,7 @@
       </template>
       <template v-else-if="column.key === 'type'">
         <LedgerTypeTag :type="record.type" />
+        <a-tag v-if="record.codeless" color="purple" class="codeless">{{ CODELESS_LABEL }}</a-tag>
         <a-tag v-if="record.reversedById" class="reversed">已冲正</a-tag>
       </template>
       <template v-else-if="column.key === 'change'">
@@ -33,6 +34,10 @@
         <template v-if="record.orderNo">
           <span class="pm-num">{{ record.orderNo }}</span>
           <a-tag v-if="record.orderNoTyped" color="orange" class="typed">手输</a-tag>
+          <div v-if="record.productAmountCent != null" class="muted">商品 {{ formatCent(record.productAmountCent) }}</div>
+        </template>
+        <template v-else-if="record.codeless">
+          <span class="muted">没填单号</span>
           <div v-if="record.productAmountCent != null" class="muted">商品 {{ formatCent(record.productAmountCent) }}</div>
         </template>
       </template>
@@ -65,6 +70,7 @@ import { computed } from 'vue';
 import type { LedgerEntry } from '../api/types';
 import { useSessionStore } from '../stores/session';
 import { formatDateTime } from '../utils/datetime';
+import { CODELESS_LABEL } from '../utils/ledger';
 import { formatCent } from '../utils/money';
 import { maskPhone } from '../utils/phone';
 import { canReverse } from '../utils/roles';
@@ -138,6 +144,10 @@ function onChange(p: TablePaginationConfig): void {
 
 .typed {
   margin-left: 4px;
+}
+
+.codeless {
+  margin-top: 4px;
 }
 
 .reversed {

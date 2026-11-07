@@ -1,6 +1,6 @@
 import { downloadAgreementPhoto, fetchLedger, fetchMember, fetchSignFlows } from '../../utils/api';
 import { messageOf } from '../../utils/errors';
-import { canRechargeAt, LedgerRow, toLedgerRow } from '../../utils/ledger';
+import { canCodelessAt, canRechargeAt, LedgerRow, toLedgerRow } from '../../utils/ledger';
 import { formatCent } from '../../utils/money';
 import { ORDER_TEXT, orderUrl, readSignMode, SIGN_MODE_KEY } from '../../utils/order';
 import { consumeEntryUrl } from '../../utils/paycode';
@@ -76,6 +76,8 @@ Page({
     noStore: false,
     /** 直接充值只给店长和超级管理员；店员只看到「办理权益单」。 */
     canRecharge: false,
+    /** 无码抵扣（顾客出示不了会员码）只给本店店长和超级管理员。 */
+    canCodeless: false,
     member: null as MemberHeader | null,
     rows: [] as (LedgerRow & { date: string })[],
     openOrders: [] as OpenOrder[],
@@ -111,6 +113,7 @@ Page({
       loading: true,
       noStore: !store,
       canRecharge: !!store && canRechargeAt(store.id, session.access),
+      canCodeless: !!store && canCodelessAt(store.id, session.access),
       historyTitle: unrestricted ? '最近记录' : '本店记录',
       historyNote: unrestricted ? '全部门店' : '只显示在你门店办理的',
     });
@@ -170,6 +173,11 @@ Page({
       return;
     }
     wx.navigateTo({ url: consumeEntryUrl(scanned.member.id, scanned.code, scanned.expiresAt) });
+  },
+
+  /** 顾客没带手机、出示不了会员码：店长不扫码直接抵扣，要写原因。 */
+  onCodeless() {
+    wx.navigateTo({ url: `/staff/pages/entry/entry?kind=CODELESS&memberId=${encodeURIComponent(this.data.id)}` });
   },
 
   onOpenCard() {

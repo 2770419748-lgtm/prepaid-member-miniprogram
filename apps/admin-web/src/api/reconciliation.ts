@@ -6,6 +6,9 @@ export interface DayFigures {
   rechargeCent: number;
   consumeCount: number;
   consumeCent: number;
+  /** 其中无码抵扣（没扫会员码）的笔数和金额，已算在消费里。 */
+  codelessCount: number;
+  codelessCent: number;
   /** 退余额：把没用完的储值退给顾客。 */
   refundCount: number;
   refundCent: number;

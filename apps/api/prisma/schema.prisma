@@ -263,6 +263,9 @@ model LedgerEntry {
   productAmountCent Int?       @map("product_amount_cent")
   /// 订单号是店员手输的（条码扫不出来时），不是扫码读到的。
   orderNoTyped      Boolean?   @map("order_no_typed")
+  /// 无码抵扣：顾客出示不了会员码，本店店长或超级管理员按手机号找到会员直接抵扣（坤总 2026-11-07）。
+  /// 只有消费能是 true；必须带商品应付金额和原因（remark），单号选填（CHECK 约束）。
+  codeless          Boolean    @default(false)
   createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
 
   org             Org              @relation(fields: [orgId], references: [id], onDelete: Restrict)
